@@ -9,9 +9,11 @@ import {
     CheckCircle2
 } from 'lucide-react';
 import { useRole } from '../context/RoleContext';
+import { useAuth } from '../context/AuthContext';
 
 const Sidebar = () => {
     const { selectedRole, setSelectedRole, roles } = useRole();
+    const { session, logout } = useAuth();
     const [isOpen, setIsOpen] = React.useState(false);
 
     const menuItems = [
@@ -82,8 +84,9 @@ const Sidebar = () => {
                             <UserCircle size={28} className="text-slate-400" />
                         </div>
                         <div className="flex flex-col min-w-0">
-                            <span className="text-xs font-black truncate leading-none mb-1">Usuario Demo</span>
-                            <span className="text-[9px] text-slate-500 truncate uppercase font-bold tracking-widest">Sede Matriz</span>
+                            <span className="text-xs font-black truncate leading-none mb-1">{session?.name || 'Usuario Demo'}</span>
+                            <span className="text-[9px] text-slate-500 truncate uppercase font-bold tracking-widest">{session?.site || 'Sede Matriz'}</span>
+                            <span className="text-[9px] text-slate-600 truncate font-semibold mt-1">{session?.email || 'demo@businesscontrol.com'}</span>
                         </div>
                     </div>
 
@@ -122,7 +125,10 @@ const Sidebar = () => {
                         </div>
                     </div>
 
-                    <button className="flex items-center justify-center gap-3 py-4 w-full bg-white/5 rounded-xl text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all font-black text-[10px] uppercase tracking-widest border border-white/5">
+                    <button
+                        onClick={logout}
+                        className="flex items-center justify-center gap-3 py-4 w-full bg-white/5 rounded-xl text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all font-black text-[10px] uppercase tracking-widest border border-white/5"
+                    >
                         <LogOut size={16} />
                         Cerrar Sesión
                     </button>
