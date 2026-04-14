@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
     ArrowRight,
@@ -13,98 +13,24 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
+const API_LOGIN = import.meta.env.VITE_API_URL_LOGIN;
+
 const LoginPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { login, loginWithGoogleCredential } = useAuth();
+    const { login } = useAuth();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [googleStatus, setGoogleStatus] = useState('loading');
-    const googleButtonRef = useRef(null);
 
     const from = location.state?.from?.pathname || '/';
-    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-    useEffect(() => {
-        if (!googleClientId) {
-            setGoogleStatus('missing_config');
-            return undefined;
-        }
-
-        let isMounted = true;
-
-        const initializeGoogle = () => {
-            if (!window.google?.accounts?.id || !googleButtonRef.current || !isMounted) {
-                return;
-            }
-
-            window.google.accounts.id.initialize({
-                client_id: googleClientId,
-                callback: ({ credential }) => {
-                    try {
-                        loginWithGoogleCredential(credential);
-                        navigate(from, { replace: true });
-                    } catch (googleError) {
-                        setError(googleError.message || 'No fue posible iniciar sesión con Google.');
-                    }
-                },
-            });
-
-            googleButtonRef.current.innerHTML = '';
-            window.google.accounts.id.renderButton(googleButtonRef.current, {
-                type: 'standard',
-                theme: 'outline',
-                size: 'large',
-                text: 'signin_with',
-                shape: 'pill',
-                logo_alignment: 'left',
-                width: 320,
-            });
-
-            setGoogleStatus('ready');
-        };
-
-        if (window.google?.accounts?.id) {
-            initializeGoogle();
-            return () => {
-                isMounted = false;
-            };
-        }
-
-        const existingScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
-
-        if (existingScript) {
-            existingScript.addEventListener('load', initializeGoogle);
-            existingScript.addEventListener('error', () => setGoogleStatus('error'));
-
-            return () => {
-                isMounted = false;
-                existingScript.removeEventListener('load', initializeGoogle);
-            };
-        }
-
-        const script = document.createElement('script');
-        script.src = 'https://accounts.google.com/gsi/client';
-        script.async = true;
-        script.defer = true;
-        script.onload = initializeGoogle;
-        script.onerror = () => {
-            if (isMounted) {
-                setGoogleStatus('error');
-            }
-        };
-        document.head.appendChild(script);
-
-        return () => {
-            isMounted = false;
-            script.onload = null;
-            script.onerror = null;
-        };
-    }, [from, googleClientId, loginWithGoogleCredential, navigate]);
+    const handleGoogleLogin = () => {
+        window.location.href = `${API_LOGIN}/oauth2/authorization/google`;
+    };
 
     const handleSubmit = async (event) => {
         event.preventDefault();
@@ -197,29 +123,21 @@ const LoginPage = () => {
                                         </div>
                                         <div>
                                             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Google</p>
-                                            <p className="text-sm font-semibold text-slate-800">Acceder con cuenta Google</p>
+                                            <p className="text-sm font-semibold text-slate-800">Acceso Corporativo</p>
                                         </div>
                                     </div>
 
-                                    <div className="flex min-h-[44px] items-center justify-center rounded-2xl bg-white">
-                                        {googleStatus === 'ready' && <div ref={googleButtonRef} />}
-                                        {googleStatus === 'loading' && (
-                                            <p className="text-xs font-semibold text-slate-500">Cargando acceso con Google...</p>
-                                        )}
-                                        {googleStatus === 'missing_config' && (
-                                            <p className="px-4 text-center text-xs font-semibold text-amber-600">
-                                                Configura `VITE_GOOGLE_CLIENT_ID` para habilitar este acceso.
-                                            </p>
-                                        )}
-                                        {googleStatus === 'error' && (
-                                            <p className="px-4 text-center text-xs font-semibold text-red-600">
-                                                No se pudo cargar Google Sign-In en este momento.
-                                            </p>
-                                        )}
-                                    </div>
+                                    <button
+                                        onClick={handleGoogleLogin}
+                                        type="button"
+                                        className="flex w-full min-h-[44px] items-center justify-center gap-2 rounded-2xl bg-white border border-slate-200 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-blue-300 transition-all"
+                                    >
+                                        <Chrome size={16} className="text-blue-500" />
+                                        Continuar con Google
+                                    </button>
                                 </div>
 
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-3 py-2">
                                     <div className="h-px flex-1 bg-slate-200" />
                                     <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">o continuar con correo</span>
                                     <div className="h-px flex-1 bg-slate-200" />

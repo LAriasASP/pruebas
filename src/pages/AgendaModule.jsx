@@ -11,10 +11,16 @@ import PlaneacionJefe from './Agenda/PlaneacionJefe';
 import EjecucionOperativo from './Agenda/EjecucionOperativo';
 import EjecucionJefe from './Agenda/EjecucionJefe';
 
+/**
+ * MÓDULO PRINCIPAL DE AGENDAS
+ * Renderiza las pestañas de navegación principales (Planeación, Ejecución, Cierre).
+ * Decide qué componente cargar dependiendo de la categoría del usuario (Operativo vs Jefe).
+ */
 const AgendaModule = () => {
     const { selectedRole } = useRole();
     const [activeTab, setActiveTab] = useState('planeacion');
 
+    // Estas opciones de navegación son estáticas del frontend, no requieren base de datos.
     const tabs = [
         { id: 'planeacion', label: 'Planeación', icon: ClipboardList },
         { id: 'ejecucion', label: 'Ejecución', icon: MapPin },
@@ -24,11 +30,21 @@ const AgendaModule = () => {
     const renderContent = () => {
         switch (activeTab) {
             case 'planeacion':
-                // Role-based logic for Phase A
+                /**
+                 * TODO Lógica de Negocio:
+                 * Si la categoría en BD (seguridad.usuarios o catalogos.puestos) es 'Operativo',
+                 * carga la vista para capturar la agenda (PlaneacionOperativo).
+                 * Si es 'Jefe' (Gerente, Subdirector, Director, Ejecutivo Cob, Coord Cob, Subdir Cob),
+                 * carga el Dashboard de revisión de agendas (PlaneacionJefe).
+                 */
                 return selectedRole.category === 'Operativo'
                     ? <PlaneacionOperativo />
-                    : <PlaneacionJefe />; // Jefes: Gerente, Subdirector, Director, Ejecutivo Cob, Coord Cob, Subdir Cob
+                    : <PlaneacionJefe />;
             case 'ejecucion':
+                /**
+                 * TODO Lógica de Negocio:
+                 * Mismo comportamiento que Planeación pero para la Fase B (En Ruta).
+                 */
                 return selectedRole.category === 'Operativo'
                     ? <EjecucionOperativo />
                     : <EjecucionJefe />;

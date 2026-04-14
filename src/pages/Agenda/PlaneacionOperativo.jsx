@@ -183,6 +183,17 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                     <div className="grid grid-cols-4 gap-3 bg-slate-50/50 p-3 rounded-xl border border-slate-100 mt-2 ml-14">
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Producto</label>
+                            {/**
+                             * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/productos
+                             * Consulta: 
+                             * SELECT id_producto as id, nombre, categoria 
+                             * FROM catalogos.productos WHERE activo = true;
+                             * Resultado en formato JSON:
+                             * [
+                             * { "id": 1, "nombre": "Microcredito", "categoria": "Crédito" },
+                             * { "id": 2, "nombre": "Captación", "categoria": "Ahorro" }
+                             * ]
+                             */}
                             <select
                                 value={v.product}
                                 onChange={e => updateVisit(segmentName, idx, 'product', e.target.value)}
@@ -217,6 +228,17 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                         <div className="grid grid-cols-5 gap-3 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
                             <div>
                                 <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Integración</label>
+                                {/**
+                                 * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/tipos-integracion
+                                 * Consulta: 
+                                 * SELECT id_tipo_integracion as id, nombre 
+                                 * FROM catalogos.tipos_integracion WHERE activo = true;
+                                 * Resultado en formato JSON:
+                                 * [
+                                 * { "id": 1, "nombre": "Nuevo" },
+                                 * { "id": 2, "nombre": "Renovación" }
+                                 * ]
+                                 */}
                                 <select value={v.typeIntegration} onChange={e => updateVisit(segmentName, idx, 'typeIntegration', e.target.value)} className="input-cell uppercase text-[10px]">
                                     <option>Nuevo</option><option>Renovación</option><option>Tratamiento</option><option>Convenio</option>
                                 </select>
@@ -249,12 +271,34 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                             </div>
                             <div>
                                 <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Subproducto</label>
+                                {/**
+                                 * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/subproductos
+                                 * Consulta: 
+                                 * SELECT id_subproducto as id, nombre 
+                                 * FROM catalogos.subproductos WHERE activo = true;
+                                 * Resultado en formato JSON:
+                                 * [
+                                 * { "id": 1, "nombre": "PREFERENCIAL" },
+                                 * { "id": 2, "nombre": "BOLSÓN" }
+                                 * ]
+                                 */}
                                 <select value={v.subProduct} onChange={e => updateVisit(segmentName, idx, 'subProduct', e.target.value)} className="input-cell uppercase text-[10px]">
                                     <option>NINGUNO</option><option>PREFERENCIAL</option><option>BOLSÓN</option><option>BACK TO BACK</option><option>LIQUIDEZ</option><option>FASTCREDIT</option>
                                 </select>
                             </div>
                             <div>
                                 <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Programa</label>
+                                {/**
+                                 * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/programas
+                                 * Consulta: 
+                                 * SELECT id_programa as id, nombre 
+                                 * FROM catalogos.programas WHERE activo = true;
+                                 * Resultado en formato JSON:
+                                 * [
+                                 * { "id": 1, "nombre": "SCORE 500" },
+                                 * { "id": 2, "nombre": "ATRACCIÓN DE LA COMPETENCIA" }
+                                 * ]
+                                 */}
                                 <select value={v.program} onChange={e => updateVisit(segmentName, idx, 'program', e.target.value)} className="input-cell uppercase text-[10px]" disabled={v.product === 'Captación'}>
                                     <option>NINGUNO</option><option>SCORE 500</option><option>ATRACCIÓN DE LA COMPETENCIA</option><option>OTRO</option>
                                 </select>
@@ -349,6 +393,17 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                         </div>
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo de Gestión (Personal)</label>
+                            {/**
+                             * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/tipos-gestion
+                             * Consulta: 
+                             * SELECT id_tipo_gestion as id, nombre 
+                             * FROM catalogos.tipos_gestion WHERE activo = true;
+                             * Resultado en formato JSON:
+                             * [
+                             * { "id": 1, "nombre": "Visita integral" },
+                             * { "id": 2, "nombre": "Gestión telefónica" }
+                             * ]
+                             */}
                             <input
                                 value={v.typeVisitManagement}
                                 onChange={e => updateVisit(segmentName, idx, 'typeVisitManagement', e.target.value)}
@@ -358,6 +413,17 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                         </div>
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta para Aplicar</label>
+                            {/**
+                             * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/herramientas
+                             * Consulta: 
+                             * SELECT id_herramienta as id, nombre 
+                             * FROM catalogos.herramientas WHERE activo = true;
+                             * Resultado en formato JSON:
+                             * [
+                             * { "id": 1, "nombre": "Cobranza" },
+                             * { "id": 2, "nombre": "Convenio Liquidación" }
+                             * ]
+                             */}
                             <select
                                 value={v.herramientaAplicar}
                                 onChange={e => updateVisit(segmentName, idx, 'herramientaAplicar', e.target.value)}
@@ -391,6 +457,17 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                         </div>
                         <div className="col-span-2">
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo Gestión</label>
+                            {/**
+                             * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/tipos-gestion
+                             * Consulta: 
+                             * SELECT id_tipo_gestion as id, nombre 
+                             * FROM catalogos.tipos_gestion WHERE activo = true;
+                             * Resultado en formato JSON:
+                             * [
+                             * { "id": 1, "nombre": "Visita integral" },
+                             * { "id": 2, "nombre": "Gestión telefónica" }
+                             * ]
+                             */}
                             <select value={v.typeManagement} onChange={e => updateVisit(segmentName, idx, 'typeManagement', e.target.value)} className="input-cell uppercase text-[10px]">
                                 <option>Visita integral</option><option>Visita correctiva</option><option>Visita preventiva</option><option>Visita presencial domicilio</option><option>Visita presencial aval</option><option>Visita presencial Trabajo</option><option>Gestión telefónica</option>
                             </select>
@@ -433,6 +510,18 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
 
                 {!isClientOnlySegment && (
                     <div className="w-48">
+                        {/**
+                         * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/clasificaciones
+                         * Consulta: 
+                         * SELECT id_clasificacion as id, nombre 
+                         * FROM catalogos.clasificaciones WHERE activo = true;
+                         * Resultado en formato JSON:
+                         * [
+                         * { "id": 1, "nombre": "Contacto" },
+                         * { "id": 2, "nombre": "Prospecto" },
+                         * { "id": 3, "nombre": "Cliente" }
+                         * ]
+                         */}
                         <select value={v.classification} onChange={e => updateVisit(segmentName, idx, 'classification', e.target.value)} className="input-cell !py-2 uppercase font-black tracking-widest text-[9px]">
                             <option>Contacto</option>
                             <option>Prospecto</option>
@@ -444,19 +533,32 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                 {!isClientOnlySegment && (
                     <div className="flex-1 min-w-0">
                         {segmentName === 'Evaluación e Integración' ? (
-                            <select
-                                value={v.activity}
-                                onChange={e => updateVisit(segmentName, idx, 'activity', e.target.value)}
-                                className="input-cell !py-2 uppercase text-[10px] font-black"
-                            >
-                                <option>Integración</option>
-                                <option>Validación Analista Operaciones o Mesa de Control</option>
-                                <option>Verificación Telefónica</option>
-                                <option>Verificación Presencial</option>
-                                <option>Comité de Crédito</option>
-                                <option>Corrección de Expediente</option>
-                                <option>VoBo de Supervisor</option>
-                            </select>
+                            <>
+                                {/**
+                                 * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/actividades
+                                 * Consulta: 
+                                 * SELECT id_actividad as id, nombre 
+                                 * FROM catalogos.actividades WHERE activo = true;
+                                 * Resultado en formato JSON:
+                                 * [
+                                 * { "id": 1, "nombre": "Integración" },
+                                 * { "id": 2, "nombre": "Verificación Telefónica" }
+                                 * ]
+                                 */}
+                                <select
+                                    value={v.activity}
+                                    onChange={e => updateVisit(segmentName, idx, 'activity', e.target.value)}
+                                    className="input-cell !py-2 uppercase text-[10px] font-black"
+                                >
+                                    <option>Integración</option>
+                                    <option>Validación Analista Operaciones o Mesa de Control</option>
+                                    <option>Verificación Telefónica</option>
+                                    <option>Verificación Presencial</option>
+                                    <option>Comité de Crédito</option>
+                                    <option>Corrección de Expediente</option>
+                                    <option>VoBo de Supervisor</option>
+                                </select>
+                            </>
                         ) : (
                             <input
                                 value={v.activity}

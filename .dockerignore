@@ -6,3 +6,4 @@ npm-debug.log*
 Dockerfile
 .dockerignore
 .DS_Store
+.env.development

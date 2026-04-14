@@ -7,17 +7,41 @@ import {
 } from 'lucide-react';
 
 // ── Catálogos ────────────────────────────────────────────────────────────────
+
+/**
+ * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/estatus-cartera
+ * Consulta:
+ * SELECT id_estatus_cartera as id, nombre FROM catalogos.estatus_cartera WHERE activo = true;
+ * * Resultado en JSON:
+ * [
+ * { "id": 1, "nombre": "Abono/ Pago Parcial" },
+ * { "id": 2, "nombre": "Compromiso de pago" },
+ * { "id": 3, "nombre": "Negativa de pago" }
+ * ]
+ */
 const ESTATUS_CARTERA = [
     'Seleccionar resultado...',
     'Abono/ Pago Parcial', 'Compromiso de pago', 'Negativa de pago',
     'Ilocalizable', 'Promesa de pago', 'Sin contacto', 'Convenio', 'Finado',
 ];
+
+/**
+ * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/sub-estatus
+ * Consulta:
+ * SELECT id_sub_estatus as id, nombre FROM catalogos.sub_estatus WHERE activo = true;
+ */
 const SUB_ESTATUS = [
     'N/A', 'Insolvente', 'Solvente', 'No reconoce el crédito',
     'Dice que ya pago', 'Liquidación', 'Normalización', 'Trat Especial',
     'Cliente no estuvo', 'Aviso debajo de la puerta', 'Se cambio domicilio',
     'Convenio vigentes', 'Convenio incumplidos',
 ];
+
+/**
+ * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/tipos-gestion
+ * Consulta:
+ * SELECT id_tipo_gestion as id, nombre FROM catalogos.tipos_gestion WHERE activo = true;
+ */
 const TIPO_GESTION_UNPLANNED = [
     'Seleccionar tipo...',
     'Visita integral', 'Visita correctiva', 'Visita preventiva',
@@ -25,6 +49,12 @@ const TIPO_GESTION_UNPLANNED = [
     'Visita presencial Trabajo', 'Gestión telefónica',
     'Gestión envió de sms', 'Gestión telefónica aval',
 ];
+
+/**
+ * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/motivos-no-visita
+ * Consulta:
+ * SELECT id_motivo as id, descripcion as nombre FROM catalogos.motivos_no_visita WHERE activo = true;
+ */
 const MOTIVO_NO_VISITA = [
     'Seleccionar motivo...',
     'Cliente no disponible',
@@ -35,6 +65,7 @@ const MOTIVO_NO_VISITA = [
     'Tiempo insuficiente en ruta',
     'Otro',
 ];
+
 const SEG_CFG = {
     'Promoción': { label: 'PROMO', dot: 'bg-blue-500', badge: 'bg-blue-50 text-blue-700' },
     'Evaluación e Integración': { label: 'EVAL', dot: 'bg-violet-500', badge: 'bg-violet-50 text-violet-700' },
@@ -42,6 +73,7 @@ const SEG_CFG = {
     'Gestión de Empresarias': { label: 'EMPRES', dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700' },
     'Imprevisto': { label: 'IMPREV', dot: 'bg-rose-500', badge: 'bg-rose-50 text-rose-700' },
 };
+
 const RESULTADO_BADGE = {
     'Abono/ Pago Parcial': 'bg-emerald-100 text-emerald-700',
     'Compromiso de pago': 'bg-blue-100 text-blue-700',
@@ -73,14 +105,17 @@ const ProgressRing = ({ done, total, size = 68 }) => {
         </div>
     );
 };
+
 const SegBadge = ({ seg }) => {
     const c = SEG_CFG[seg] || SEG_CFG['Imprevisto'];
     return <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${c.badge}`}>{c.label}</span>;
 };
+
 const ResultBadge = ({ resultado }) => {
     const cls = RESULTADO_BADGE[resultado] || 'bg-slate-100 text-slate-600';
     return <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide ${cls}`}>{resultado}</span>;
 };
+
 const nowTimeStr = () => {
     const n = new Date();
     return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
@@ -164,7 +199,7 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
     const needsAmountDate = isCompromiso || isPromesa;
     const visitaNoRealizada = form.visitaRealizada === false;
 
-    // decisionTomada: controls visibility of Notes + Photo sections
+     // decisionTomada: controls visibility of Notes + Photo sections
     const decisionTomada = visitaNoRealizada
         ? form.motivoNoVisita && form.motivoNoVisita !== 'Seleccionar motivo...'
         : isCarteraSegment
@@ -196,6 +231,7 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
         r.onload = ev => { setPhotoPreview(ev.target.result); setForm(p => ({ ...p, photoUrl: ev.target.result })); };
         r.readAsDataURL(f);
     };
+
     const submit = () => {
         if (!canSave) return;
         const durationMin = Math.round((Date.now() - startMs) / 60000);
@@ -204,6 +240,11 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
             : isCarteraSegment
                 ? form.resultado
                 : form.actividadRealizada ? 'Actividad realizada' : 'Actividad no realizada';
+        
+        /**
+         * TODO: EP Lógico para registrar el check-in (Gestión / Ejecución en ruta).
+         * EP Sugerido: POST /api/v1/gestiones/ejecucion
+         */
         onSubmit({
             ...form,
             resultado: resultadoFinal,
@@ -219,7 +260,7 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
         <div className="fixed inset-0 z-[200] flex items-end md:items-center justify-center animate-in fade-in duration-200">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
             <div className="relative z-10 w-full max-w-lg bg-white rounded-t-[32px] md:rounded-[28px] shadow-2xl max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom-4 duration-300">
-                {/* Header */}
+                 {/* Header */}
                 <div className="sticky top-0 bg-white px-6 pt-6 pb-4 border-b border-slate-100 flex items-start justify-between z-10">
                     <div>
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Registrar Gestión</p>
@@ -236,11 +277,11 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                     </button>
                 </div>
 
-                <div className="px-6 py-5 space-y-5">
+                               <div className="px-6 py-5 space-y-5">
                     {/* GPS */}
                     <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest
                         ${gps.status === 'ok' ? 'bg-emerald-50 text-emerald-700' : gps.status === 'error' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
-                        {gps.status === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
+                            {gps.status === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
                         {gps.status === 'loading' && 'Capturando coordenadas GPS...'}
                         {gps.status === 'ok' && `GPS: ${gps.lat}, ${gps.lng}`}
                         {gps.status === 'error' && 'Ubicación no disponible'}
@@ -297,6 +338,9 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                     {!visitaNoRealizada && !isCarteraSegment && form.actividadRealizada === false && (
                         <div className="animate-in fade-in duration-200 bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-3">
                             <p className="text-[8px] font-black text-amber-700 uppercase tracking-widest">¿Por qué no se realizó la actividad?</p>
+                            {/**
+                             * TODO: EP: /api/v1/catalogos/motivos-no-actividad
+                             */}
                             <select value={form.motivoNoActividad || ''}
                                 onChange={e => setForm(p => ({ ...p, motivoNoActividad: e.target.value }))}
                                 className="input-cell">
@@ -312,10 +356,13 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                         </div>
                     )}
 
-                    {/* Rama SÍ actividad PROMO/EVAL — resultado de la gestión */}
+                     {/* Rama SÍ actividad PROMO/EVAL — resultado de la gestión */}
                     {!visitaNoRealizada && !isCarteraSegment && form.actividadRealizada === true && (
                         <div className="animate-in fade-in duration-200">
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Resultado de la Gestión</label>
+                            {/**
+                             * TODO: EP: /api/v1/catalogos/resultados-gestion
+                             */}
                             <select value={form.resultado}
                                 onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))}
                                 className="input-cell">
@@ -341,7 +388,7 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                             </select>
                         </div>
                     )}
-
+                    
                     {/* Promesa / Compromiso de pago: monto + fecha */}
                     {needsAmountDate && (
                         <div className={`animate-in slide-in-from-top-2 duration-300 p-4 rounded-2xl border space-y-3 ${isCompromiso ? 'bg-blue-50 border-blue-100' : 'bg-indigo-50 border-indigo-100'
@@ -375,7 +422,7 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                                 </div>
                             </div>
                         </div>
-                    )}
+                    )} 
 
                     {/* Notas — siempre que haya una decisión tomada */}
                     {decisionTomada && (
@@ -422,7 +469,7 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                     )}
                 </div>
 
-                {/* Footer */}
+                 {/* Footer */}
                 <div className="sticky bottom-0 bg-white px-6 pb-6 pt-4 border-t border-slate-50">
                     <button onClick={submit} disabled={!canSave}
                         className={`w-full py-5 rounded-[20px] text-[11px] font-black uppercase tracking-[0.3em] transition-all
@@ -444,9 +491,14 @@ const UnplannedForm = ({ onAdd, onCancel }) => {
     const ok = form.name
         && form.tipoGestion && form.tipoGestion !== 'Seleccionar tipo...'
         && form.resultado && form.resultado !== 'Seleccionar resultado...'
-        && (!needsAmountDate || (form.pagoMonto && form.pagoFecha));
+        && (!needsAmountDate || (form.pagoMonto && form.pagoFecha));    
     const submit = () => {
         if (!ok) return;
+        
+        /**
+         * TODO: EP Lógico para registrar el check-in (Gestión No Planeada).
+         * EP Sugerido: POST /api/v1/gestiones/ejecucion/no-planeada
+         */
         onAdd({
             name: form.name.toUpperCase(), _segment: 'Imprevisto',
             checkInTime: nowTimeStr(), tipoGestion: form.tipoGestion,
@@ -507,7 +559,7 @@ const UnplannedForm = ({ onAdd, onCancel }) => {
                 <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Notas</label>
                 <input type="text" value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Observaciones…" className="input-cell" />
             </div>
-            <button onClick={submit} disabled={!ok}
+             <button onClick={submit} disabled={!ok}
                 className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all
                     ${ok ? 'bg-rose-500 text-white hover:bg-rose-600' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}>
                 Registrar Imprevisto
@@ -772,7 +824,7 @@ const FollowUpCard = ({ followUp, checkIn, onSetTime, onCheckIn }) => {
     const isDone = !!checkIn;
     const fmtDate = (d) => { try { return new Date(d + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return d; } };
     return (
-        <div className={`flex items-center gap-4 px-5 py-4 transition-all duration-200
+         <div className={`flex items-center gap-4 px-5 py-4 transition-all duration-200
             ${isDone ? 'bg-emerald-50/60' : 'bg-white hover:bg-slate-50/80'}`}>
 
             {/* Status dot */}
@@ -790,7 +842,7 @@ const FollowUpCard = ({ followUp, checkIn, onSetTime, onCheckIn }) => {
             {/* Segment */}
             <SegBadge seg={followUp._segment} />
 
-            {/* Nombre + monto comprometido */}
+           {/* Nombre + monto comprometido */}
             <div className="flex-1 min-w-0">
                 <p className={`text-[13px] font-black uppercase truncate leading-tight
                     ${isDone ? 'text-emerald-700 line-through decoration-emerald-300' : 'text-primary'}`}>
@@ -1028,6 +1080,10 @@ const EjecucionOperativo = () => {
             )}
 
             {/* KPI Compromisos vs Real */}
+            {/**
+             * TODO: EP Lógico para actualizar los KPIs Reales del día en la Base de Datos.
+             * EP Sugerido: PUT /api/v1/kpis/real
+             */}
             <KpiRealPanel
                 roleId={selectedRole?.id}
                 kpiCompromisos={currentAgenda.kpiCompromisos || {}}

@@ -4,6 +4,42 @@ import { AGENDAS_COMERCIAL, AGENDAS_COBRANZA } from '../data/agendaMockData';
 
 const AgendaContext = createContext();
 
+/**
+ * TODO: EP: GET /api/v1/contactos/directorio
+ * Consulta Backend:
+ * SELECT 
+ * (select cl.id_cliente from agendas.clientes cl where cl.id_contacto = c.id_contacto) as id_cliente,
+ * c.id_contacto,
+ * c.nombre,
+ * (select c2.nombre as calificacion from agendas.clasificaciones as c2 where c2.id_clasificacion = c.id_clasificacion),
+ * c.ciudad, 
+ * c.colonia, 
+ * c.calles,
+ * c.telefonos, 
+ * (select p.nombre as producto from catalogos.productos p where p.id_producto = c.id_producto),
+ * c.correo, 
+ * c.fch_crea, 
+ * c.fch_modifica, 
+ * c.id_usuario_crea,
+ * c.id_usuario_modifica,
+ * c.activo
+ * FROM agendas.contactos c ORDER BY id_contacto ASC;
+ * * Resultado en JSON esperado:
+ * [
+ * {
+ * "id_cliente" : null,
+ * "id_contacto" : 1,
+ * "nombre" : "JUAN PEREZ",
+ * "calificacion" : "CONTACTO",
+ * "ciudad" : "León",
+ * "colonia" : "Centro",
+ * "calles" : "Madero 123",
+ * "telefonos" : "[\"5512345678\", \"5511112222\", \"\"]",
+ * "producto" : "NA"
+ * },
+ * // ...
+ * ]
+ */
 export const mockDatabase = [
     // --- CONTACTOS (6) ---
     { name: 'JUAN PEREZ', classification: 'Contacto', phones: ['5512345678', '5511112222', ''], city: 'León', colony: 'Centro', streets: 'Madero 123' },
@@ -24,74 +60,248 @@ export const mockDatabase = [
 
     // --- CLIENTES (7) - Full data for all possible segments ---
     {
-        name: 'KARLA MEDELLIN', classification: 'Cliente', idCredito: 'CR-8829-2025', product: 'Microcredito',
-        typeIntegration: 'Renovación', estimatedAmount: '45000', annualRate: '35.00', subProduct: 'PREFERENCIAL', program: 'SCORE 500',
-        moraInicioMes: '0', moraActual: '2', saldoInicioMes: '45000', saldoActual: '44200',
-        portfolioStatus: 'Abono/ Pago Parcial', ultimoEstatus: 'Vigente',
-        fechaIngreso: '15/05/2024', entryDate: '15/05/2024', saldoOcupado: '45000', saldoDisponible: '5000',
-        moraDays: '2', phones: ['5511223344', '', ''], city: 'Guanajuato', colony: 'Marfil', streets: 'Callejon de la Paz 5',
-        ultimaFechaPago: '10/02/2026', fechaVencimiento: '15/03/2026', montoAmortizacion: '2500', montoRequeridoCorriente: '0',
-        herramientaAplicada: 'Ninguna', categoriaGestion: 'Preventivo'
+        name: 'KARLA MEDELLIN', 
+        
+        idCredito: 'CR-8829-2025', 
+
+        product: 'Microcredito',
+
+        typeIntegration: 'Renovación', //Canales ok
+
+        estimatedAmount: '45000', 
+        annualRate: '35.00', 
+        subProduct: 'PREFERENCIAL', //producto id_tipo 4
+        program: 'SCORE 500', //programa
+        moraInicioMes: '0', 
+        moraActual: '2', 
+        saldoInicioMes: '45000', 
+        saldoActual: '44200',
+        portfolioStatus: 'Abono/ Pago Parcial', //estados
+        ultimoEstatus: 'Vigente',
+        fechaIngreso: '15/05/2024', 
+        entryDate: '15/05/2024', 
+        saldoOcupado: '45000', 
+        saldoDisponible: '5000',
+        moraDays: '2',        
+
+        ultimaFechaPago: '10/02/2026', 
+        fechaVencimiento: '15/03/2026', 
+        montoAmortizacion: '2500', 
+        montoRequeridoCorriente: '0',
+        herramientaAplicada: 'Ninguna', //modalidades
+        categoriaGestion: 'Preventivo'
     },
     {
-        name: 'HUGO GALAVAN', classification: 'Cliente', idCredito: 'CR-9012-2025', product: 'Consumo',
-        typeIntegration: 'Nuevo', estimatedAmount: '12000', annualRate: '42.50', subProduct: 'NINGUNO', program: 'NINGUNO',
-        moraInicioMes: '5', moraActual: '0', saldoInicioMes: '12000', saldoActual: '10500',
-        portfolioStatus: 'Compromiso de pago', ultimoEstatus: 'Vigente',
-        fechaIngreso: '20/06/2024', entryDate: '20/06/2024', saldoOcupado: '12000', saldoDisponible: '8000',
-        moraDays: '0', phones: ['5522334455', '', ''], city: 'León', colony: 'Centro', streets: 'Pino Suarez 10',
-        ultimaFechaPago: '20/02/2026', fechaVencimiento: '20/03/2026', montoAmortizacion: '1200', montoRequeridoCorriente: '0',
-        herramientaAplicada: 'Ninguna', categoriaGestion: 'Control'
+        name: 'HUGO GALAVAN', 
+        classification: 'Cliente', 
+        
+        idCredito: 'CR-9012-2025', 
+        
+        product: 'Consumo',
+
+        typeIntegration: 'Nuevo', 
+        estimatedAmount: '12000', 
+        annualRate: '42.50', 
+        subProduct: 'NINGUNO', 
+        program: 'NINGUNO',
+        moraInicioMes: '5', 
+        moraActual: '0', 
+        saldoInicioMes: '12000', 
+        saldoActual: '10500',
+        portfolioStatus: 'Compromiso de pago', 
+        ultimoEstatus: 'Vigente',
+        fechaIngreso: '20/06/2024', 
+        entryDate: '20/06/2024', 
+        saldoOcupado: '12000', 
+        saldoDisponible: '8000',
+        moraDays: '0', 
+        
+        phones: ['5522334455', '', ''], 
+        city: 'León', 
+        colony: 'Centro', 
+        streets: 'Pino Suarez 10',
+
+        ultimaFechaPago: '20/02/2026', 
+        fechaVencimiento: '20/03/2026', 
+        montoAmortizacion: '1200', 
+        montoRequeridoCorriente: '0',
+        herramientaAplicada: 'Ninguna', 
+        categoriaGestion: 'Control'
     },
     {
         name: 'ANA VICTORIA', classification: 'Cliente', idCredito: 'CR-1122-2025', product: 'Pyme',
-        typeIntegration: 'Renovación', estimatedAmount: '150000', annualRate: '28.00', subProduct: 'BOLSÓN', program: 'ATRACCIÓN DE LA COMPETENCIA',
-        moraInicioMes: '0', moraActual: '0', saldoInicioMes: '85000', saldoActual: '80000',
-        portfolioStatus: 'Sin contacto', ultimoEstatus: 'Vigente',
-        fechaIngreso: '10/01/2024', entryDate: '10/01/2024', saldoOcupado: '85000', saldoDisponible: '15000',
-        moraDays: '0', phones: ['5533445566', '', ''], city: 'Silao', colony: 'Centro', streets: 'Morelos 22',
-        ultimaFechaPago: '05/02/2026', fechaVencimiento: '10/03/2026', montoAmortizacion: '8500', montoRequeridoCorriente: '0',
-        herramientaAplicada: 'Ninguna', categoriaGestion: 'Preventivo'
+
+        typeIntegration: 'Renovación', 
+        estimatedAmount: '150000', 
+        annualRate: '28.00', 
+        subProduct: 'BOLSÓN', 
+        program: 'ATRACCIÓN DE LA COMPETENCIA',
+        moraInicioMes: '0', 
+        moraActual: '0', 
+        saldoInicioMes: '85000', 
+        saldoActual: '80000',
+        portfolioStatus: 'Sin contacto', 
+        ultimoEstatus: 'Vigente',
+        fechaIngreso: '10/01/2024', 
+        entryDate: '10/01/2024', 
+        saldoOcupado: '85000',
+        saldoDisponible: '15000',
+        moraDays: '0', 
+        
+        phones: ['5533445566', '', ''], 
+        city: 'Silao', 
+        colony: 'Centro', 
+        streets: 'Morelos 22',
+
+        ultimaFechaPago: '05/02/2026', 
+        fechaVencimiento: '10/03/2026', 
+        montoAmortizacion: '8500', 
+        montoRequeridoCorriente: '0',
+        herramientaAplicada: 'Ninguna', 
+        categoriaGestion: 'Preventivo'
     },
     {
-        name: 'ROBERTO GOMEZ', classification: 'Cliente', idCredito: 'CR-3344-2025', product: 'Microcredito',
-        typeIntegration: 'Tratamiento', estimatedAmount: '15000', annualRate: '45.00', subProduct: 'FASTCREDIT', program: 'OTRO',
-        moraInicioMes: '30', moraActual: '32', saldoInicioMes: '15000', saldoActual: '15000',
-        portfolioStatus: 'Promesa de pago', ultimoEstatus: 'Vencido',
-        fechaIngreso: '12/03/2024', entryDate: '12/03/2024', saldoOcupado: '15000', saldoDisponible: '0',
-        moraDays: '32', phones: ['5544556677', '', ''], city: 'León', colony: 'Lomas', streets: 'Roble 12',
-        ultimaFechaPago: '12/01/2026', fechaVencimiento: '12/02/2026', montoAmortizacion: '4500', montoRequeridoCorriente: '4500',
-        herramientaAplicada: 'Ninguna', categoriaGestion: 'Recuperación'
+        name: 'ROBERTO GOMEZ', 
+        classification: 'Cliente', 
+
+        idCredito: 'CR-3344-2025', 
+
+        product: 'Microcredito',
+
+        typeIntegration: 'Tratamiento', 
+        estimatedAmount: '15000', 
+        annualRate: '45.00', 
+        subProduct: 'FASTCREDIT', 
+        program: 'OTRO',
+        moraInicioMes: '30', 
+        moraActual: '32', 
+        saldoInicioMes: '15000', 
+        saldoActual: '15000',
+        portfolioStatus: 'Promesa de pago', 
+        ultimoEstatus: 'Vencido',
+        fechaIngreso: '12/03/2024', 
+        entryDate: '12/03/2024', 
+        saldoOcupado: '15000', 
+        saldoDisponible: '0',
+        moraDays: '32', 
+
+        phones: ['5544556677', '', ''], 
+        city: 'León', 
+        colony: 'Lomas', 
+        streets: 'Roble 12',
+
+        ultimaFechaPago: '12/01/2026', 
+        fechaVencimiento: '12/02/2026', 
+        montoAmortizacion: '4500', 
+        montoRequeridoCorriente: '4500',
+        herramientaAplicada: 'Ninguna', 
+        categoriaGestion: 'Recuperación'
     },
     {
-        name: 'SANDRA LUZ', classification: 'Cliente', idCredito: 'CR-5566-2025', product: 'Captación',
-        typeIntegration: 'Nuevo', estimatedAmount: '0', annualRate: '0.00', subProduct: 'NINGUNO', program: 'NINGUNO',
-        moraInicioMes: '0', moraActual: '0', saldoInicioMes: '0', saldoActual: '0',
-        portfolioStatus: 'N/A', ultimoEstatus: 'Vigente',
-        fechaIngreso: '05/07/2024', entryDate: '05/07/2024', saldoOcupado: '0', saldoDisponible: '25000',
-        moraDays: '0', phones: ['5555667788', '', ''], city: 'Irapuato', colony: 'Centro', streets: 'Juarez 1',
-        ultimaFechaPago: '-', fechaVencimiento: '-', montoAmortizacion: '0', montoRequeridoCorriente: '0',
-        herramientaAplicada: 'N/A', categoriaGestion: 'Preventivo'
+        name: 'SANDRA LUZ', 
+        classification: 'Cliente', 
+        
+        idCredito: 'CR-5566-2025', 
+        
+        product: 'Captación',
+
+        typeIntegration: 'Nuevo', 
+        estimatedAmount: '0', 
+        annualRate: '0.00', subProduct: 'NINGUNO', 
+        program: 'NINGUNO',
+        moraInicioMes: '0', 
+        moraActual: '0', 
+        saldoInicioMes: '0', 
+        saldoActual: '0',
+        portfolioStatus: 'N/A', 
+        ultimoEstatus: 'Vigente',
+        fechaIngreso: '05/07/2024', 
+        entryDate: '05/07/2024', 
+        saldoOcupado: '0', 
+        saldoDisponible: '25000',
+        moraDays: '0', 
+        
+        phones: ['5555667788', '', ''], 
+        city: 'Irapuato', 
+        colony: 'Centro', 
+        streets: 'Juarez 1',
+
+        ultimaFechaPago: '-', 
+        fechaVencimiento: '-', 
+        montoAmortizacion: '0', 
+        montoRequeridoCorriente: '0',
+        herramientaAplicada: 'N/A', 
+        categoriaGestion: 'Preventivo'
     },
     {
-        name: 'PEDRO INFANTE', classification: 'Cliente', idCredito: 'CR-7788-2025', product: 'Consumo',
-        typeIntegration: 'Nuevo', estimatedAmount: '5000', annualRate: '38.00', subProduct: 'LIQUIDEZ', program: 'NINGUNO',
-        moraInicioMes: '0', moraActual: '0', saldoInicioMes: '5000', saldoActual: '2000',
-        portfolioStatus: 'Abono/ Pago Parcial', ultimoEstatus: 'Vigente',
-        fechaIngreso: '10/08/2024', entryDate: '10/08/2024', saldoOcupado: '5000', saldoDisponible: '3000',
-        moraDays: '0', phones: ['5566778899', '', ''], city: 'León', colony: 'Obregon', streets: 'Revolucion 45',
-        ultimaFechaPago: '15/02/2026', fechaVencimiento: '15/03/2026', montoAmortizacion: '500', montoRequeridoCorriente: '0',
-        herramientaAplicada: 'Ninguna', categoriaGestion: 'Preventivo'
+        name: 'PEDRO INFANTE', 
+        classification: 'Cliente', 
+
+        idCredito: 'CR-7788-2025',
+
+        product: 'Consumo',
+
+        typeIntegration: 'Nuevo', 
+        estimatedAmount: '5000', 
+        annualRate: '38.00', 
+        subProduct: 'LIQUIDEZ', 
+        program: 'NINGUNO',
+        moraInicioMes: '0', 
+        moraActual: '0', 
+        saldoInicioMes: '5000', 
+        saldoActual: '2000',
+        portfolioStatus: 'Abono/ Pago Parcial', 
+        ultimoEstatus: 'Vigente',
+        fechaIngreso: '10/08/2024', 
+        entryDate: '10/08/2024', 
+        saldoOcupado: '5000', 
+        saldoDisponible: '3000',
+        moraDays: '0', 
+        phones: ['5566778899', '', ''], 
+        city: 'León', 
+        colony: 'Obregon', 
+        streets: 'Revolucion 45',
+
+        ultimaFechaPago: '15/02/2026', 
+        fechaVencimiento: '15/03/2026', 
+        montoAmortizacion: '500', 
+        montoRequeridoCorriente: '0',
+        herramientaAplicada: 'Ninguna', 
+        categoriaGestion: 'Preventivo'
     },
     {
-        name: 'VICENTE FERNANDEZ', classification: 'Cliente', idCredito: 'CR-9900-2025', product: 'Pyme',
-        typeIntegration: 'Convenio', estimatedAmount: '150000', annualRate: '25.00', subProduct: 'BACK TO BACK', program: 'SCORE 500',
-        moraInicioMes: '10', moraActual: '12', saldoInicioMes: '150000', saldoActual: '150000',
-        portfolioStatus: 'Promesa de pago', ultimoEstatus: 'Vencido',
-        fechaIngreso: '01/01/2024', entryDate: '01/01/2024', saldoOcupado: '150000', saldoDisponible: '0',
-        moraDays: '12', phones: ['5599001122', '', ''], city: 'Irapuato', colony: 'Juarez', streets: 'Libertad 100',
-        ultimaFechaPago: '01/01/2026', fechaVencimiento: '01/02/2026', montoAmortizacion: '15000', montoRequeridoCorriente: '15000',
-        herramientaAplicada: 'Ninguna', categoriaGestion: 'Legal'
+        name: 'VICENTE FERNANDEZ', 
+        classification: 'Cliente', 
+        idCredito: 'CR-9900-2025', 
+        product: 'Pyme',
+        typeIntegration: 'Convenio', 
+        estimatedAmount: '150000', 
+        annualRate: '25.00', 
+        subProduct: 'BACK TO BACK', 
+        program: 'SCORE 500',
+        moraInicioMes: '10', 
+        moraActual: '12', 
+        saldoInicioMes: '150000', 
+        saldoActual: '150000',
+        portfolioStatus: 'Promesa de pago', 
+        ultimoEstatus: 'Vencido',
+        fechaIngreso: '01/01/2024',
+        entryDate: '01/01/2024', 
+        saldoOcupado: '150000', 
+        saldoDisponible: '0',
+        moraDays: '12', 
+        
+        phones: ['5599001122', '', ''], 
+        city: 'Irapuato', 
+        colony: 'Juarez', 
+        streets: 'Libertad 100',
+
+        ultimaFechaPago: '01/01/2026', 
+        fechaVencimiento: '01/02/2026', 
+        montoAmortizacion: '15000', 
+        montoRequeridoCorriente: '15000',
+        herramientaAplicada: 'Ninguna', //Modalidad
+        categoriaGestion: 'Legal'
     }
 ];
 
@@ -152,7 +362,26 @@ export const AgendaProvider = ({ children }) => {
     const [agendas, setAgendas] = useState([]);
     const [scheduledFollowUps, setScheduledFollowUps] = useState([]);
 
-    // ── Demo: auto-load approved agenda when operative role is selected ─────────
+    /**
+     * TODO: EP: GET /api/v1/kpis/metas?fecha=YYYY-MM-DD
+     * Consulta Backend: Extrae las metas y compromisos capturados previamente.
+     * En el futuro este mock se eliminará y el estado kpiCompromisos 
+     * se llenará directamente con la respuesta del backend.
+     */
+    const DEMO_KPI_COMPROMISOS = {
+        'asesor-f': { captNueva: '120000', captReinversion: '85000', colocInicial: '95000', colocRedisposicion: '45000', rec0: '18000', rec1_7: '12000', rec8_30: '8500', rec31_60: '4000', recMas61: '2000' },
+        'asesor-c': { captNueva: '95000', captReinversion: '60000', dispersion: '180000', dispersionNueva: '75000', aperturasCredFacil: '8', montoLineasApertura: '240000', rec0: '22000', rec1_7: '15000', rec8_30: '9000', rec31_60: '5000', recMas61: '2500', servicioPremiumPendiente: '3' },
+        'coordinador-l': { captNueva: '80000', captReinversion: '55000', dispersion: '150000', dispersionNueva: '60000', aperturasCredFacil: '6', montoLineasApertura: '180000', rec0: '16000', rec1_7: '11000', rec8_30: '7000', rec31_60: '3500', recMas61: '1500', servicioPremiumPendiente: '2' },
+        'gestor-i': { cobranzaTotalDia: '45000', cobranza1_30: '28000', cobranza31_60: '12000', opCobradas: '14', visitasRealizadas: '8', promesasDia: '5', montoPromesas: '18000', saldoSaneadoDia: '8000', contencionMas30: '22000', contencionMas60: '12000', contencionMas89: '5000' },
+        'gestor-e': { captNueva: '70000', captReinversion: '40000', dispersion: '120000', dispersionNueva: '50000', aperturasCredFacil: '5', montoLineasApertura: '150000', rec0: '14000', rec1_7: '9000', rec8_30: '6000', rec31_60: '3000', recMas61: '1200', servicioPremiumPendiente: '2' },
+    };
+
+    /**
+     * TODO: EP: GET /api/v1/agendas/operativo/hoy
+     * Esta constante asocia temporalmente los usuarios Mock con las agendas.
+     * En producción, simplemente llamarás al EP que te regresará el JSON 
+     * con la agenda del usuario logueado en base a su Token.
+     */
     const DEMO_AGENDA_IDS = {
         'asesor-f': AGENDAS_COMERCIAL.find(ag => ag.operativo.puesto === 'Asesor Financiero'),
         'asesor-c': AGENDAS_COMERCIAL.find(ag => ag.operativo.puesto === 'Asesor Comercial' && ag.sucursal === 'HERMOSILLO'),
@@ -184,16 +413,6 @@ export const AgendaProvider = ({ children }) => {
             }
         }));
     }, [selectedRole?.id]);
-
-    // Demo KPI compromiso values by role — must be declared before the useEffect that uses it
-    const DEMO_KPI_COMPROMISOS = {
-        'asesor-f': { captNueva: '120000', captReinversion: '85000', colocInicial: '95000', colocRedisposicion: '45000', rec0: '18000', rec1_7: '12000', rec8_30: '8500', rec31_60: '4000', recMas61: '2000' },
-        'asesor-c': { captNueva: '95000', captReinversion: '60000', dispersion: '180000', dispersionNueva: '75000', aperturasCredFacil: '8', montoLineasApertura: '240000', rec0: '22000', rec1_7: '15000', rec8_30: '9000', rec31_60: '5000', recMas61: '2500', servicioPremiumPendiente: '3' },
-        'coordinador-l': { captNueva: '80000', captReinversion: '55000', dispersion: '150000', dispersionNueva: '60000', aperturasCredFacil: '6', montoLineasApertura: '180000', rec0: '16000', rec1_7: '11000', rec8_30: '7000', rec31_60: '3500', recMas61: '1500', servicioPremiumPendiente: '2' },
-        'gestor-i': { cobranzaTotalDia: '45000', cobranza1_30: '28000', cobranza31_60: '12000', opCobradas: '14', visitasRealizadas: '8', promesasDia: '5', montoPromesas: '18000', saldoSaneadoDia: '8000', contencionMas30: '22000', contencionMas60: '12000', contencionMas89: '5000' },
-        'gestor-e': { captNueva: '70000', captReinversion: '40000', dispersion: '120000', dispersionNueva: '50000', aperturasCredFacil: '5', montoLineasApertura: '150000', rec0: '14000', rec1_7: '9000', rec8_30: '6000', rec31_60: '3000', recMas61: '1200', servicioPremiumPendiente: '2' },
-    };
-    // ─────────────────────────────────────────────────────────────────────────
 
     const getVisibleSegments = () => {
         const roleId = selectedRole?.id;

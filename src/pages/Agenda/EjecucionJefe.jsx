@@ -11,6 +11,11 @@ import {
 } from 'lucide-react';
 
 // ── Mock CheckIn Generator ────────────────────────────────────────────────────
+
+/**
+ * TODO: EP: GET /api/v1/catalogos/estatus-cartera
+ * Consulta: SELECT id, nombre FROM catalogos.estatus_cartera;
+ */
 const MOCK_RESULTADOS = [
     'Abono/ Pago Parcial', 'Compromiso de pago', 'Promesa de pago',
     'Negativa de pago', 'Sin contacto', 'Ilocalizable', 'Convenio',
@@ -124,18 +129,26 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
     };
 
     // KPI helpers for read-only view
+
+    /**
+     * TODO: EP Lógico de KPIs
+     * Consulta Backend: 
+     * SELECT k.* FROM agendas.kpis k WHERE id_usuario = :id_operativo AND fecha = :hoy
+     */
     const DEMO_KPI_COMPROMISOS = {
         'asesor-f': { captNueva: '120000', captReinversion: '85000', colocInicial: '95000', colocRedisposicion: '45000', rec0: '18000', rec1_7: '12000', rec8_30: '8500', rec31_60: '4000', recMas61: '2000' },
         'asesor-c': { captNueva: '95000', captReinversion: '60000', dispersion: '180000', dispersionNueva: '75000', aperturasCredFacil: '8', montoLineasApertura: '240000', rec0: '22000', rec1_7: '15000', rec8_30: '9000', rec31_60: '5000', recMas61: '2500', servicioPremiumPendiente: '3' },
         'coordinador-l': { captNueva: '80000', captReinversion: '55000', dispersion: '150000', dispersionNueva: '60000', aperturasCredFacil: '6', montoLineasApertura: '180000', rec0: '16000', rec1_7: '11000', rec8_30: '7000', rec31_60: '3500', recMas61: '1500', servicioPremiumPendiente: '2' },
         'gestor-i': { cobranzaTotalDia: '45000', cobranza1_30: '28000', cobranza31_60: '12000', opCobradas: '14', visitasRealizadas: '8', promesasDia: '5', montoPromesas: '18000', saldoSaneadoDia: '8000', contencionMas30: '22000', contencionMas60: '12000', contencionMas89: '5000' },
     };
+    
     const FIELDS_JEFE = {
         'asesor-f': [{ key: 'captNueva', label: 'Captación Nueva' }, { key: 'captReinversion', label: 'Captación Reinv.' }, { key: 'colocInicial', label: 'Colocación Inicial' }, { key: 'rec0', label: 'Recup. 0 días' }, { key: 'rec1_7', label: 'Recup. 1-7d' }],
         'asesor-c': [{ key: 'captNueva', label: 'Captación Nueva' }, { key: 'dispersion', label: 'Dispersión' }, { key: 'rec0', label: 'Recup. 0 días' }, { key: 'servicioPremiumPendiente', label: 'Serv. Premium' }],
         'coordinador-l': [{ key: 'captNueva', label: 'Captación Nueva' }, { key: 'dispersion', label: 'Dispersión' }, { key: 'rec0', label: 'Recup. 0 días' }],
         'gestor-i': [{ key: 'cobranzaTotalDia', label: 'Cobranza Total' }, { key: 'opCobradas', label: 'Ops. Cobradas' }, { key: 'visitasRealizadas', label: '# Visitas' }, { key: 'promesasDia', label: 'Promesas' }],
     };
+    
     const puestoToRoleId = (puesto) => {
         if (puesto?.includes('Financiero')) return 'asesor-f';
         if (puesto?.includes('Comercial')) return 'asesor-c';
@@ -474,6 +487,10 @@ const EjecucionJefe = () => {
                 </header>
                 <KpiBar agendas={AGENDAS_COBRANZA} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/**
+                     * TODO: EP Lógico de Ejecutivos. Mapeo de la jerarquía que vendrá 
+                     * de: GET /api/v1/jerarquia/cobranza/ejecutivos
+                     */}
                     {EJECUTIVOS_COBRANZA.map(ej => {
                         const ejAg = AGENDAS_COBRANZA.filter(ag => ag.ejecutivoId === ej.id);
                         const done = ejAg.filter(ag => ag.status === 'aprobada').reduce((a, ag) => a + Math.floor(Object.values(ag.segments).flat().filter(v => v.name).length * 0.65), 0);

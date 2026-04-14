@@ -4,6 +4,27 @@
  * con varias gestiones por segmento.
  */
 
+/**
+ * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/zonas-sucursales
+ * Consulta:
+ * select z.nombre as id, z.descripcion as nombre, s.nombre as sucursales 
+ * from catalogos.zonas as z
+ * inner join catalogos.sucursales s on z.id_zona = s.id_zona order by z.id_zona ;
+ * * Resultado en formato JSON:
+ * [
+ * {
+ * "id" : "zona-1",
+ * "nombre" : "ZONA I",
+ * "sucursales" : "LA PAZ"
+ * },
+ * {
+ * "id" : "zona-1",
+ * "nombre" : "ZONA I",
+ * "sucursales" : "HERMOSILLO"
+ * }
+ * // ...
+ * ]
+ */
 export const ZONAS = [
     { id: 'zona-1', nombre: 'ZONA I', sucursales: ['HERMOSILLO', 'OBREGON', 'NAVOJOA', 'GUAYMAS', 'CABORCA'] },
     { id: 'zona-2', nombre: 'ZONA II', sucursales: ['LA PAZ', 'CABO SAN LUCAS', 'SAN JOSE DEL CABO', 'LORETO'] },
@@ -14,6 +35,18 @@ export const ZONAS = [
 
 const formatCurrency = (v) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(v);
 
+/**
+ * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/estados
+ * Consulta:
+ * SELECT id_estado, nombre FROM catalogos.estados;
+ * * Resultado en JSON:
+ * [
+ * { "id_estado" : 1, "nombre" : "BORRADOR" },
+ * { "id_estado" : 2, "nombre" : "PENDIENTE" },
+ * { "id_estado" : 3, "nombre" : "APROBADA" },
+ * { "id_estado" : 4, "nombre" : "REQUIERE_MODIFICACION" }
+ * ]
+ */
 // Colores/badges por estado
 export const STATUS_STYLES = {
     borrador: { label: 'Borrador', bg: 'bg-slate-100', text: 'text-slate-500', dot: 'bg-slate-400' },
@@ -31,6 +64,18 @@ const mk = (overrides) => ({ id: String(_uid++), ...overrides });
 // ─────────────────────────────────────────────────────────────────────────────
 // AGENDAS CANAL COMERCIAL
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * TODO: Este arreglo se alimentará del EP: /api/v1/agendas/equipo/comercial?fecha=YYYY-MM-DD
+ * Consulta:
+ * SELECT p.id_plan as id, z.nombre as zona, s.nombre as sucursal, 
+ * u.nombre as operativo_nombre, u.puesto as operativo_puesto,
+ * p.fch_crea as horaEnvio, e.nombre as status, p.nota_jefe
+ * FROM agendas.planes p
+ * INNER JOIN seguridad.usuarios u ON p.id_usuario = u.id_usuario
+ * INNER JOIN catalogos.estados e ON p.id_estado = e.id_estado ...
+ * (Debe incluir el JSON de segmentos/gestiones como subconsulta o detalle)
+ */
 export const AGENDAS_COMERCIAL = [
     // ── HERMOSILLO ─────────────────────────────────────────────
     {
@@ -231,6 +276,11 @@ export const AGENDAS_COMERCIAL = [
     },
 ];
 
+/**
+ * TODO: Este arreglo se alimentará del EP: /api/v1/agendas/equipo/cobranza?fecha=YYYY-MM-DD
+ * Consulta: (Misma estructura de Planes pero cruzando con Ejecutivos de Cobranza)
+ */
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AGENDAS CANAL COBRANZA (Gestor Interno)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -329,6 +379,15 @@ export const AGENDAS_COBRANZA = [
     },
 ];
 
+
+/**
+ * TODO: Este arreglo se alimentará del EP: /api/v1/jerarquia/cobranza/ejecutivos
+ * Consulta:
+ * SELECT u.id_usuario as id, u.nombre, j.id_jefe as coordinadorId 
+ * FROM seguridad.usuarios u ... WHERE puesto = 'EJECUTIVO-COB'
+ */
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ESTRUCTURA JERÁRQUICA COBRANZA
 // (los gestores no se agrupan por zona/sucursal sino por ejecutivo asignado)
@@ -358,6 +417,12 @@ export const EJECUTIVOS_COBRANZA = [
     },
 ];
 
+/**
+ * TODO: Este arreglo se alimentará del EP: /api/v1/jerarquia/cobranza/coordinadores
+ * Consulta:
+ * SELECT u.id_usuario as id, u.nombre
+ * FROM seguridad.usuarios u ... WHERE puesto = 'COORD-COB'
+ */
 export const COORDINADORES_COBRANZA = [
     {
         id: 'coord-01',
@@ -402,3 +467,65 @@ export const contarEstados = (agendas) => ({
     requiere_modificacion: agendas.filter(a => a.status === 'requiere_modificacion').length,
     totalGestiones: agendas.reduce((s, a) => s + a.totalGestiones, 0),
 });
+
+
+/* ==========================================================================
+ * SIMULACIÓN DE ENDPOINTS (API SERVICE)
+ * ========================================================================== */
+// TODO: Reemplazar el cuerpo de estas funciones con llamadas reales (axios.get/post)
+
+export const AgendaApiService = {
+    
+    // 1. Obtener las agendas de un equipo (Aplica para todos los jefes)
+    // EP Sugerido: GET /api/v1/agendas/equipo?fecha=YYYY-MM-DD
+    getAgendasEquipo: async (canal) => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                const data = canal === 'cobranza' ? AGENDAS_COBRANZA : AGENDAS_COMERCIAL;
+                resolve({ codigo: 'OK', contenido: data });
+            }, 500); 
+        });
+    },
+
+    // 2. Obtener la jerarquía de cobranza (Solo para subdirector de cobranza)
+    // EP Sugerido: GET /api/v1/jerarquia/cobranza
+    getJerarquiaCobranza: async () => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                resolve({
+                    codigo: 'OK',
+                    contenido: {
+                        coordinadores: COORDINADORES_COBRANZA,
+                        ejecutivos: EJECUTIVOS_COBRANZA
+                    }
+                });
+            }, 300);
+        });
+    },
+
+    // 3. Autorizar o Rechazar una agenda (PUT / POST)
+    // EP Sugerido: PUT /api/v1/agendas/{idPlan}/estatus
+    actualizarEstatusAgenda: async (idPlan, estatus, nota = '') => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                resolve({
+                    codigo: 'OK',
+                    mensaje: `Agenda ${idPlan} actualizada a ${estatus} correctamente.`
+                });
+            }, 600);
+        });
+    },
+
+    // 4. Registrar Gestión Operativa (Check-in)
+    // EP Sugerido: POST /api/v1/gestiones/ejecucion
+    registrarCheckIn: async (idVisita, formData) => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                resolve({
+                    codigo: 'OK',
+                    mensaje: 'Gestión guardada correctamente en base de datos.'
+                });
+            }, 800);
+        });
+    }
+};

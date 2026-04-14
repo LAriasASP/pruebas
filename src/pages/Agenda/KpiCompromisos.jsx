@@ -7,6 +7,15 @@ import { Target, Lock, TrendingUp, DollarSign, Users, Activity } from 'lucide-re
 // Field Definitions per Role
 // ──────────────────────────────────────────────────────────────────────────────
 
+/**
+ * TODO: Estos catálogos de configuración de KPIs se alimentarán del EP: /api/v1/catalogos/kpis-config
+ * Consulta Backend Lógica:
+ * SELECT k.grupo, k.color, k.llave_campo, k.etiqueta 
+ * FROM catalogos.kpis_configuracion k 
+ * WHERE k.clave_puesto = 'ASESOR-F' AND k.activo = true;
+ * * Resultado en JSON esperado: 
+ * Arreglos agrupados por categoría para construir los inputs dinámicamente.
+ */
 const FIELDS_ASESOR_F = [
     {
         group: 'Captación',
@@ -40,6 +49,9 @@ const FIELDS_ASESOR_F = [
     },
 ];
 
+/**
+ * TODO: Mismo EP: /api/v1/catalogos/kpis-config filtrando por clave ASESOR-C o COORDINADOR-L
+ */
 const FIELDS_COORD_ASESOR_C = [
     {
         group: 'Captación',
@@ -83,6 +95,9 @@ const FIELDS_COORD_ASESOR_C = [
     },
 ];
 
+/**
+ * TODO: Mismo EP: /api/v1/catalogos/kpis-config filtrando por clave GESTOR-I
+ */
 const FIELDS_GESTOR_I = [
     {
         group: 'Cobranza',
@@ -200,6 +215,12 @@ const KpiCompromisos = () => {
     const { currentAgenda, updateKpi } = useAgenda();
 
     const isLocked = currentAgenda.status === 'pendiente' || currentAgenda.status === 'aprobada';
+    
+    /**
+     * TODO: Los valores capturados aquí se extraen y envían al backend
+     * al momento de certificar la agenda (PlaneacionOperativo.jsx).
+     * EP de Inserción: POST /api/v1/agendas/{idPlan}/kpis-compromisos
+     */
     const kpi = currentAgenda.kpiCompromisos || {};
 
     // Determine which field groups to render

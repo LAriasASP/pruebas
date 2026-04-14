@@ -1,30 +1,27 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext } from 'react';
+import { useAuth } from './AuthContext';
 
 const RoleContext = createContext();
 
-export const roles = [
-    // === CANAL COMERCIAL - OPERATIVOS ===
-    { id: 'asesor-f', name: 'Asesor Financiero', category: 'Operativo', canal: 'comercial' },
-    { id: 'asesor-c', name: 'Asesor Comercial', category: 'Operativo', canal: 'comercial' },
-    { id: 'coordinador-l', name: 'Coordinador de Línea Revolvente', category: 'Operativo', canal: 'comercial' },
-    { id: 'asesor-nuevo', name: 'Asesor en Formación (sin agenda)', category: 'Operativo', canal: 'comercial' },
-    // === CANAL COBRANZA - OPERATIVO ===
-    { id: 'gestor-i', name: 'Gestor Interno', category: 'Operativo', canal: 'cobranza' },
-    // === CANAL COMERCIAL - JEFES ===
-    { id: 'gerente', name: 'Gerente de Sucursal', category: 'Jefe', canal: 'comercial', nivel: 1 },
-    { id: 'subdirector', name: 'Subdirector / Gerente Divisional', category: 'Jefe', canal: 'comercial', nivel: 2 },
-    { id: 'director', name: 'Director General', category: 'Jefe', canal: 'comercial', nivel: 3 },
-    // === CANAL COBRANZA - JEFES ===
-    { id: 'ejecutivo-cob', name: 'Ejecutivo de Cobranza', category: 'Jefe', canal: 'cobranza', nivel: 1 },
-    { id: 'coord-cob', name: 'Coordinador de Cobranza', category: 'Jefe', canal: 'cobranza', nivel: 2 },
-    { id: 'subdir-cob', name: 'Subdirector de Cobranza', category: 'Jefe', canal: 'cobranza', nivel: 3 },
-];
-
 export const RoleProvider = ({ children }) => {
-    const [selectedRole, setSelectedRole] = useState(roles[0]);
+    const { session } = useAuth();
+
+    // Extraemos el rol directamente desde la sesión autenticada que armamos en AuthContext.
+    // Si el usuario no está logueado, selectedRole será null.
+    const selectedRole = session ? {
+        id: session.clavePuesto ? session.clavePuesto.toLowerCase() : 'sin-rol', 
+        name: session.nombrePuesto,
+        category: session.category === 'JEFE' ? 'Jefe' : 'Operativo',
+        canal: session.canal ? session.canal.toLowerCase() : 'general',
+        nivel: session.nivel // Ya viene como número entero desde el AuthContext
+    } : null;
+
+    // Solo exportamos el rol real en un arreglo de 1 elemento,
+    // para no romper componentes que esperaban iterar sobre `roles` en la demo.
+    const roles = selectedRole ? [selectedRole] : [];
 
     return (
-        <RoleContext.Provider value={{ selectedRole, setSelectedRole, roles }}>
+        <RoleContext.Provider value={{ selectedRole, roles }}>
             {children}
         </RoleContext.Provider>
     );

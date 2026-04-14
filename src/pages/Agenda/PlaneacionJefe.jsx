@@ -132,6 +132,10 @@ const SegmentReadOnly = ({ title, visits, color }) => {
             </button>
             {open && (
                 <div className="divide-y divide-slate-100">
+                    {/**
+                     * REFERENCIA DATA: Esta información proviene de agendas.planes 
+                     * y sus acciones vinculadas en agendas.controles (ver AgendaContext mockDatabase)
+                     */}
                     {visits.map((v, idx) => (
                         <div key={v.id} className="px-5 py-3 bg-white hover:bg-slate-50/50 grid grid-cols-12 gap-3 items-start text-[10px]">
                             <div className="col-span-1 font-mono-tech text-slate-400 pt-1">{idx + 1}</div>
@@ -263,6 +267,10 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
                     >
                         <AlertTriangle size={16} /> Solicitar Modificación
                     </button>
+                    {/**
+                     * TODO: EP sugerido: PUT /api/v1/agendas/{idPlan}/estatus
+                     * Consulta Backend: UPDATE agendas.planes SET id_estado = 3 WHERE id_plan = :idPlan;
+                     */}
                     <button
                         onClick={handleApprove}
                         className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white transition-all font-black text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-200"
@@ -562,6 +570,10 @@ const VistaGerente = ({ agendas, sucursal, zona, rolName, canal }) => {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {/**
+                         * REFERENCIA DATA: Estas tarjetas visualizan los datos cargados en 
+                         * AgendaContext/agendaMockData, filtrados por sucursal o ejecutivo.
+                         */}
                         {agendas.map(ag => (
                             <AgendaCard
                                 key={ag.id}
@@ -607,6 +619,10 @@ const VistaSubdirector = ({ zona, sucursalesData, rolName, canal }) => {
 
     return (
         <div className="animate-in fade-in duration-300">
+            {/**
+             * TODO: EP: GET /api/v1/zonas/{idZona}/resumen
+             * Consulta: SELECT s.nombre, count(p.id_plan) as total FROM sucursales s ...
+             */}
             <KpiBar
                 counts={counts}
                 title={zona}
@@ -657,6 +673,10 @@ const VistaDirector = ({ zonasData, rolName, canal }) => {
 
     return (
         <div className="animate-in fade-in duration-300">
+            {/**
+             * TODO: EP: GET /api/v1/nacional/resumen
+             * Consulta: SELECT z.nombre, count(p.id_plan) as total FROM zonas z ...
+             */}
             <KpiBar
                 counts={counts}
                 title="Vista Nacional"
@@ -808,6 +828,11 @@ const VistaCoordCobranza = ({ coordinador, ejecutivos, allAgendas, rolName }) =>
 
     return (
         <div className="animate-in fade-in duration-300">
+            {/**
+             * TODO: EP Lógico de Coordinadores. Mapeo de la jerarquía que vendrá 
+             * de: GET /api/v1/jerarquia/cobranza/coordinadores
+             * Consulta: SELECT * FROM seguridad.usuarios WHERE id_jefe = :idCoordinador
+             */}
             <KpiBar
                 counts={counts}
                 title={`Coord. ${coordinador.nombre}`}
@@ -816,6 +841,10 @@ const VistaCoordCobranza = ({ coordinador, ejecutivos, allAgendas, rolName }) =>
             />
             <h3 className="text-[11px] font-black text-accent uppercase tracking-widest mb-4">Regiones de Ejecutivos</h3>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/**
+                 * TODO: EP Lógico de Ejecutivos. Mapeo de la jerarquía que vendrá 
+                 * de: GET /api/v1/jerarquia/cobranza/ejecutivos
+                 */}
                 {ejecutivos.map(ej => (
                     <EjecutivoCard
                         key={ej.id}
@@ -867,6 +896,10 @@ const VistaSubdirCobranza = ({ coordinadores, ejecutivos, allAgendas, rolName })
             />
             <h3 className="text-[11px] font-black text-accent uppercase tracking-widest mb-4">Coordinadores de Cobranza</h3>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/**
+                 * TODO: EP Lógico de Coordinadores. Mapeo de la jerarquía que vendrá 
+                 * de: GET /api/v1/jerarquia/cobranza/coordinadores
+                 */}
                 {coordinadores.map(coord => {
                     const coordEjs = ejecutivos.filter(e => e.coordinadorId === coord.id);
                     const coordAgendas = allAgendas.filter(ag => coordEjs.some(e => e.id === ag.ejecutivoId));

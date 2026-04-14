@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 import { RoleProvider } from './context/RoleContext';
 import { AgendaProvider } from './context/AgendaContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { CatalogProvider } from './context/CatalogContext';
 
 const AppLayout = () => (
   <div className="flex min-h-screen bg-background text-primary">
@@ -52,11 +53,13 @@ function App() {
   return (
     <AuthProvider>
       <RoleProvider>
-        <AgendaProvider>
-          <Router>
-            <AppRoutes />
-          </Router>
-        </AgendaProvider>
+        <CatalogProvider>
+          <AgendaProvider>
+            <Router>
+              <AppRoutes />
+            </Router>
+          </AgendaProvider>
+        </CatalogProvider>
       </RoleProvider>
     </AuthProvider>
   );
