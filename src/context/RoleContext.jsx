@@ -6,18 +6,15 @@ const RoleContext = createContext();
 export const RoleProvider = ({ children }) => {
     const { session } = useAuth();
 
-    // Extraemos el rol directamente desde la sesión autenticada que armamos en AuthContext.
-    // Si el usuario no está logueado, selectedRole será null.
+    // Ahora leemos exactamente las llaves que definimos en AuthContext
     const selectedRole = session ? {
-        id: session.clavePuesto ? session.clavePuesto.toLowerCase() : 'sin-rol', 
-        name: session.nombrePuesto,
-        category: session.category === 'JEFE' ? 'Jefe' : 'Operativo',
-        canal: session.canal ? session.canal.toLowerCase() : 'general',
-        nivel: session.nivel // Ya viene como número entero desde el AuthContext
+        id: session.clavePuesto ? String(session.clavePuesto).toLowerCase() : 'sin-rol', 
+        name: session.nombrePuesto || 'Rol Desconocido',
+        category: session.category || 'Operativo', // Ya viene como 'Jefe' o 'Operativo' desde AuthContext
+        canal: session.canal || 'general',
+        nivel: session.nivel || 1
     } : null;
 
-    // Solo exportamos el rol real en un arreglo de 1 elemento,
-    // para no romper componentes que esperaban iterar sobre `roles` en la demo.
     const roles = selectedRole ? [selectedRole] : [];
 
     return (

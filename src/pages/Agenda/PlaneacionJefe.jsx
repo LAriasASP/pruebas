@@ -1,14 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRole } from '../../context/RoleContext';
 import {
-    AGENDAS_COMERCIAL, AGENDAS_COBRANZA,
-    EJECUTIVOS_COBRANZA, COORDINADORES_COBRANZA,
-    agendasDeEjecutivo, agruparPorZona, contarEstados, STATUS_STYLES
+    agruparPorZona, agendasDeEjecutivo, contarEstados, STATUS_STYLES,
+    AgendaApiService // <-- Importamos el servicio de API que simula el Backend
 } from '../../data/agendaMockData';
 import {
     CheckCircle2, Clock, AlertTriangle, ChevronRight, ChevronDown,
     User, Building2, MapPin, FileText, X, Send, RotateCcw,
-    Users, TrendingUp, Briefcase, Eye, ArrowLeft, Shield, Layers
+    Users, TrendingUp, Briefcase, Eye, ArrowLeft, Shield, Layers, Loader2
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -54,6 +53,14 @@ const CounterBadge = ({ counts }) => (
 // ─────────────────────────────────────────────────────────────────────────────
 const ModificacionModal = ({ operativo, onConfirm, onCancel }) => {
     const [nota, setNota] = useState('');
+    const [enviando, setEnviando] = useState(false);
+
+    const handleSubmit = async () => {
+        setEnviando(true);
+        await onConfirm(nota);
+        setEnviando(false);
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg mx-4 p-8 animate-in zoom-in-95 duration-200">
@@ -62,7 +69,7 @@ const ModificacionModal = ({ operativo, onConfirm, onCancel }) => {
                         <h3 className="text-lg font-black text-primary uppercase tracking-tight">Solicitar Modificación</h3>
                         <p className="text-[10px] font-bold text-accent uppercase tracking-widest mt-1">{operativo}</p>
                     </div>
-                    <button onClick={onCancel} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                    <button onClick={onCancel} disabled={enviando} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
                         <X size={16} className="text-slate-400" />
                     </button>
                 </div>
@@ -78,6 +85,7 @@ const ModificacionModal = ({ operativo, onConfirm, onCancel }) => {
                 <textarea
                     value={nota}
                     onChange={e => setNota(e.target.value)}
+                    disabled={enviando}
                     rows={4}
                     className="w-full border border-slate-200 rounded-2xl p-4 text-[12px] text-primary font-medium resize-none focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
                     placeholder="Ej: Corregir la dirección del cliente #3, empalme de horario en las 11:00..."
@@ -85,16 +93,18 @@ const ModificacionModal = ({ operativo, onConfirm, onCancel }) => {
                 <div className="flex gap-3 mt-6">
                     <button
                         onClick={onCancel}
+                        disabled={enviando}
                         className="flex-1 py-3.5 rounded-2xl border border-slate-200 text-[11px] font-black uppercase tracking-widest text-accent hover:bg-slate-50 transition-all"
                     >
                         Cancelar
                     </button>
                     <button
-                        disabled={!nota.trim()}
-                        onClick={() => onConfirm(nota)}
+                        disabled={!nota.trim() || enviando}
+                        onClick={handleSubmit}
                         className={`flex-1 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-widest text-white transition-all flex items-center justify-center gap-2 ${nota.trim() ? 'bg-red-500 hover:bg-red-600 shadow-lg' : 'bg-slate-300 cursor-not-allowed'}`}
                     >
-                        <Send size={14} /> Enviar Solicitud
+                        {enviando ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} 
+                        {enviando ? 'Enviando...' : 'Enviar Solicitud'}
                     </button>
                 </div>
             </div>
@@ -105,7 +115,7 @@ const ModificacionModal = ({ operativo, onConfirm, onCancel }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // DETALLE DE AGENDA (Vista solo lectura para jefes)
 // ─────────────────────────────────────────────────────────────────────────────
-const SegmentReadOnly = ({ title, visits, color }) => {
+const SegmentReadOnly = ({ title, visits }) => {
     const [open, setOpen] = useState(true);
     if (!visits || visits.length === 0) return null;
 
@@ -132,10 +142,6 @@ const SegmentReadOnly = ({ title, visits, color }) => {
             </button>
             {open && (
                 <div className="divide-y divide-slate-100">
-                    {/**
-                     * REFERENCIA DATA: Esta información proviene de agendas.planes 
-                     * y sus acciones vinculadas en agendas.controles (ver AgendaContext mockDatabase)
-                     */}
                     {visits.map((v, idx) => (
                         <div key={v.id} className="px-5 py-3 bg-white hover:bg-slate-50/50 grid grid-cols-12 gap-3 items-start text-[10px]">
                             <div className="col-span-1 font-mono-tech text-slate-400 pt-1">{idx + 1}</div>
@@ -174,22 +180,23 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
     const [modModal, setModModal] = useState(false);
     const [localStatus, setLocalStatus] = useState(agenda.status);
     const [localNota, setLocalNota] = useState(agenda.notaJefe || '');
+    const [isProcessing, setIsProcessing] = useState(false);
 
     const segmentOrder = ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera', 'Gestión de Empresarias'];
 
-    const handleApprove = () => {
+    const handleApprove = async () => {
+        setIsProcessing(true);
+        await onApprove(agenda.id);
         setLocalStatus('aprobada');
-        onApprove && onApprove(agenda.id);
+        setIsProcessing(false);
     };
 
-    const handleMod = (nota) => {
+    const handleMod = async (nota) => {
+        await onRequestMod(agenda.id, nota);
         setLocalStatus('requiere_modificacion');
         setLocalNota(nota);
         setModModal(false);
-        onRequestMod && onRequestMod(agenda.id, nota);
     };
-
-    const totalConSegmentos = segmentOrder.reduce((s, seg) => s + (agenda.segments[seg]?.length || 0), 0);
 
     return (
         <div className="animate-in slide-in-from-right-4 duration-300">
@@ -263,19 +270,18 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
                 <div className="flex gap-3 mt-8 pt-6 border-t border-slate-100">
                     <button
                         onClick={() => setModModal(true)}
-                        className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-red-200 text-red-500 hover:bg-red-50 transition-all font-black text-[11px] uppercase tracking-widest"
+                        disabled={isProcessing}
+                        className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-red-200 text-red-500 hover:bg-red-50 transition-all font-black text-[11px] uppercase tracking-widest disabled:opacity-50"
                     >
                         <AlertTriangle size={16} /> Solicitar Modificación
                     </button>
-                    {/**
-                     * TODO: EP sugerido: PUT /api/v1/agendas/{idPlan}/estatus
-                     * Consulta Backend: UPDATE agendas.planes SET id_estado = 3 WHERE id_plan = :idPlan;
-                     */}
                     <button
                         onClick={handleApprove}
-                        className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white transition-all font-black text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-200"
+                        disabled={isProcessing}
+                        className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white transition-all font-black text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-200 disabled:opacity-50"
                     >
-                        <CheckCircle2 size={16} /> Autorizar Agenda
+                        {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                        {isProcessing ? 'Autorizando...' : 'Autorizar Agenda'}
                     </button>
                 </div>
             )}
@@ -295,17 +301,20 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
 const AgendaCard = ({ agenda, onSelect, onApprove, onRequestMod }) => {
     const [modModal, setModModal] = useState(false);
     const [localStatus, setLocalStatus] = useState(agenda.status);
+    const [isProcessing, setIsProcessing] = useState(false);
 
-    const handleApprove = (e) => {
+    const handleApprove = async (e) => {
         e.stopPropagation();
+        setIsProcessing(true);
+        await onApprove(agenda.id);
         setLocalStatus('aprobada');
-        onApprove && onApprove(agenda.id);
+        setIsProcessing(false);
     };
 
-    const handleMod = (nota) => {
+    const handleMod = async (nota) => {
+        await onRequestMod(agenda.id, nota);
         setLocalStatus('requiere_modificacion');
         setModModal(false);
-        onRequestMod && onRequestMod(agenda.id, nota);
     };
 
     const segCounts = {
@@ -328,7 +337,6 @@ const AgendaCard = ({ agenda, onSelect, onApprove, onRequestMod }) => {
                 onClick={() => onSelect(agenda)}
                 className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-blue-200 hover:shadow-md hover:shadow-blue-100/60 transition-all cursor-pointer group p-5"
             >
-                {/* Top row */}
                 <div className="flex items-start justify-between gap-4 mb-4">
                     <div className="flex items-center gap-3 min-w-0">
                         <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center flex-shrink-0">
@@ -348,7 +356,6 @@ const AgendaCard = ({ agenda, onSelect, onApprove, onRequestMod }) => {
                     </div>
                 </div>
 
-                {/* Segment pills */}
                 <div className="flex flex-wrap gap-1.5 mb-4">
                     {segCounts.prom > 0 && <span className="px-2 py-1 rounded-lg bg-blue-50 text-blue-600 text-[9px] font-black">Prom {segCounts.prom}</span>}
                     {segCounts.eval > 0 && <span className="px-2 py-1 rounded-lg bg-violet-50 text-violet-600 text-[9px] font-black">E&I {segCounts.eval}</span>}
@@ -356,7 +363,6 @@ const AgendaCard = ({ agenda, onSelect, onApprove, onRequestMod }) => {
                     {segCounts.emp > 0 && <span className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-600 text-[9px] font-black">Emp {segCounts.emp}</span>}
                 </div>
 
-                {/* Actions */}
                 <div className="flex items-center justify-between border-t border-slate-50 pt-4">
                     <button
                         onClick={(e) => { e.stopPropagation(); onSelect(agenda); }}
@@ -369,15 +375,18 @@ const AgendaCard = ({ agenda, onSelect, onApprove, onRequestMod }) => {
                         <div className="flex gap-2">
                             <button
                                 onClick={(e) => { e.stopPropagation(); setModModal(true); }}
-                                className="px-3 py-1.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1"
+                                disabled={isProcessing}
+                                className="px-3 py-1.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1 disabled:opacity-50"
                             >
                                 <AlertTriangle size={11} /> Modificar
                             </button>
                             <button
                                 onClick={handleApprove}
-                                className="px-3 py-1.5 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1 shadow-sm"
+                                disabled={isProcessing}
+                                className="px-3 py-1.5 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1 shadow-sm disabled:opacity-50"
                             >
-                                <CheckCircle2 size={11} /> Autorizar
+                                {isProcessing ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />} 
+                                Autorizar
                             </button>
                         </div>
                     )}
@@ -534,9 +543,8 @@ const KpiBar = ({ counts, title, subtitle, icon: Icon }) => (
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VISTA GERENTE (Nivel 1 Comercial / Nivel 1 Cobranza)
-// Muestra agendas de su sucursal agrupadas por operativo
 // ─────────────────────────────────────────────────────────────────────────────
-const VistaGerente = ({ agendas, sucursal, zona, rolName, canal }) => {
+const VistaGerente = ({ agendas, sucursal, zona, rolName, canal, onApproveAgenda, onModAgenda }) => {
     const [detalle, setDetalle] = useState(null);
     const counts = contarEstados(agendas);
 
@@ -545,8 +553,8 @@ const VistaGerente = ({ agendas, sucursal, zona, rolName, canal }) => {
             <AgendaDetalle
                 agenda={detalle}
                 onBack={() => setDetalle(null)}
-                onApprove={(id) => console.log('Aprobada:', id)}
-                onRequestMod={(id, nota) => console.log('Modificar:', id, nota)}
+                onApprove={onApproveAgenda}
+                onRequestMod={onModAgenda}
             />
         );
     }
@@ -570,17 +578,13 @@ const VistaGerente = ({ agendas, sucursal, zona, rolName, canal }) => {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        {/**
-                         * REFERENCIA DATA: Estas tarjetas visualizan los datos cargados en 
-                         * AgendaContext/agendaMockData, filtrados por sucursal o ejecutivo.
-                         */}
                         {agendas.map(ag => (
                             <AgendaCard
                                 key={ag.id}
                                 agenda={ag}
                                 onSelect={setDetalle}
-                                onApprove={(id) => console.log('Aprobada:', id)}
-                                onRequestMod={(id, nota) => console.log('Modificar:', id, nota)}
+                                onApprove={onApproveAgenda}
+                                onRequestMod={onModAgenda}
                             />
                         ))}
                     </div>
@@ -591,10 +595,9 @@ const VistaGerente = ({ agendas, sucursal, zona, rolName, canal }) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VISTA SUBDIRECTOR (Nivel 2) — ve su zona con sus sucursales
-// Drill: Zona → Sucursal (vista Gerente)
+// VISTA SUBDIRECTOR (Nivel 2)
 // ─────────────────────────────────────────────────────────────────────────────
-const VistaSubdirector = ({ zona, sucursalesData, rolName, canal }) => {
+const VistaSubdirector = ({ zona, sucursalesData, rolName, canal, onApproveAgenda, onModAgenda }) => {
     const [drillSucursal, setDrillSucursal] = useState(null);
     const allAgendas = Object.values(sucursalesData).flat();
     const counts = contarEstados(allAgendas);
@@ -612,6 +615,8 @@ const VistaSubdirector = ({ zona, sucursalesData, rolName, canal }) => {
                     zona={zona}
                     rolName="Vista de Sucursal"
                     canal={canal}
+                    onApproveAgenda={onApproveAgenda}
+                    onModAgenda={onModAgenda}
                 />
             </div>
         );
@@ -619,10 +624,6 @@ const VistaSubdirector = ({ zona, sucursalesData, rolName, canal }) => {
 
     return (
         <div className="animate-in fade-in duration-300">
-            {/**
-             * TODO: EP: GET /api/v1/zonas/{idZona}/resumen
-             * Consulta: SELECT s.nombre, count(p.id_plan) as total FROM sucursales s ...
-             */}
             <KpiBar
                 counts={counts}
                 title={zona}
@@ -646,10 +647,9 @@ const VistaSubdirector = ({ zona, sucursalesData, rolName, canal }) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VISTA DIRECTOR (Nivel 3) — ve todas las zonas
-// Drill: Global → Zona → Sucursal → Detalle
+// VISTA DIRECTOR (Nivel 3)
 // ─────────────────────────────────────────────────────────────────────────────
-const VistaDirector = ({ zonasData, rolName, canal }) => {
+const VistaDirector = ({ zonasData, rolName, canal, onApproveAgenda, onModAgenda }) => {
     const [drillZona, setDrillZona] = useState(null);
     const allAgendas = Object.values(zonasData).flatMap(suc => Object.values(suc).flat());
     const counts = contarEstados(allAgendas);
@@ -666,6 +666,8 @@ const VistaDirector = ({ zonasData, rolName, canal }) => {
                     sucursalesData={drillZona.sucursales}
                     rolName="Vista Subdirector"
                     canal={canal}
+                    onApproveAgenda={onApproveAgenda}
+                    onModAgenda={onModAgenda}
                 />
             </div>
         );
@@ -673,10 +675,6 @@ const VistaDirector = ({ zonasData, rolName, canal }) => {
 
     return (
         <div className="animate-in fade-in duration-300">
-            {/**
-             * TODO: EP: GET /api/v1/nacional/resumen
-             * Consulta: SELECT z.nombre, count(p.id_plan) as total FROM zonas z ...
-             */}
             <KpiBar
                 counts={counts}
                 title="Vista Nacional"
@@ -699,7 +697,7 @@ const VistaDirector = ({ zonasData, rolName, canal }) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TARJETA DE EJECUTIVO DE COBRANZA (para vista del Coordinador)
+// TARJETA DE EJECUTIVO DE COBRANZA
 // ─────────────────────────────────────────────────────────────────────────────
 const EjecutivoCard = ({ ejecutivo, agendas, onClick }) => {
     const counts = contarEstados(agendas);
@@ -740,10 +738,9 @@ const EjecutivoCard = ({ ejecutivo, agendas, onClick }) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VISTA EJECUTIVO COBRANZA (Nivel 1) — ve sus gestores sin importar zona/sucursal
-// Su territorio = "Región Ejecutivo [nombre]"
+// VISTA EJECUTIVO COBRANZA (Nivel 1)
 // ─────────────────────────────────────────────────────────────────────────────
-const VistaEjecutivoCobranza = ({ ejecutivo, agendas, rolName }) => {
+const VistaEjecutivoCobranza = ({ ejecutivo, agendas, rolName, onApproveAgenda, onModAgenda }) => {
     const [detalle, setDetalle] = useState(null);
     const counts = contarEstados(agendas);
     const regionLabel = `Región Ej. ${ejecutivo.nombre}`;
@@ -753,8 +750,8 @@ const VistaEjecutivoCobranza = ({ ejecutivo, agendas, rolName }) => {
             <AgendaDetalle
                 agenda={detalle}
                 onBack={() => setDetalle(null)}
-                onApprove={(id) => console.log('Aprobada:', id)}
-                onRequestMod={(id, nota) => console.log('Modificar:', id, nota)}
+                onApprove={onApproveAgenda}
+                onRequestMod={onModAgenda}
             />
         );
     }
@@ -767,7 +764,6 @@ const VistaEjecutivoCobranza = ({ ejecutivo, agendas, rolName }) => {
                 subtitle={`Cobranza · ${rolName} · ${agendas.length} gestores asignados`}
                 icon={Shield}
             />
-            {/* Nota aclaratoria de sucursales */}
             {ejecutivo.sucursalesRef?.length > 0 && (
                 <div className="mb-4 flex items-center gap-2 flex-wrap">
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sucursales de referencia:</span>
@@ -791,8 +787,8 @@ const VistaEjecutivoCobranza = ({ ejecutivo, agendas, rolName }) => {
                             key={ag.id}
                             agenda={ag}
                             onSelect={setDetalle}
-                            onApprove={(id) => console.log('Aprobada:', id)}
-                            onRequestMod={(id, nota) => console.log('Modificar:', id, nota)}
+                            onApprove={onApproveAgenda}
+                            onRequestMod={onModAgenda}
                         />
                     ))}
                 </div>
@@ -802,10 +798,9 @@ const VistaEjecutivoCobranza = ({ ejecutivo, agendas, rolName }) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VISTA COORDINADOR COBRANZA (Nivel 2) — ve sus ejecutivos y sus regiones
-// Drill: Coordinador → Región Ejecutivo → Gestores
+// VISTA COORDINADOR COBRANZA (Nivel 2)
 // ─────────────────────────────────────────────────────────────────────────────
-const VistaCoordCobranza = ({ coordinador, ejecutivos, allAgendas, rolName }) => {
+const VistaCoordCobranza = ({ coordinador, ejecutivos, allAgendas, rolName, onApproveAgenda, onModAgenda }) => {
     const [drillEjecutivo, setDrillEjecutivo] = useState(null);
     const counts = contarEstados(allAgendas);
 
@@ -821,6 +816,8 @@ const VistaCoordCobranza = ({ coordinador, ejecutivos, allAgendas, rolName }) =>
                     ejecutivo={drillEjecutivo}
                     agendas={ejAgendas}
                     rolName="Vista de Región"
+                    onApproveAgenda={onApproveAgenda}
+                    onModAgenda={onModAgenda}
                 />
             </div>
         );
@@ -828,11 +825,6 @@ const VistaCoordCobranza = ({ coordinador, ejecutivos, allAgendas, rolName }) =>
 
     return (
         <div className="animate-in fade-in duration-300">
-            {/**
-             * TODO: EP Lógico de Coordinadores. Mapeo de la jerarquía que vendrá 
-             * de: GET /api/v1/jerarquia/cobranza/coordinadores
-             * Consulta: SELECT * FROM seguridad.usuarios WHERE id_jefe = :idCoordinador
-             */}
             <KpiBar
                 counts={counts}
                 title={`Coord. ${coordinador.nombre}`}
@@ -841,10 +833,6 @@ const VistaCoordCobranza = ({ coordinador, ejecutivos, allAgendas, rolName }) =>
             />
             <h3 className="text-[11px] font-black text-accent uppercase tracking-widest mb-4">Regiones de Ejecutivos</h3>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/**
-                 * TODO: EP Lógico de Ejecutivos. Mapeo de la jerarquía que vendrá 
-                 * de: GET /api/v1/jerarquia/cobranza/ejecutivos
-                 */}
                 {ejecutivos.map(ej => (
                     <EjecutivoCard
                         key={ej.id}
@@ -859,10 +847,9 @@ const VistaCoordCobranza = ({ coordinador, ejecutivos, allAgendas, rolName }) =>
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VISTA SUBDIRECTOR COBRANZA (Nivel 3) — ve todos los coordinadores
-// Drill: Nacional → Coordinador → Ejecutivo → Gestores
+// VISTA SUBDIRECTOR COBRANZA (Nivel 3)
 // ─────────────────────────────────────────────────────────────────────────────
-const VistaSubdirCobranza = ({ coordinadores, ejecutivos, allAgendas, rolName }) => {
+const VistaSubdirCobranza = ({ coordinadores, ejecutivos, allAgendas, rolName, onApproveAgenda, onModAgenda }) => {
     const [drillCoord, setDrillCoord] = useState(null);
     const counts = contarEstados(allAgendas);
 
@@ -880,12 +867,13 @@ const VistaSubdirCobranza = ({ coordinadores, ejecutivos, allAgendas, rolName })
                     ejecutivos={coordEjs}
                     allAgendas={coordAgendas}
                     rolName="Vista de Coordinador"
+                    onApproveAgenda={onApproveAgenda}
+                    onModAgenda={onModAgenda}
                 />
             </div>
         );
     }
 
-    // KPI: tarjeta por coordinador
     return (
         <div className="animate-in fade-in duration-300">
             <KpiBar
@@ -896,10 +884,6 @@ const VistaSubdirCobranza = ({ coordinadores, ejecutivos, allAgendas, rolName })
             />
             <h3 className="text-[11px] font-black text-accent uppercase tracking-widest mb-4">Coordinadores de Cobranza</h3>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/**
-                 * TODO: EP Lógico de Coordinadores. Mapeo de la jerarquía que vendrá 
-                 * de: GET /api/v1/jerarquia/cobranza/coordinadores
-                 */}
                 {coordinadores.map(coord => {
                     const coordEjs = ejecutivos.filter(e => e.coordinadorId === coord.id);
                     const coordAgendas = allAgendas.filter(ag => coordEjs.some(e => e.id === ag.ejecutivoId));
@@ -951,25 +935,94 @@ const VistaSubdirCobranza = ({ coordinadores, ejecutivos, allAgendas, rolName })
 // ─────────────────────────────────────────────────────────────────────────────
 const PlaneacionJefe = () => {
     const { selectedRole } = useRole();
-    const { name: roleName, canal, nivel } = selectedRole;
+    const { canal, nivel, name: roleName } = selectedRole;
+
+    const [loading, setLoading] = useState(true);
+    const [agendas, setAgendas] = useState([]);
+    const [jerarquia, setJerarquia] = useState({ coordinadores: [], ejecutivos: [] });
+
+    // FASE 4: Carga dinámica del Dashboard
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            setLoading(true);
+            try {
+                // 1. Cargar las agendas
+                const resAgendas = await AgendaApiService.getAgendasEquipo(canal);
+                if (resAgendas.codigo === 'OK') {
+                    setAgendas(resAgendas.contenido || []);
+                }
+
+                // 2. Cargar jerarquía si es cobranza
+                if (canal === 'cobranza') {
+                    const resJerarquia = await AgendaApiService.getJerarquiaCobranza();
+                    if (resJerarquia.codigo === 'OK') {
+                        setJerarquia(resJerarquia.contenido || { coordinadores: [], ejecutivos: [] });
+                    }
+                }
+            } catch (err) {
+                console.error("Error al cargar dashboard de jefes", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchDashboardData();
+    }, [canal]);
+
+    // Handlers que conectan la UI con el API (PUT)
+    const handleApproveAgenda = async (idPlan) => {
+        try {
+            await AgendaApiService.actualizarEstatusAgenda(idPlan, 'aprobada');
+            // Opcional: recargar agendas para forzar sincronía con BD, o dejar que la UI cambie localmente.
+        } catch (error) {
+            console.error("Error autorizando agenda", error);
+            alert("No se pudo autorizar la agenda");
+        }
+    };
+
+    const handleModAgenda = async (idPlan, nota) => {
+        try {
+            await AgendaApiService.actualizarEstatusAgenda(idPlan, 'requiere_modificacion', nota);
+        } catch (error) {
+            console.error("Error solicitando modificación", error);
+            alert("No se pudo solicitar la modificación");
+        }
+    };
 
     const WRAP = ({ children }) => (
         <div className="max-w-[1400px] mx-auto pb-20 px-4 md:px-8 pt-6">{children}</div>
     );
 
-    // ── CANAL COBRANZA: jerarquía por ejecutivo ─────────────────────────────
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center py-32 text-slate-400">
+                <Loader2 size={36} className="animate-spin mb-4 text-blue-500" />
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500">Cargando Tablero de Supervisión...</p>
+            </div>
+        );
+    }
+
+    // ── CANAL COBRANZA ─────────────────────────────────────────────
     if (canal === 'cobranza') {
         if (nivel === 1) {
-            // Simular ejecutivo ej-01
-            const miEjecutivo = EJECUTIVOS_COBRANZA[0];
-            const misAgendas = agendasDeEjecutivo(AGENDAS_COBRANZA, miEjecutivo.id);
-            return <WRAP><VistaEjecutivoCobranza ejecutivo={miEjecutivo} agendas={misAgendas} rolName={roleName} /></WRAP>;
+            const miEjecutivo = jerarquia.ejecutivos[0] || {};
+            const misAgendas = agendasDeEjecutivo(agendas, miEjecutivo.id);
+            return (
+                <WRAP>
+                    <VistaEjecutivoCobranza 
+                        ejecutivo={miEjecutivo} 
+                        agendas={misAgendas} 
+                        rolName={roleName} 
+                        onApproveAgenda={handleApproveAgenda}
+                        onModAgenda={handleModAgenda}
+                    />
+                </WRAP>
+            );
         }
         if (nivel === 2) {
-            // Simular coordinador coord-01
-            const miCoord = COORDINADORES_COBRANZA[0];
-            const misEjecutivos = EJECUTIVOS_COBRANZA.filter(e => e.coordinadorId === miCoord.id);
-            const misAgendas = AGENDAS_COBRANZA.filter(ag => misEjecutivos.some(e => e.id === ag.ejecutivoId));
+            const miCoord = jerarquia.coordinadores[0] || {};
+            const misEjecutivos = jerarquia.ejecutivos.filter(e => e.coordinadorId === miCoord.id);
+            const misAgendas = agendas.filter(ag => misEjecutivos.some(e => e.id === ag.ejecutivoId));
             return (
                 <WRAP>
                     <VistaCoordCobranza
@@ -977,6 +1030,8 @@ const PlaneacionJefe = () => {
                         ejecutivos={misEjecutivos}
                         allAgendas={misAgendas}
                         rolName={roleName}
+                        onApproveAgenda={handleApproveAgenda}
+                        onModAgenda={handleModAgenda}
                     />
                 </WRAP>
             );
@@ -985,10 +1040,12 @@ const PlaneacionJefe = () => {
             return (
                 <WRAP>
                     <VistaSubdirCobranza
-                        coordinadores={COORDINADORES_COBRANZA}
-                        ejecutivos={EJECUTIVOS_COBRANZA}
-                        allAgendas={AGENDAS_COBRANZA}
+                        coordinadores={jerarquia.coordinadores}
+                        ejecutivos={jerarquia.ejecutivos}
+                        allAgendas={agendas}
                         rolName={roleName}
+                        onApproveAgenda={handleApproveAgenda}
+                        onModAgenda={handleModAgenda}
                     />
                 </WRAP>
             );
@@ -996,16 +1053,17 @@ const PlaneacionJefe = () => {
         return null;
     }
 
-    // ── CANAL COMERCIAL: jerarquía por zona/sucursal (original) ────────────
-    const zonasData = agruparPorZona(AGENDAS_COMERCIAL);
+    // ── CANAL COMERCIAL ────────────────────────────────────────────
+    const zonasData = agruparPorZona(agendas);
+    // TODO: Obtener zona/sucursal de sesión. Para demo, forzamos valores que hagan match.
     const miZona = 'ZONA I';
     const miSucursal = 'HERMOSILLO';
     const misSucursalesEnZona = zonasData[miZona] || {};
     const misAgendas = misSucursalesEnZona[miSucursal] || [];
 
-    if (nivel === 1) return <WRAP><VistaGerente agendas={misAgendas} sucursal={miSucursal} zona={miZona} rolName={roleName} canal="comercial" /></WRAP>;
-    if (nivel === 2) return <WRAP><VistaSubdirector zona={miZona} sucursalesData={misSucursalesEnZona} rolName={roleName} canal="comercial" /></WRAP>;
-    if (nivel === 3) return <WRAP><VistaDirector zonasData={zonasData} rolName={roleName} canal="comercial" /></WRAP>;
+    if (nivel === 1) return <WRAP><VistaGerente agendas={misAgendas} sucursal={miSucursal} zona={miZona} rolName={roleName} canal="comercial" onApproveAgenda={handleApproveAgenda} onModAgenda={handleModAgenda} /></WRAP>;
+    if (nivel === 2) return <WRAP><VistaSubdirector zona={miZona} sucursalesData={misSucursalesEnZona} rolName={roleName} canal="comercial" onApproveAgenda={handleApproveAgenda} onModAgenda={handleModAgenda} /></WRAP>;
+    if (nivel === 3) return <WRAP><VistaDirector zonasData={zonasData} rolName={roleName} canal="comercial" onApproveAgenda={handleApproveAgenda} onModAgenda={handleModAgenda} /></WRAP>;
 
     return null;
 };

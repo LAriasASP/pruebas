@@ -1,71 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRole } from '../../context/RoleContext';
 import { useAgenda } from '../../context/AgendaContext';
+import { useCatalogs } from '../../context/CatalogContext'; // <-- Importamos los catálogos globales
 import {
     MapPin, CheckCircle2, Clock, Camera, Plus, X, AlertCircle,
     Navigation, FileText, Loader2, Calendar, Image, Shield
 } from 'lucide-react';
 
-// ── Catálogos ────────────────────────────────────────────────────────────────
-
-/**
- * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/estatus-cartera
- * Consulta:
- * SELECT id_estatus_cartera as id, nombre FROM catalogos.estatus_cartera WHERE activo = true;
- * * Resultado en JSON:
- * [
- * { "id": 1, "nombre": "Abono/ Pago Parcial" },
- * { "id": 2, "nombre": "Compromiso de pago" },
- * { "id": 3, "nombre": "Negativa de pago" }
- * ]
- */
-const ESTATUS_CARTERA = [
-    'Seleccionar resultado...',
-    'Abono/ Pago Parcial', 'Compromiso de pago', 'Negativa de pago',
-    'Ilocalizable', 'Promesa de pago', 'Sin contacto', 'Convenio', 'Finado',
-];
-
-/**
- * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/sub-estatus
- * Consulta:
- * SELECT id_sub_estatus as id, nombre FROM catalogos.sub_estatus WHERE activo = true;
- */
-const SUB_ESTATUS = [
-    'N/A', 'Insolvente', 'Solvente', 'No reconoce el crédito',
-    'Dice que ya pago', 'Liquidación', 'Normalización', 'Trat Especial',
-    'Cliente no estuvo', 'Aviso debajo de la puerta', 'Se cambio domicilio',
-    'Convenio vigentes', 'Convenio incumplidos',
-];
-
-/**
- * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/tipos-gestion
- * Consulta:
- * SELECT id_tipo_gestion as id, nombre FROM catalogos.tipos_gestion WHERE activo = true;
- */
-const TIPO_GESTION_UNPLANNED = [
-    'Seleccionar tipo...',
-    'Visita integral', 'Visita correctiva', 'Visita preventiva',
-    'Visita presencial domicilio', 'Visita presencial aval',
-    'Visita presencial Trabajo', 'Gestión telefónica',
-    'Gestión envió de sms', 'Gestión telefónica aval',
-];
-
-/**
- * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/motivos-no-visita
- * Consulta:
- * SELECT id_motivo as id, descripcion as nombre FROM catalogos.motivos_no_visita WHERE activo = true;
- */
-const MOTIVO_NO_VISITA = [
-    'Seleccionar motivo...',
-    'Cliente no disponible',
-    'Dirección incorrecta o no encontrada',
-    'Visita reagendada por el cliente',
-    'Emergencia de ruta',
-    'Condiciones de seguridad',
-    'Tiempo insuficiente en ruta',
-    'Otro',
-];
-
+// ── Configuración Visual (Frontend Only) ─────────────────────────────────────
 const SEG_CFG = {
     'Promoción': { label: 'PROMO', dot: 'bg-blue-500', badge: 'bg-blue-50 text-blue-700' },
     'Evaluación e Integración': { label: 'EVAL', dot: 'bg-violet-500', badge: 'bg-violet-50 text-violet-700' },
@@ -105,17 +47,14 @@ const ProgressRing = ({ done, total, size = 68 }) => {
         </div>
     );
 };
-
 const SegBadge = ({ seg }) => {
     const c = SEG_CFG[seg] || SEG_CFG['Imprevisto'];
     return <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${c.badge}`}>{c.label}</span>;
 };
-
 const ResultBadge = ({ resultado }) => {
     const cls = RESULTADO_BADGE[resultado] || 'bg-slate-100 text-slate-600';
     return <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide ${cls}`}>{resultado}</span>;
 };
-
 const nowTimeStr = () => {
     const n = new Date();
     return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
@@ -161,10 +100,7 @@ const YesNo = ({ value, onChange }) => (
     <div className="flex gap-2">
         {[{ label: 'SÍ', val: true }, { label: 'NO', val: false }].map(opt => (
             <button key={opt.label} type="button" onClick={() => onChange(opt.val)}
-                className={`flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all
-                    ${value === opt.val
-                        ? opt.val ? 'bg-emerald-500 text-white shadow-lg' : 'bg-red-500 text-white shadow-lg'
-                        : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>
+                className={`flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${value === opt.val ? (opt.val ? 'bg-emerald-500 text-white shadow-lg' : 'bg-red-500 text-white shadow-lg') : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>
                 {opt.label}
             </button>
         ))}
@@ -175,6 +111,15 @@ const YesNo = ({ value, onChange }) => (
 const CARTERA_SEGS = ['Seguimiento de Cartera', 'Gestión de Empresarias'];
 
 const CheckInModal = ({ visit, onClose, onSubmit }) => {
+    // ── Extraemos los catálogos globales ──
+    const { 
+        motivosNoVisita = [], 
+        estatusCartera = [], 
+        motivosNoActividad = [], 
+        resultadosGestion = [], 
+        subEstatus = [] 
+    } = useCatalogs() || {};
+
     const isCarteraSegment = CARTERA_SEGS.includes(visit._segment);
 
     const [form, setForm] = useState({
@@ -194,14 +139,15 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
     const [openTime] = useState(nowTimeStr);
     const gps = useGPS(true);
     const fileRef = useRef(null);
+    
+    // Logica para saber si es compromiso/promesa basándonos en el texto (o ID a futuro)
     const isCompromiso = form.resultado === 'Compromiso de pago';
     const isPromesa = form.resultado === 'Promesa de pago';
     const needsAmountDate = isCompromiso || isPromesa;
     const visitaNoRealizada = form.visitaRealizada === false;
 
-     // decisionTomada: controls visibility of Notes + Photo sections
     const decisionTomada = visitaNoRealizada
-        ? form.motivoNoVisita && form.motivoNoVisita !== 'Seleccionar motivo...'
+        ? form.motivoNoVisita && form.motivoNoVisita !== ''
         : isCarteraSegment
             ? form.clienteEncontrado !== null
             : form.actividadRealizada !== null && (
@@ -212,10 +158,10 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
 
     const canSave = form.visitaRealizada !== null && (
         visitaNoRealizada
-            ? form.motivoNoVisita && form.motivoNoVisita !== 'Seleccionar motivo...'
+            ? form.motivoNoVisita && form.motivoNoVisita !== ''
             : isCarteraSegment
                 ? form.clienteEncontrado !== null
-                && form.resultado && form.resultado !== 'Seleccionar resultado...'
+                && form.resultado && form.resultado !== ''
                 && (!needsAmountDate || (form.pagoMonto && form.pagoFecha))
                 : form.actividadRealizada !== null && (
                     form.actividadRealizada === false
@@ -260,7 +206,6 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
         <div className="fixed inset-0 z-[200] flex items-end md:items-center justify-center animate-in fade-in duration-200">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
             <div className="relative z-10 w-full max-w-lg bg-white rounded-t-[32px] md:rounded-[28px] shadow-2xl max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom-4 duration-300">
-                 {/* Header */}
                 <div className="sticky top-0 bg-white px-6 pt-6 pb-4 border-b border-slate-100 flex items-start justify-between z-10">
                     <div>
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Registrar Gestión</p>
@@ -277,36 +222,32 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                     </button>
                 </div>
 
-                               <div className="px-6 py-5 space-y-5">
-                    {/* GPS */}
-                    <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest
-                        ${gps.status === 'ok' ? 'bg-emerald-50 text-emerald-700' : gps.status === 'error' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
-                            {gps.status === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
+                <div className="px-6 py-5 space-y-5">
+                    <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest ${gps.status === 'ok' ? 'bg-emerald-50 text-emerald-700' : gps.status === 'error' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                        {gps.status === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
                         {gps.status === 'loading' && 'Capturando coordenadas GPS...'}
                         {gps.status === 'ok' && `GPS: ${gps.lat}, ${gps.lng}`}
                         {gps.status === 'error' && 'Ubicación no disponible'}
                         {gps.status === 'idle' && 'Inicializando...'}
                     </div>
 
-                    {/* 1. ¿Se realizó la visita? */}
                     <div>
                         <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-1">¿Se realizó la visita?</label>
                         <YesNo value={form.visitaRealizada} onChange={v => setForm(p => ({ ...p, visitaRealizada: v, clienteEncontrado: null, actividadRealizada: null, motivoNoVisita: '' }))} />
                     </div>
 
-                    {/* Rama NO: Motivo de no-visita */}
                     {visitaNoRealizada && (
                         <div className="animate-in fade-in duration-200 bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-3">
                             <p className="text-[8px] font-black text-amber-700 uppercase tracking-widest">¿Por qué no se realizó?</p>
                             <select value={form.motivoNoVisita}
                                 onChange={e => setForm(p => ({ ...p, motivoNoVisita: e.target.value }))}
                                 className="input-cell">
-                                {MOTIVO_NO_VISITA.map(m => <option key={m}>{m}</option>)}
+                                <option value="" disabled>Seleccionar motivo...</option>
+                                {motivosNoVisita.map(m => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
                             </select>
                         </div>
                     )}
 
-                    {/* Rama SÍ - CARTERA: ¿Se encontró al cliente? */}
                     {!visitaNoRealizada && isCarteraSegment && form.visitaRealizada !== null && (
                         <div className="animate-in fade-in duration-200">
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-1">¿Se encontró al cliente?</label>
@@ -314,17 +255,16 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                         </div>
                     )}
 
-                    {/* Rama SÍ - CARTERA: Actualizar Estatus */}
                     {!visitaNoRealizada && isCarteraSegment && form.clienteEncontrado !== null && (
                         <div className="animate-in fade-in duration-200">
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Actualizar Estatus de Cartera *</label>
                             <select value={form.resultado} onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))} className="input-cell">
-                                {ESTATUS_CARTERA.map(e => <option key={e}>{e}</option>)}
+                                <option value="" disabled>Seleccionar resultado...</option>
+                                {estatusCartera.map(e => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
                             </select>
                         </div>
                     )}
 
-                    {/* Rama SÍ - PROMO/EVAL: ¿Se realizó la actividad planeada? */}
                     {!visitaNoRealizada && !isCarteraSegment && form.visitaRealizada !== null && (
                         <div className="animate-in fade-in duration-200 bg-violet-50 border border-violet-100 rounded-2xl p-4 space-y-3">
                             <p className="text-[8px] font-black text-violet-500 uppercase tracking-widest mb-1">Actividad Planeada</p>
@@ -334,69 +274,44 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                         </div>
                     )}
 
-                    {/* Rama NO actividad — ¿por qué no? */}
                     {!visitaNoRealizada && !isCarteraSegment && form.actividadRealizada === false && (
                         <div className="animate-in fade-in duration-200 bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-3">
                             <p className="text-[8px] font-black text-amber-700 uppercase tracking-widest">¿Por qué no se realizó la actividad?</p>
-                            {/**
-                             * TODO: EP: /api/v1/catalogos/motivos-no-actividad
-                             */}
                             <select value={form.motivoNoActividad || ''}
                                 onChange={e => setForm(p => ({ ...p, motivoNoActividad: e.target.value }))}
                                 className="input-cell">
-                                <option value="">Seleccionar motivo...</option>
-                                <option>Cliente no disponible</option>
-                                <option>Actividad reagendada por el cliente</option>
-                                <option>Tiempo insuficiente</option>
-                                <option>Documentación incompleta</option>
-                                <option>Decisión del cliente posponida</option>
-                                <option>Pendiente de autorización interna</option>
-                                <option>Otro</option>
+                                <option value="" disabled>Seleccionar motivo...</option>
+                                {motivosNoActividad.map(m => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
                             </select>
                         </div>
                     )}
 
-                     {/* Rama SÍ actividad PROMO/EVAL — resultado de la gestión */}
                     {!visitaNoRealizada && !isCarteraSegment && form.actividadRealizada === true && (
                         <div className="animate-in fade-in duration-200">
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Resultado de la Gestión</label>
-                            {/**
-                             * TODO: EP: /api/v1/catalogos/resultados-gestion
-                             */}
                             <select value={form.resultado}
                                 onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))}
                                 className="input-cell">
-                                <option value="">Seleccionar resultado...</option>
-                                <option>Solicitud pre-llenada entregada</option>
-                                <option>Solicitud completa entregada</option>
-                                <option>Prospecto interesado — seguimiento</option>
-                                <option>Cita agendada</option>
-                                <option>Evaluación completada</option>
-                                <option>VoBo de supervisor obtenido</option>
-                                <option>Cliente no interesado</option>
-                                <option>Otro</option>
+                                <option value="" disabled>Seleccionar resultado...</option>
+                                {resultadosGestion.map(r => <option key={r.id} value={r.nombre}>{r.nombre}</option>)}
                             </select>
                         </div>
                     )}
 
-                    {/* Sub-estatus — solo Cartera, solo si visitaRealizada */}
-                    {!visitaNoRealizada && isCarteraSegment && form.resultado && form.resultado !== 'Seleccionar resultado...' && (
+                    {!visitaNoRealizada && isCarteraSegment && form.resultado && form.resultado !== '' && (
                         <div className="animate-in fade-in duration-200">
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Sub-estatus</label>
                             <select value={form.subestatus} onChange={e => setForm(p => ({ ...p, subestatus: e.target.value }))} className="input-cell">
-                                {SUB_ESTATUS.map(s => <option key={s}>{s}</option>)}
+                                {subEstatus.map(s => <option key={s.id} value={s.nombre}>{s.nombre}</option>)}
                             </select>
                         </div>
                     )}
-                    
-                    {/* Promesa / Compromiso de pago: monto + fecha */}
+
                     {needsAmountDate && (
-                        <div className={`animate-in slide-in-from-top-2 duration-300 p-4 rounded-2xl border space-y-3 ${isCompromiso ? 'bg-blue-50 border-blue-100' : 'bg-indigo-50 border-indigo-100'
-                            }`}>
+                        <div className={`animate-in slide-in-from-top-2 duration-300 p-4 rounded-2xl border space-y-3 ${isCompromiso ? 'bg-blue-50 border-blue-100' : 'bg-indigo-50 border-indigo-100'}`}>
                             <div className="flex items-start gap-2">
                                 <div className="flex-1">
-                                    <p className={`text-[9px] font-black uppercase tracking-widest ${isCompromiso ? 'text-blue-700' : 'text-indigo-700'
-                                        }`}>
+                                    <p className={`text-[9px] font-black uppercase tracking-widest ${isCompromiso ? 'text-blue-700' : 'text-indigo-700'}`}>
                                         {isCompromiso ? 'Datos del Compromiso de Pago *' : 'Datos de la Promesa de Pago *'}
                                     </p>
                                     {isCompromiso && (
@@ -422,9 +337,8 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                                 </div>
                             </div>
                         </div>
-                    )} 
+                    )}
 
-                    {/* Notas — siempre que haya una decisión tomada */}
                     {decisionTomada && (
                         <div className="animate-in fade-in duration-200">
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Notas</label>
@@ -433,7 +347,6 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                         </div>
                     )}
 
-                    {/* Foto — siempre que haya una decisión tomada */}
                     {decisionTomada && (
                         <div className="animate-in fade-in duration-200">
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Evidencia Fotográfica</label>
@@ -452,7 +365,7 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                             )}
                         </div>
                     )}
-                    {/* Estatus de Cartera — siempre al final de toda gestión */}
+                    
                     {decisionTomada && (
                         <div className="animate-in fade-in duration-200 bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
                             <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Estatus de Cartera</p>
@@ -460,20 +373,18 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                                 value={form.estatusCartera}
                                 onChange={e => setForm(p => ({ ...p, estatusCartera: e.target.value }))}
                                 className="input-cell">
-                                <option value="">Seleccionar estatus...</option>
-                                {ESTATUS_CARTERA.filter(e => e !== 'Seleccionar resultado...').map(e => (
-                                    <option key={e}>{e}</option>
+                                <option value="" disabled>Seleccionar estatus...</option>
+                                {estatusCartera.map(e => (
+                                    <option key={e.id} value={e.nombre}>{e.nombre}</option>
                                 ))}
                             </select>
                         </div>
                     )}
                 </div>
 
-                 {/* Footer */}
                 <div className="sticky bottom-0 bg-white px-6 pb-6 pt-4 border-t border-slate-50">
                     <button onClick={submit} disabled={!canSave}
-                        className={`w-full py-5 rounded-[20px] text-[11px] font-black uppercase tracking-[0.3em] transition-all
-                            ${canSave ? 'bg-primary text-white shadow-xl hover:scale-105 active:scale-95' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}>
+                        className={`w-full py-5 rounded-[20px] text-[11px] font-black uppercase tracking-[0.3em] transition-all ${canSave ? 'bg-primary text-white shadow-xl hover:scale-105 active:scale-95' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}>
                         Registrar Gestión
                     </button>
                 </div>
@@ -484,14 +395,19 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
 
 // ── Unplanned Visit Form ──────────────────────────────────────────────────────
 const UnplannedForm = ({ onAdd, onCancel }) => {
+    // ── Extraemos los catálogos globales para este componente ──
+    const { tiposGestionNoPlaneada = [], estatusCartera = [] } = useCatalogs() || {};
+
     const [form, setForm] = useState({ name: '', tipoGestion: '', resultado: '', notes: '', pagoMonto: '', pagoFecha: '' });
     const isCompromiso = form.resultado === 'Compromiso de pago';
     const isPromesa = form.resultado === 'Promesa de pago';
     const needsAmountDate = isCompromiso || isPromesa;
+    
     const ok = form.name
-        && form.tipoGestion && form.tipoGestion !== 'Seleccionar tipo...'
-        && form.resultado && form.resultado !== 'Seleccionar resultado...'
-        && (!needsAmountDate || (form.pagoMonto && form.pagoFecha));    
+        && form.tipoGestion && form.tipoGestion !== ''
+        && form.resultado && form.resultado !== ''
+        && (!needsAmountDate || (form.pagoMonto && form.pagoFecha));
+    
     const submit = () => {
         if (!ok) return;
         
@@ -506,6 +422,7 @@ const UnplannedForm = ({ onAdd, onCancel }) => {
             pagoMonto: form.pagoMonto, pagoFecha: form.pagoFecha
         });
     };
+
     return (
         <div className="mt-6 border-2 border-dashed border-rose-200 rounded-3xl p-6 bg-rose-50/30 animate-in slide-in-from-bottom-4 duration-300 space-y-4">
             <div className="flex items-center justify-between">
@@ -520,22 +437,21 @@ const UnplannedForm = ({ onAdd, onCancel }) => {
                 <div>
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo Gestión *</label>
                     <select value={form.tipoGestion} onChange={e => setForm(p => ({ ...p, tipoGestion: e.target.value }))} className="input-cell text-[10px]">
-                        {TIPO_GESTION_UNPLANNED.map(t => <option key={t}>{t}</option>)}
+                        <option value="" disabled>Seleccionar tipo...</option>
+                        {tiposGestionNoPlaneada.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
                     </select>
                 </div>
                 <div>
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Resultado *</label>
                     <select value={form.resultado} onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))} className="input-cell text-[10px]">
-                        {ESTATUS_CARTERA.map(e => <option key={e}>{e}</option>)}
+                        <option value="" disabled>Seleccionar resultado...</option>
+                        {estatusCartera.map(e => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
                     </select>
                 </div>
             </div>
-            {/* Compromiso / Promesa: monto + fecha */}
             {needsAmountDate && (
-                <div className={`p-3 rounded-2xl border space-y-3 animate-in fade-in duration-200 ${isCompromiso ? 'bg-blue-50 border-blue-100' : 'bg-indigo-50 border-indigo-100'
-                    }`}>
-                    <p className={`text-[9px] font-black uppercase tracking-widest ${isCompromiso ? 'text-blue-700' : 'text-indigo-700'
-                        }`}>
+                <div className={`p-3 rounded-2xl border space-y-3 animate-in fade-in duration-200 ${isCompromiso ? 'bg-blue-50 border-blue-100' : 'bg-indigo-50 border-indigo-100'}`}>
+                    <p className={`text-[9px] font-black uppercase tracking-widest ${isCompromiso ? 'text-blue-700' : 'text-indigo-700'}`}>
                         {isCompromiso ? 'Datos del Compromiso de Pago *' : 'Datos de la Promesa de Pago *'}
                     </p>
                     <div className="grid grid-cols-2 gap-3">
@@ -559,9 +475,8 @@ const UnplannedForm = ({ onAdd, onCancel }) => {
                 <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Notas</label>
                 <input type="text" value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Observaciones…" className="input-cell" />
             </div>
-             <button onClick={submit} disabled={!ok}
-                className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all
-                    ${ok ? 'bg-rose-500 text-white hover:bg-rose-600' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}>
+            <button onClick={submit} disabled={!ok}
+                className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${ok ? 'bg-rose-500 text-white hover:bg-rose-600' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}>
                 Registrar Imprevisto
             </button>
         </div>
@@ -574,12 +489,10 @@ const VisitCard = ({ visit, checkIn, onCheckIn }) => {
     const isDone = !!checkIn;
 
     return (
-        <div className={`flex items-center gap-4 px-5 py-4 transition-all duration-200
-            ${isDone ? 'bg-emerald-50/60' : 'bg-white hover:bg-slate-50/80'}`}>
+        <div className={`flex items-center gap-4 px-5 py-4 transition-all duration-200 ${isDone ? 'bg-emerald-50/60' : 'bg-white hover:bg-slate-50/80'}`}>
 
             {/* Status dot */}
-            <div className={`w-3 h-3 rounded-full flex-shrink-0 ring-2 border-2 border-white transition-all
-                ${isDone ? 'bg-emerald-500 ring-emerald-200' : `${segCfg.dot} ring-slate-100`}`} />
+            <div className={`w-3 h-3 rounded-full flex-shrink-0 ring-2 border-2 border-white transition-all ${isDone ? 'bg-emerald-500 ring-emerald-200' : `${segCfg.dot} ring-slate-100`}`} />
 
             {/* Hora */}
             <span className="text-[11px] font-black text-accent w-14 flex-shrink-0 font-mono">
@@ -591,8 +504,7 @@ const VisitCard = ({ visit, checkIn, onCheckIn }) => {
 
             {/* Nombre y actividad */}
             <div className="flex-1 min-w-0">
-                <p className={`text-[13px] font-black uppercase truncate leading-tight
-                    ${isDone ? 'text-emerald-700 line-through decoration-emerald-300' : 'text-primary'}`}>
+                <p className={`text-[13px] font-black uppercase truncate leading-tight ${isDone ? 'text-emerald-700 line-through decoration-emerald-300' : 'text-primary'}`}>
                     {visit.name}
                 </p>
                 {(visit.activity || visit.typeVisitManagement || visit.typeManagement) && (
@@ -601,8 +513,7 @@ const VisitCard = ({ visit, checkIn, onCheckIn }) => {
                     </p>
                 )}
                 {isDone && checkIn?.resultado && (
-                    <span className={`inline-block text-[8px] font-black px-2 py-0.5 rounded-full mt-1
-                        ${RESULTADO_BADGE[checkIn.resultado] || 'bg-slate-100 text-slate-600'}`}>
+                    <span className={`inline-block text-[8px] font-black px-2 py-0.5 rounded-full mt-1 ${RESULTADO_BADGE[checkIn.resultado] || 'bg-slate-100 text-slate-600'}`}>
                         {checkIn.resultado}
                     </span>
                 )}
@@ -700,7 +611,6 @@ const kpiBg = (pct) => pct >= 90 ? 'bg-emerald-500' : pct >= 70 ? 'bg-amber-400'
 const kpiDotCls = (pct, hasValue) => !hasValue ? 'bg-slate-200' : pct >= 90 ? 'bg-emerald-500' : pct >= 70 ? 'bg-amber-400' : 'bg-red-500';
 const fmtNum = (v, isCount) => { const n = Number(v); if (isNaN(n)) return '—'; return isCount ? String(n) : `$${n.toLocaleString()}`; };
 
-// Simple controlled money input — no internal hooks, no key tricks
 const MoneyInput = ({ value, onChange, isCount }) => (
     <input
         type="text" inputMode="numeric"
@@ -729,7 +639,6 @@ const KpiRealPanel = ({ roleId, kpiCompromisos, kpiReal, onUpdate }) => {
 
     return (
         <div className="mt-10 mb-4">
-            {/* Section header */}
             <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3">
                     <div className="w-1.5 h-7 bg-yellow-400 rounded-full" />
@@ -748,14 +657,12 @@ const KpiRealPanel = ({ roleId, kpiCompromisos, kpiReal, onUpdate }) => {
                     const dotCls = GROUP_DOT[color] || GROUP_DOT.blue;
                     return (
                         <div key={group} className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-200">
-                            {/* Group header — navy gradient matching Planeación */}
                             <div className="gradient-header !rounded-t-2xl shadow-md">
                                 <div className="flex items-center gap-2">
                                     <div className={`w-1.5 h-4 rounded-full ${dotCls}`} />
                                     <span className="text-xs font-black uppercase tracking-widest text-white">{group}</span>
                                 </div>
                             </div>
-                            {/* Fields */}
                             <div className="divide-y divide-slate-100">
                                 {fields.map(({ key, label, count: isCount }) => {
                                     const comp = kpiCompromisos?.[key];
@@ -765,15 +672,11 @@ const KpiRealPanel = ({ roleId, kpiCompromisos, kpiReal, onUpdate }) => {
                                     const hasReal = !!real;
                                     return (
                                         <div key={key} className="px-5 py-4 flex items-center gap-4">
-                                            {/* Colored dot bullet — always visible, color depends on status */}
                                             <div className={`w-4 h-4 rounded-full flex-shrink-0 transition-colors duration-300 ${kpiDotCls(pct, hasReal)}`} />
-                                            {/* KPI label */}
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-sm font-black text-primary uppercase tracking-wide leading-tight">{label}</p>
                                             </div>
-                                            {/* Compromiso → Real → % — always full width, no layout shift */}
                                             <div className="flex items-end gap-3 flex-shrink-0">
-                                                {/* Compromiso column */}
                                                 {hasComp && (
                                                     <div className="text-center">
                                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Compromiso</p>
@@ -783,7 +686,6 @@ const KpiRealPanel = ({ roleId, kpiCompromisos, kpiReal, onUpdate }) => {
                                                     </div>
                                                 )}
                                                 {hasComp && <span className="text-slate-300 font-bold text-lg mb-1">→</span>}
-                                                {/* Real input */}
                                                 <div className="text-center">
                                                     <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">Real</p>
                                                     <MoneyInput
@@ -792,7 +694,6 @@ const KpiRealPanel = ({ roleId, kpiCompromisos, kpiReal, onUpdate }) => {
                                                         isCount={isCount}
                                                     />
                                                 </div>
-                                                {/* % column — always reserved, never causes layout shift */}
                                                 <div className="text-center min-w-[52px] mb-0.5">
                                                     {hasReal && hasComp ? (
                                                         <>
@@ -824,7 +725,7 @@ const FollowUpCard = ({ followUp, checkIn, onSetTime, onCheckIn }) => {
     const isDone = !!checkIn;
     const fmtDate = (d) => { try { return new Date(d + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return d; } };
     return (
-         <div className={`flex items-center gap-4 px-5 py-4 transition-all duration-200
+        <div className={`flex items-center gap-4 px-5 py-4 transition-all duration-200
             ${isDone ? 'bg-emerald-50/60' : 'bg-white hover:bg-slate-50/80'}`}>
 
             {/* Status dot */}
@@ -842,7 +743,7 @@ const FollowUpCard = ({ followUp, checkIn, onSetTime, onCheckIn }) => {
             {/* Segment */}
             <SegBadge seg={followUp._segment} />
 
-           {/* Nombre + monto comprometido */}
+            {/* Nombre + monto comprometido */}
             <div className="flex-1 min-w-0">
                 <p className={`text-[13px] font-black uppercase truncate leading-tight
                     ${isDone ? 'text-emerald-700 line-through decoration-emerald-300' : 'text-primary'}`}>

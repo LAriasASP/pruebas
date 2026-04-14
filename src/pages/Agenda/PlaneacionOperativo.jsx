@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, RotateCcw, Plus, MapPin, Search, Navigation, Calendar, Clock, Trash2, Phone, MoreHorizontal, User, Tag, CheckCircle2 } from 'lucide-react';
 import { useAgenda } from '../../context/AgendaContext';
+import { useCatalogs } from '../../context/CatalogContext'; // <-- Importamos el contexto de catálogos
 import KpiCompromisos from './KpiCompromisos';
 
 const timeOptions = [];
@@ -175,6 +176,18 @@ const PhoneFields = ({ v, idx, segmentName, updateVisit }) => {
 
 const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAvailable, mockDatabase }) => {
     const isClientOnlySegment = segmentName === 'Seguimiento de Cartera' || segmentName === 'Gestión de Empresarias';
+    
+    // ── Extraemos todos los catálogos del contexto ──
+    const { 
+        productos = [], 
+        subproductos = [], 
+        programas = [], 
+        tiposIntegracion = [], 
+        actividades = [], 
+        clasificaciones = [], 
+        herramientas = [],
+        tiposGestion = []
+    } = useCatalogs() || {};
 
     const renderSegmentDetails = () => {
         switch (segmentName) {
@@ -183,28 +196,26 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                     <div className="grid grid-cols-4 gap-3 bg-slate-50/50 p-3 rounded-xl border border-slate-100 mt-2 ml-14">
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Producto</label>
-                            {/**
-                             * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/productos
-                             * Consulta: 
-                             * SELECT id_producto as id, nombre, categoria 
-                             * FROM catalogos.productos WHERE activo = true;
-                             * Resultado en formato JSON:
-                             * [
-                             * { "id": 1, "nombre": "Microcredito", "categoria": "Crédito" },
-                             * { "id": 2, "nombre": "Captación", "categoria": "Ahorro" }
-                             * ]
-                             */}
                             <select
-                                value={v.product}
+                                value={v.product || ''}
                                 onChange={e => updateVisit(segmentName, idx, 'product', e.target.value)}
                                 className={`input-cell uppercase ${!v.product ? 'text-slate-400' : 'text-primary'}`}
                             >
                                 <option value="" disabled>Seleccionar producto...</option>
                                 <optgroup label="Crédito">
-                                    <option>Microcredito</option><option>Consumo</option><option>Pyme</option><option>Crédito Fácil</option>
+                                    {productos.filter(p => p.categoria === 'Crédito').map(p => (
+                                        <option key={p.id} value={p.nombre}>{p.nombre}</option>
+                                    ))}
                                 </optgroup>
                                 <optgroup label="Ahorro">
-                                    <option>Captación</option>
+                                    {productos.filter(p => p.categoria === 'Ahorro').map(p => (
+                                        <option key={p.id} value={p.nombre}>{p.nombre}</option>
+                                    ))}
+                                </optgroup>
+                                <optgroup label="Otro">
+                                    {productos.filter(p => p.categoria !== 'Crédito' && p.categoria !== 'Ahorro').map(p => (
+                                        <option key={p.id} value={p.nombre}>{p.nombre}</option>
+                                    ))}
                                 </optgroup>
                             </select>
                         </div>
@@ -228,19 +239,9 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                         <div className="grid grid-cols-5 gap-3 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
                             <div>
                                 <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Integración</label>
-                                {/**
-                                 * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/tipos-integracion
-                                 * Consulta: 
-                                 * SELECT id_tipo_integracion as id, nombre 
-                                 * FROM catalogos.tipos_integracion WHERE activo = true;
-                                 * Resultado en formato JSON:
-                                 * [
-                                 * { "id": 1, "nombre": "Nuevo" },
-                                 * { "id": 2, "nombre": "Renovación" }
-                                 * ]
-                                 */}
-                                <select value={v.typeIntegration} onChange={e => updateVisit(segmentName, idx, 'typeIntegration', e.target.value)} className="input-cell uppercase text-[10px]">
-                                    <option>Nuevo</option><option>Renovación</option><option>Tratamiento</option><option>Convenio</option>
+                                <select value={v.typeIntegration || ''} onChange={e => updateVisit(segmentName, idx, 'typeIntegration', e.target.value)} className="input-cell uppercase text-[10px]">
+                                    <option value="" disabled>Seleccionar...</option>
+                                    {tiposIntegracion.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
                                 </select>
                             </div>
                             <div>
@@ -271,36 +272,16 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                             </div>
                             <div>
                                 <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Subproducto</label>
-                                {/**
-                                 * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/subproductos
-                                 * Consulta: 
-                                 * SELECT id_subproducto as id, nombre 
-                                 * FROM catalogos.subproductos WHERE activo = true;
-                                 * Resultado en formato JSON:
-                                 * [
-                                 * { "id": 1, "nombre": "PREFERENCIAL" },
-                                 * { "id": 2, "nombre": "BOLSÓN" }
-                                 * ]
-                                 */}
-                                <select value={v.subProduct} onChange={e => updateVisit(segmentName, idx, 'subProduct', e.target.value)} className="input-cell uppercase text-[10px]">
-                                    <option>NINGUNO</option><option>PREFERENCIAL</option><option>BOLSÓN</option><option>BACK TO BACK</option><option>LIQUIDEZ</option><option>FASTCREDIT</option>
+                                <select value={v.subProduct || ''} onChange={e => updateVisit(segmentName, idx, 'subProduct', e.target.value)} className="input-cell uppercase text-[10px]">
+                                    <option value="" disabled>Seleccionar...</option>
+                                    {subproductos.map(s => <option key={s.id} value={s.nombre}>{s.nombre}</option>)}
                                 </select>
                             </div>
                             <div>
                                 <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Programa</label>
-                                {/**
-                                 * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/programas
-                                 * Consulta: 
-                                 * SELECT id_programa as id, nombre 
-                                 * FROM catalogos.programas WHERE activo = true;
-                                 * Resultado en formato JSON:
-                                 * [
-                                 * { "id": 1, "nombre": "SCORE 500" },
-                                 * { "id": 2, "nombre": "ATRACCIÓN DE LA COMPETENCIA" }
-                                 * ]
-                                 */}
-                                <select value={v.program} onChange={e => updateVisit(segmentName, idx, 'program', e.target.value)} className="input-cell uppercase text-[10px]" disabled={v.product === 'Captación'}>
-                                    <option>NINGUNO</option><option>SCORE 500</option><option>ATRACCIÓN DE LA COMPETENCIA</option><option>OTRO</option>
+                                <select value={v.program || ''} onChange={e => updateVisit(segmentName, idx, 'program', e.target.value)} className="input-cell uppercase text-[10px]" disabled={v.product === 'Captación'}>
+                                    <option value="" disabled>Seleccionar...</option>
+                                    {programas.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
                                 </select>
                             </div>
                         </div>
@@ -393,47 +374,24 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                         </div>
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo de Gestión (Personal)</label>
-                            {/**
-                             * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/tipos-gestion
-                             * Consulta: 
-                             * SELECT id_tipo_gestion as id, nombre 
-                             * FROM catalogos.tipos_gestion WHERE activo = true;
-                             * Resultado en formato JSON:
-                             * [
-                             * { "id": 1, "nombre": "Visita integral" },
-                             * { "id": 2, "nombre": "Gestión telefónica" }
-                             * ]
-                             */}
-                            <input
-                                value={v.typeVisitManagement}
+                            <select
+                                value={v.typeVisitManagement || ''}
                                 onChange={e => updateVisit(segmentName, idx, 'typeVisitManagement', e.target.value)}
                                 className="input-cell uppercase text-[10px] h-[42px]"
-                                placeholder="Describir tipo de gestión..."
-                            />
+                            >
+                                <option value="" disabled>Seleccionar tipo...</option>
+                                {tiposGestion.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
+                            </select>
                         </div>
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta para Aplicar</label>
-                            {/**
-                             * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/herramientas
-                             * Consulta: 
-                             * SELECT id_herramienta as id, nombre 
-                             * FROM catalogos.herramientas WHERE activo = true;
-                             * Resultado en formato JSON:
-                             * [
-                             * { "id": 1, "nombre": "Cobranza" },
-                             * { "id": 2, "nombre": "Convenio Liquidación" }
-                             * ]
-                             */}
                             <select
-                                value={v.herramientaAplicar}
+                                value={v.herramientaAplicar || ''}
                                 onChange={e => updateVisit(segmentName, idx, 'herramientaAplicar', e.target.value)}
                                 className="input-cell uppercase text-[10px] h-[42px]"
                             >
-                                <option>Ninguna</option>
-                                <option>Cobranza</option>
-                                <option>Renovación Especial</option>
-                                <option>Tratamiento</option>
-                                <option>Convenio Liquidación</option>
+                                <option value="" disabled>Seleccionar...</option>
+                                {herramientas.map(h => <option key={h.id} value={h.nombre}>{h.nombre}</option>)}
                             </select>
                         </div>
                     </div>
@@ -457,19 +415,13 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                         </div>
                         <div className="col-span-2">
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo Gestión</label>
-                            {/**
-                             * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/tipos-gestion
-                             * Consulta: 
-                             * SELECT id_tipo_gestion as id, nombre 
-                             * FROM catalogos.tipos_gestion WHERE activo = true;
-                             * Resultado en formato JSON:
-                             * [
-                             * { "id": 1, "nombre": "Visita integral" },
-                             * { "id": 2, "nombre": "Gestión telefónica" }
-                             * ]
-                             */}
-                            <select value={v.typeManagement} onChange={e => updateVisit(segmentName, idx, 'typeManagement', e.target.value)} className="input-cell uppercase text-[10px]">
-                                <option>Visita integral</option><option>Visita correctiva</option><option>Visita preventiva</option><option>Visita presencial domicilio</option><option>Visita presencial aval</option><option>Visita presencial Trabajo</option><option>Gestión telefónica</option>
+                            <select 
+                                value={v.typeManagement || ''} 
+                                onChange={e => updateVisit(segmentName, idx, 'typeManagement', e.target.value)} 
+                                className="input-cell uppercase text-[10px]"
+                            >
+                                <option value="" disabled>Seleccionar tipo...</option>
+                                {tiposGestion.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
                             </select>
                         </div>
                     </div>
@@ -510,22 +462,17 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
 
                 {!isClientOnlySegment && (
                     <div className="w-48">
-                        {/**
-                         * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/clasificaciones
-                         * Consulta: 
-                         * SELECT id_clasificacion as id, nombre 
-                         * FROM catalogos.clasificaciones WHERE activo = true;
-                         * Resultado en formato JSON:
-                         * [
-                         * { "id": 1, "nombre": "Contacto" },
-                         * { "id": 2, "nombre": "Prospecto" },
-                         * { "id": 3, "nombre": "Cliente" }
-                         * ]
-                         */}
-                        <select value={v.classification} onChange={e => updateVisit(segmentName, idx, 'classification', e.target.value)} className="input-cell !py-2 uppercase font-black tracking-widest text-[9px]">
-                            <option>Contacto</option>
-                            <option>Prospecto</option>
-                            {segmentName !== 'Promoción' && <option>Cliente</option>}
+                        <select 
+                            value={v.classification || ''} 
+                            onChange={e => updateVisit(segmentName, idx, 'classification', e.target.value)} 
+                            className="input-cell !py-2 uppercase font-black tracking-widest text-[9px]"
+                        >
+                            <option value="" disabled>Clasificación...</option>
+                            {clasificaciones.map(c => {
+                                // Ocultar 'CLIENTE' si el segmento es 'Promoción'
+                                if (segmentName === 'Promoción' && c.nombre.toUpperCase() === 'CLIENTE') return null;
+                                return <option key={c.id} value={c.nombre}>{c.nombre}</option>;
+                            })}
                         </select>
                     </div>
                 )}
@@ -533,32 +480,14 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                 {!isClientOnlySegment && (
                     <div className="flex-1 min-w-0">
                         {segmentName === 'Evaluación e Integración' ? (
-                            <>
-                                {/**
-                                 * TODO: Estos catálogos se alimentarán del EP: /api/v1/catalogos/actividades
-                                 * Consulta: 
-                                 * SELECT id_actividad as id, nombre 
-                                 * FROM catalogos.actividades WHERE activo = true;
-                                 * Resultado en formato JSON:
-                                 * [
-                                 * { "id": 1, "nombre": "Integración" },
-                                 * { "id": 2, "nombre": "Verificación Telefónica" }
-                                 * ]
-                                 */}
-                                <select
-                                    value={v.activity}
-                                    onChange={e => updateVisit(segmentName, idx, 'activity', e.target.value)}
-                                    className="input-cell !py-2 uppercase text-[10px] font-black"
-                                >
-                                    <option>Integración</option>
-                                    <option>Validación Analista Operaciones o Mesa de Control</option>
-                                    <option>Verificación Telefónica</option>
-                                    <option>Verificación Presencial</option>
-                                    <option>Comité de Crédito</option>
-                                    <option>Corrección de Expediente</option>
-                                    <option>VoBo de Supervisor</option>
-                                </select>
-                            </>
+                            <select
+                                value={v.activity || ''}
+                                onChange={e => updateVisit(segmentName, idx, 'activity', e.target.value)}
+                                className="input-cell !py-2 uppercase text-[10px] font-black"
+                            >
+                                <option value="" disabled>Seleccionar actividad...</option>
+                                {actividades.map(a => <option key={a.id} value={a.nombre}>{a.nombre}</option>)}
+                            </select>
                         ) : (
                             <input
                                 value={v.activity}

@@ -24,14 +24,12 @@ export const AuthProvider = ({ children }) => {
 
     const checkServerSession = async () => {
         try {
-            // 1. Validamos cookie con backend de login
             const sessionResponse = await axios.post(`${API_LOGIN}/auth/sesion`, null, {
                 withCredentials: true 
             });
 
             if (sessionResponse.data?.codigo === 'OK' && sessionResponse.data?.contenido === true) {
                 
-                // 2. Traemos la Info Inicial (Rol y Permisos Reales)
                 const infoResponse = await axios.get(`${API_COBRANZA}/usuario/info-inicial`, {
                     withCredentials: true
                 });
@@ -39,7 +37,6 @@ export const AuthProvider = ({ children }) => {
                 if (infoResponse.data?.codigo === 'OK' && infoResponse.data?.contenido) {
                     const userData = infoResponse.data.contenido;
                     
-                    // 3. Traemos la Info de Zonas (Sucursal y Zona Reales)
                     let datosUbicacion = { sucursal: "Matriz", zona: "Sin asignar" };
                     try {
                         const zonasResponse = await axios.get(`${API_COBRANZA}/usuario/info-zonas`, {
@@ -52,22 +49,23 @@ export const AuthProvider = ({ children }) => {
                             };
                         }
                     } catch (zonaError) {
-                        console.warn("El usuario no tiene zona asignada o falló el endpoint de zonas", zonaError);
+                        console.warn("El usuario no tiene zona asignada", zonaError);
                     }
 
-                    // 4. Armamos la sesión. 
-                    // ¡AQUÍ ESTABA EL DETALLE! La clave corta (ej. "COORDINADOR-L") viene en userData.id
+                    // ARMADO DE SESIÓN CORREGIDO
                     const activeSession = {
                         isAuthenticated: true,
                         idUsuario: userData.userId,
-                        name: userData.userName,
-                        email: "", // Si no viene email, lo dejamos vacío
+                        userName: userData.userName, // El nombre de la persona
+                        email: "",
                         puestoId: userData.idPuesto,
-                        nombrePuesto: userData.name,
-                        canal: userData.canal?.toLowerCase() || 'general',
-                        category: userData.category === 'JEFE' ? 'Jefe' : 'Operativo',
-                        nivel: userData.nivel ? parseInt(userData.nivel.replace('N', '')) : null,
-                        clavePuesto: userData.id, // <--- CORRECCIÓN: Usamos userData.id
+                        nombrePuesto: userData.name, // "EJECUTIVO DE COBRANZA"
+                        clavePuesto: userData.id,    // "EJECUTIVO-COB"
+                        canal: userData.canal ? String(userData.canal).toLowerCase() : 'general',
+                        // Guardamos la categoría limpiamente como Jefe u Operativo
+                        category: userData.category?.toUpperCase() === 'JEFE' ? 'Jefe' : 'Operativo',
+                        // Parseamos el nivel sacando solo el número (N1 -> 1)
+                        nivel: userData.nivel ? parseInt(String(userData.nivel).replace(/\D/g, ''), 10) : 1,
                         sucursal: datosUbicacion.sucursal, 
                         zona: datosUbicacion.zona 
                     };

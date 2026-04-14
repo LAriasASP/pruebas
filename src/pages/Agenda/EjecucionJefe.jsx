@@ -1,21 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRole } from '../../context/RoleContext';
 import {
-    AGENDAS_COMERCIAL, AGENDAS_COBRANZA,
-    EJECUTIVOS_COBRANZA, COORDINADORES_COBRANZA,
-    agruparPorZona, agendasDeEjecutivo, STATUS_STYLES
+    agruparPorZona, agendasDeEjecutivo, STATUS_STYLES,
+    AgendaApiService
 } from '../../data/agendaMockData';
 import {
     CheckCircle2, Clock, AlertTriangle, ChevronRight, ArrowLeft,
-    User, Building2, MapPin, Activity, Users, TrendingUp, Navigation, Target
+    User, Building2, MapPin, Activity, Users, TrendingUp, Navigation, Target, Loader2
 } from 'lucide-react';
 
 // ── Mock CheckIn Generator ────────────────────────────────────────────────────
-
-/**
- * TODO: EP: GET /api/v1/catalogos/estatus-cartera
- * Consulta: SELECT id, nombre FROM catalogos.estatus_cartera;
- */
 const MOCK_RESULTADOS = [
     'Abono/ Pago Parcial', 'Compromiso de pago', 'Promesa de pago',
     'Negativa de pago', 'Sin contacto', 'Ilocalizable', 'Convenio',
@@ -128,27 +122,18 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
         'Convenio': 'bg-purple-100 text-purple-700', 'Finado': 'bg-gray-200 text-gray-600',
     };
 
-    // KPI helpers for read-only view
-
-    /**
-     * TODO: EP Lógico de KPIs
-     * Consulta Backend: 
-     * SELECT k.* FROM agendas.kpis k WHERE id_usuario = :id_operativo AND fecha = :hoy
-     */
     const DEMO_KPI_COMPROMISOS = {
         'asesor-f': { captNueva: '120000', captReinversion: '85000', colocInicial: '95000', colocRedisposicion: '45000', rec0: '18000', rec1_7: '12000', rec8_30: '8500', rec31_60: '4000', recMas61: '2000' },
         'asesor-c': { captNueva: '95000', captReinversion: '60000', dispersion: '180000', dispersionNueva: '75000', aperturasCredFacil: '8', montoLineasApertura: '240000', rec0: '22000', rec1_7: '15000', rec8_30: '9000', rec31_60: '5000', recMas61: '2500', servicioPremiumPendiente: '3' },
         'coordinador-l': { captNueva: '80000', captReinversion: '55000', dispersion: '150000', dispersionNueva: '60000', aperturasCredFacil: '6', montoLineasApertura: '180000', rec0: '16000', rec1_7: '11000', rec8_30: '7000', rec31_60: '3500', recMas61: '1500', servicioPremiumPendiente: '2' },
         'gestor-i': { cobranzaTotalDia: '45000', cobranza1_30: '28000', cobranza31_60: '12000', opCobradas: '14', visitasRealizadas: '8', promesasDia: '5', montoPromesas: '18000', saldoSaneadoDia: '8000', contencionMas30: '22000', contencionMas60: '12000', contencionMas89: '5000' },
     };
-    
     const FIELDS_JEFE = {
         'asesor-f': [{ key: 'captNueva', label: 'Captación Nueva' }, { key: 'captReinversion', label: 'Captación Reinv.' }, { key: 'colocInicial', label: 'Colocación Inicial' }, { key: 'rec0', label: 'Recup. 0 días' }, { key: 'rec1_7', label: 'Recup. 1-7d' }],
         'asesor-c': [{ key: 'captNueva', label: 'Captación Nueva' }, { key: 'dispersion', label: 'Dispersión' }, { key: 'rec0', label: 'Recup. 0 días' }, { key: 'servicioPremiumPendiente', label: 'Serv. Premium' }],
         'coordinador-l': [{ key: 'captNueva', label: 'Captación Nueva' }, { key: 'dispersion', label: 'Dispersión' }, { key: 'rec0', label: 'Recup. 0 días' }],
         'gestor-i': [{ key: 'cobranzaTotalDia', label: 'Cobranza Total' }, { key: 'opCobradas', label: 'Ops. Cobradas' }, { key: 'visitasRealizadas', label: '# Visitas' }, { key: 'promesasDia', label: 'Promesas' }],
     };
-    
     const puestoToRoleId = (puesto) => {
         if (puesto?.includes('Financiero')) return 'asesor-f';
         if (puesto?.includes('Comercial')) return 'asesor-c';
@@ -220,7 +205,6 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
                 })}
             </div>
 
-            {/* KPI Compromisos vs Real — read-only supervisor view */}
             {kpiFields.length > 0 && Object.keys(compromisos).length > 0 && (
                 <div className="mt-6">
                     <div className="flex items-center gap-2 mb-3">
@@ -371,14 +355,60 @@ const VistaEjecutivo = ({ ejecutivo, agendas }) => {
 // ── Main EjecucionJefe ────────────────────────────────────────────────────────
 const EjecucionJefe = () => {
     const { selectedRole } = useRole();
-    const { id: roleId, canal, nivel, name: rolName } = selectedRole;
+    const { canal, nivel, name: rolName } = selectedRole;
 
-    // Commercial canal
+    const [loading, setLoading] = useState(true);
+    const [agendas, setAgendas] = useState([]);
+    const [jerarquia, setJerarquia] = useState({ coordinadores: [], ejecutivos: [] });
+
+    // FIX: Todos los hooks de estado deben ir al principio, antes de cualquier `if` o `return`
+    const [selectedZona, setSelectedZona] = useState(null);
+    const [selectedEj, setSelectedEj] = useState(null);
+
+    // FASE 4: Carga dinámica del Dashboard de Ejecución
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            setLoading(true);
+            try {
+                // 1. Cargar las agendas
+                const resAgendas = await AgendaApiService.getAgendasEquipo(canal);
+                if (resAgendas.codigo === 'OK') {
+                    setAgendas(resAgendas.contenido || []);
+                }
+
+                // 2. Cargar jerarquía si es cobranza
+                if (canal === 'cobranza') {
+                    const resJerarquia = await AgendaApiService.getJerarquiaCobranza();
+                    if (resJerarquia.codigo === 'OK') {
+                        setJerarquia(resJerarquia.contenido || { coordinadores: [], ejecutivos: [] });
+                    }
+                }
+            } catch (err) {
+                console.error("Error al cargar dashboard de jefes (Ejecución)", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchDashboardData();
+    }, [canal]);
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center py-32 text-slate-400">
+                <Loader2 size={36} className="animate-spin mb-4 text-blue-500" />
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500">Cargando Tablero de Ejecución...</p>
+            </div>
+        );
+    }
+
+    // ── CANAL COMERCIAL ────────────────────────────────────────────
     if (canal === 'comercial') {
-        const zonas = agruparPorZona(AGENDAS_COMERCIAL);
+        const zonas = agruparPorZona(agendas);
 
-        if (nivel === 1) { // Gerente — sees their own sucursal (pick first as demo)
-            const myAgendas = AGENDAS_COMERCIAL.filter(ag => ag.sucursal === 'HERMOSILLO');
+        if (nivel === 1) { // Gerente
+            // TODO: Ajustar a la sucursal del jefe logueado
+            const myAgendas = agendas.filter(ag => ag.sucursal === 'HERMOSILLO');
             return (
                 <div className="max-w-4xl mx-auto pb-20 pt-8 px-4 animate-in fade-in duration-500">
                     <header className="mb-8">
@@ -390,21 +420,22 @@ const EjecucionJefe = () => {
             );
         }
 
-        if (nivel === 2) { // Subdirector — sees one zone
-            const myZona = Object.entries(zonas)[0]; // ZONA I for demo
+        if (nivel === 2) { // Subdirector
+            // TODO: Ajustar a la zona del jefe logueado
+            const myZonaName = Object.keys(zonas)[0] || 'ZONA I';
+            const myZona = zonas[myZonaName]; 
             return (
                 <div className="max-w-5xl mx-auto pb-20 pt-8 px-4 animate-in fade-in duration-500">
                     <header className="mb-8">
                         <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Supervisión de Zona</h2>
-                        <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">{myZona?.[0]} · Ejecución en curso</p>
+                        <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">{myZonaName} · Ejecución en curso</p>
                     </header>
-                    {myZona && <VistaZona zonaData={myZona[1]} rolName={rolName} />}
+                    {myZona && <VistaZona zonaData={myZona} rolName={rolName} />}
                 </div>
             );
         }
 
-        // Director — sees all zones
-        const [selectedZona, setSelectedZona] = useState(null);
+        // Director
         if (selectedZona) {
             return (
                 <div className="max-w-5xl mx-auto pb-20 pt-8 px-4">
@@ -416,19 +447,20 @@ const EjecucionJefe = () => {
                 </div>
             );
         }
+        
         return (
             <div className="max-w-5xl mx-auto pb-20 pt-8 px-4 animate-in fade-in duration-500">
                 <header className="mb-8">
                     <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Supervisión Nacional</h2>
                     <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Ejecución en Ruta · Todas las Zonas</p>
                 </header>
-                <KpiBar agendas={AGENDAS_COMERCIAL} />
+                <KpiBar agendas={agendas} />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {[
                         { id: 'ZONA I', nombre: 'ZONA I' }, { id: 'ZONA II', nombre: 'ZONA II' },
                         { id: 'ZONA III', nombre: 'ZONA III' }, { id: 'ZONA IV', nombre: 'ZONA IV' },
                     ].map(z => {
-                        const zAgendas = AGENDAS_COMERCIAL.filter(ag => ag.zona === z.id);
+                        const zAgendas = agendas.filter(ag => ag.zona === z.id);
                         const done = zAgendas.filter(ag => ag.status === 'aprobada').reduce((a, ag) => a + Math.floor(Object.values(ag.segments).flat().filter(v => v.name).length * 0.65), 0);
                         const total = zAgendas.reduce((a, ag) => a + Object.values(ag.segments).flat().filter(v => v.name).length, 0);
                         return (
@@ -451,19 +483,18 @@ const EjecucionJefe = () => {
         );
     }
 
-    // Cobranza canal
+    // ── CANAL COBRANZA ─────────────────────────────────────────────
     if (canal === 'cobranza') {
-        const [selectedEj, setSelectedEj] = useState(null);
 
-        if (nivel === 1) { // Ejecutivo — sees their gestores
-            const myEj = EJECUTIVOS_COBRANZA[0]; // demo: first ejecutivo
+        if (nivel === 1) { // Ejecutivo
+            const myEj = jerarquia.ejecutivos[0] || {}; 
             return (
                 <div className="max-w-4xl mx-auto pb-20 pt-8 px-4 animate-in fade-in duration-500">
                     <header className="mb-8">
                         <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Mis Gestores en Ruta</h2>
                         <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Región Ejecutivo · Ejecución en curso</p>
                     </header>
-                    <VistaEjecutivo ejecutivo={myEj} agendas={AGENDAS_COBRANZA} />
+                    <VistaEjecutivo ejecutivo={myEj} agendas={agendas} />
                 </div>
             );
         }
@@ -475,24 +506,21 @@ const EjecucionJefe = () => {
                     <button onClick={() => setSelectedEj(null)} className="flex items-center gap-2 text-[10px] font-black text-accent hover:text-primary uppercase tracking-widest mb-6 transition-colors">
                         <ArrowLeft size={14} /> Todos los Ejecutivos
                     </button>
-                    <VistaEjecutivo ejecutivo={selectedEj} agendas={AGENDAS_COBRANZA} />
+                    <VistaEjecutivo ejecutivo={selectedEj} agendas={agendas} />
                 </div>
             );
         }
+        
         return (
             <div className="max-w-4xl mx-auto pb-20 pt-8 px-4 animate-in fade-in duration-500">
                 <header className="mb-8">
                     <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Supervisión Cobranza</h2>
                     <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Ejecutivos en Campo · Ruta en Curso</p>
                 </header>
-                <KpiBar agendas={AGENDAS_COBRANZA} />
+                <KpiBar agendas={agendas} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/**
-                     * TODO: EP Lógico de Ejecutivos. Mapeo de la jerarquía que vendrá 
-                     * de: GET /api/v1/jerarquia/cobranza/ejecutivos
-                     */}
-                    {EJECUTIVOS_COBRANZA.map(ej => {
-                        const ejAg = AGENDAS_COBRANZA.filter(ag => ag.ejecutivoId === ej.id);
+                    {jerarquia.ejecutivos.map(ej => {
+                        const ejAg = agendas.filter(ag => ag.ejecutivoId === ej.id);
                         const done = ejAg.filter(ag => ag.status === 'aprobada').reduce((a, ag) => a + Math.floor(Object.values(ag.segments).flat().filter(v => v.name).length * 0.65), 0);
                         const total = ejAg.reduce((a, ag) => a + Object.values(ag.segments).flat().filter(v => v.name).length, 0);
                         return (

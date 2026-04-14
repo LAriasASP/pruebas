@@ -1,142 +1,21 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRole } from '../../context/RoleContext';
 import { useAgenda } from '../../context/AgendaContext';
-import { Target, Lock, TrendingUp, DollarSign, Users, Activity } from 'lucide-react';
+import { Target, Lock, TrendingUp, DollarSign, Users, Activity, Loader2 } from 'lucide-react';
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Field Definitions per Role
+// 1. Diccionario de Iconos (Mapea el string del Backend al componente de React)
 // ──────────────────────────────────────────────────────────────────────────────
-
-/**
- * TODO: Estos catálogos de configuración de KPIs se alimentarán del EP: /api/v1/catalogos/kpis-config
- * Consulta Backend Lógica:
- * SELECT k.grupo, k.color, k.llave_campo, k.etiqueta 
- * FROM catalogos.kpis_configuracion k 
- * WHERE k.clave_puesto = 'ASESOR-F' AND k.activo = true;
- * * Resultado en JSON esperado: 
- * Arreglos agrupados por categoría para construir los inputs dinámicamente.
- */
-const FIELDS_ASESOR_F = [
-    {
-        group: 'Captación',
-        color: 'blue',
-        icon: DollarSign,
-        fields: [
-            { key: 'captNueva', label: 'Captación Nueva' },
-            { key: 'captReinversion', label: 'Captación Reinversión' },
-        ]
-    },
-    {
-        group: 'Colocación',
-        color: 'emerald',
-        icon: TrendingUp,
-        fields: [
-            { key: 'colocInicial', label: 'Colocación Inicial' },
-            { key: 'colocRedisposicion', label: 'Colocación Redisposición' },
-        ]
-    },
-    {
-        group: 'Recuperación',
-        color: 'amber',
-        icon: Activity,
-        fields: [
-            { key: 'rec0', label: 'Recuperación 0 días' },
-            { key: 'rec1_7', label: 'Recuperación 1 a 7 días' },
-            { key: 'rec8_30', label: 'Recuperación 8 a 30 días' },
-            { key: 'rec31_60', label: 'Recuperación 31 a 60 días' },
-            { key: 'recMas61', label: 'Recuperación +61 días' },
-        ]
-    },
-];
-
-/**
- * TODO: Mismo EP: /api/v1/catalogos/kpis-config filtrando por clave ASESOR-C o COORDINADOR-L
- */
-const FIELDS_COORD_ASESOR_C = [
-    {
-        group: 'Captación',
-        color: 'blue',
-        icon: DollarSign,
-        fields: [
-            { key: 'captNueva', label: 'Captación Nueva' },
-            { key: 'captReinversion', label: 'Captación Reinversión' },
-        ]
-    },
-    {
-        group: 'Dispersión',
-        color: 'violet',
-        icon: TrendingUp,
-        fields: [
-            { key: 'dispersion', label: 'Dispersión' },
-            { key: 'dispersionNueva', label: 'Dispersión Nueva' },
-            { key: 'aperturasCredFacil', label: '# Aperturas Crédito Fácil' },
-            { key: 'montoLineasApertura', label: 'Monto Líneas de Apertura' },
-        ]
-    },
-    {
-        group: 'Recuperación',
-        color: 'amber',
-        icon: Activity,
-        fields: [
-            { key: 'rec0', label: 'Recuperación 0 días' },
-            { key: 'rec1_7', label: 'Recuperación 1 a 7 días' },
-            { key: 'rec8_30', label: 'Recuperación 8 a 30 días' },
-            { key: 'rec31_60', label: 'Recuperación 31 a 60 días' },
-            { key: 'recMas61', label: 'Recuperación +61 días' },
-        ]
-    },
-    {
-        group: 'Servicio',
-        color: 'rose',
-        icon: Users,
-        fields: [
-            { key: 'servicioPremiumPendiente', label: 'Servicio Premium Pendiente' },
-        ]
-    },
-];
-
-/**
- * TODO: Mismo EP: /api/v1/catalogos/kpis-config filtrando por clave GESTOR-I
- */
-const FIELDS_GESTOR_I = [
-    {
-        group: 'Cobranza',
-        color: 'emerald',
-        icon: DollarSign,
-        fields: [
-            { key: 'cobranzaTotalDia', label: 'Cobranza Total Día' },
-            { key: 'cobranza1_30', label: 'Cobranza 1 a 30 días' },
-            { key: 'cobranza31_60', label: 'Cobranza 31 a 60 días' },
-            { key: 'opCobradas', label: 'Operaciones Cobradas' },
-        ]
-    },
-    {
-        group: 'Visitas y Promesas',
-        color: 'blue',
-        icon: Users,
-        fields: [
-            { key: 'visitasRealizadas', label: '# Visitas Realizadas' },
-            { key: 'promesasDia', label: 'Promesas de Pago del Día' },
-            { key: 'montoPromesas', label: 'Monto de Promesas Generadas' },
-        ]
-    },
-    {
-        group: 'Saneamiento y Contención',
-        color: 'amber',
-        icon: Activity,
-        fields: [
-            { key: 'saldoSaneadoDia', label: 'Saldo Saneado Día' },
-            { key: 'contencionMas30', label: 'Contención +30 días' },
-            { key: 'contencionMas60', label: 'Contención +60 días' },
-            { key: 'contencionMas89', label: 'Contención +89 días' },
-        ]
-    },
-];
+const ICON_MAP = {
+    DollarSign: DollarSign,
+    TrendingUp: TrendingUp,
+    Activity: Activity,
+    Users: Users
+};
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Color map for group headers
+// 2. Mapa de Colores para Cabeceras
 // ──────────────────────────────────────────────────────────────────────────────
-
 const colorMap = {
     blue: { bar: 'bg-blue-500', badge: 'bg-blue-50 text-blue-600', icon: 'text-blue-500' },
     emerald: { bar: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700', icon: 'text-emerald-500' },
@@ -146,7 +25,7 @@ const colorMap = {
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Sub-components
+// Sub-componentes
 // ──────────────────────────────────────────────────────────────────────────────
 
 const KpiField = ({ label, fieldKey, value, onChange, disabled }) => (
@@ -180,13 +59,15 @@ const KpiField = ({ label, fieldKey, value, onChange, disabled }) => (
     </div>
 );
 
-const KpiGroup = ({ group, color, icon: Icon, fields, kpi, onUpdate, disabled }) => {
+const KpiGroup = ({ group, color, iconName, fields, kpi, onUpdate, disabled }) => {
     const c = colorMap[color] || colorMap.blue;
+    const IconComponent = ICON_MAP[iconName] || Target; // Target es el icono por defecto si no encuentra match
+
     return (
         <div className="space-y-3">
             {/* Group header */}
             <div className={`flex items-center gap-2.5 px-3 py-2 rounded-xl ${c.badge} w-fit`}>
-                <Icon size={12} className={c.icon} />
+                <IconComponent size={12} className={c.icon} />
                 <span className="text-[9px] font-black uppercase tracking-[0.2em]">{group}</span>
             </div>
             {/* Fields grid */}
@@ -207,7 +88,7 @@ const KpiGroup = ({ group, color, icon: Icon, fields, kpi, onUpdate, disabled })
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Main Component
+// Componente Principal
 // ──────────────────────────────────────────────────────────────────────────────
 
 const KpiCompromisos = () => {
@@ -223,24 +104,84 @@ const KpiCompromisos = () => {
      */
     const kpi = currentAgenda.kpiCompromisos || {};
 
-    // Determine which field groups to render
-    let fieldGroups = null;
-    const roleId = selectedRole?.id;
+    // ── FASE 2B: ESTADO DE CONFIGURACIÓN DE KPIS ──
+    const [fieldGroups, setFieldGroups] = useState([]);
+    const [loadingConfig, setLoadingConfig] = useState(true);
 
-    if (roleId === 'asesor-f') {
-        fieldGroups = FIELDS_ASESOR_F;
-    } else if (roleId === 'asesor-c' || roleId === 'coordinador-l') {
-        fieldGroups = FIELDS_COORD_ASESOR_C;
-    } else if (roleId === 'gestor-i') {
-        fieldGroups = FIELDS_GESTOR_I;
+    useEffect(() => {
+        // Solo intentamos cargar si hay un rol seleccionado y es operativo
+        if (!selectedRole || selectedRole.category !== 'Operativo') {
+            setLoadingConfig(false);
+            return;
+        }
+
+        const fetchKpiConfig = async () => {
+            try {
+                setLoadingConfig(true);
+
+                /**
+                 * TODO: EP Lógico -> GET /api/v1/catalogos/kpis-config?rol={roleId}
+                 * Cuando el backend esté listo, reemplaza el setTimeout por la llamada Axios.
+                 */
+                await new Promise(resolve => setTimeout(resolve, 600)); // Simulación de red
+
+                // Diccionario gigante simulando la respuesta de la Base de Datos
+                const DB_KPI_CONFIG = {
+                    'asesor-f': [
+                        { group: 'Captación', color: 'blue', iconName: 'DollarSign', fields: [{ key: 'captNueva', label: 'Captación Nueva' }, { key: 'captReinversion', label: 'Captación Reinversión' }] },
+                        { group: 'Colocación', color: 'emerald', iconName: 'TrendingUp', fields: [{ key: 'colocInicial', label: 'Colocación Inicial' }, { key: 'colocRedisposicion', label: 'Colocación Redisposición' }] },
+                        { group: 'Recuperación', color: 'amber', iconName: 'Activity', fields: [{ key: 'rec0', label: 'Recuperación 0 días' }, { key: 'rec1_7', label: 'Recuperación 1 a 7 días' }, { key: 'rec8_30', label: 'Recuperación 8 a 30 días' }, { key: 'rec31_60', label: 'Recuperación 31 a 60 días' }, { key: 'recMas61', label: 'Recuperación +61 días' }] },
+                    ],
+                    'asesor-c': [
+                        { group: 'Captación', color: 'blue', iconName: 'DollarSign', fields: [{ key: 'captNueva', label: 'Captación Nueva' }, { key: 'captReinversion', label: 'Captación Reinversión' }] },
+                        { group: 'Dispersión', color: 'violet', iconName: 'TrendingUp', fields: [{ key: 'dispersion', label: 'Dispersión' }, { key: 'dispersionNueva', label: 'Dispersión Nueva' }, { key: 'aperturasCredFacil', label: '# Aperturas Crédito Fácil' }, { key: 'montoLineasApertura', label: 'Monto Líneas de Apertura' }] },
+                        { group: 'Recuperación', color: 'amber', iconName: 'Activity', fields: [{ key: 'rec0', label: 'Recuperación 0 días' }, { key: 'rec1_7', label: 'Recuperación 1 a 7 días' }, { key: 'rec8_30', label: 'Recuperación 8 a 30 días' }, { key: 'rec31_60', label: 'Recuperación 31 a 60 días' }, { key: 'recMas61', label: 'Recuperación +61 días' }] },
+                        { group: 'Servicio', color: 'rose', iconName: 'Users', fields: [{ key: 'servicioPremiumPendiente', label: 'Servicio Premium Pendiente' }] },
+                    ],
+                    'coordinador-l': [
+                        { group: 'Captación', color: 'blue', iconName: 'DollarSign', fields: [{ key: 'captNueva', label: 'Captación Nueva' }, { key: 'captReinversion', label: 'Captación Reinversión' }] },
+                        { group: 'Dispersión', color: 'violet', iconName: 'TrendingUp', fields: [{ key: 'dispersion', label: 'Dispersión' }, { key: 'dispersionNueva', label: 'Dispersión Nueva' }, { key: 'aperturasCredFacil', label: '# Aperturas Crédito Fácil' }, { key: 'montoLineasApertura', label: 'Monto Líneas de Apertura' }] },
+                        { group: 'Recuperación', color: 'amber', iconName: 'Activity', fields: [{ key: 'rec0', label: 'Recuperación 0 días' }, { key: 'rec1_7', label: 'Recuperación 1 a 7 días' }, { key: 'rec8_30', label: 'Recuperación 8 a 30 días' }, { key: 'rec31_60', label: 'Recuperación 31 a 60 días' }, { key: 'recMas61', label: 'Recuperación +61 días' }] },
+                        { group: 'Servicio', color: 'rose', iconName: 'Users', fields: [{ key: 'servicioPremiumPendiente', label: 'Servicio Premium Pendiente' }] },
+                    ],
+                    'gestor-i': [
+                        { group: 'Cobranza', color: 'emerald', iconName: 'DollarSign', fields: [{ key: 'cobranzaTotalDia', label: 'Cobranza Total Día' }, { key: 'cobranza1_30', label: 'Cobranza 1 a 30 días' }, { key: 'cobranza31_60', label: 'Cobranza 31 a 60 días' }, { key: 'opCobradas', label: 'Operaciones Cobradas' }] },
+                        { group: 'Visitas y Promesas', color: 'blue', iconName: 'Users', fields: [{ key: 'visitasRealizadas', label: '# Visitas Realizadas' }, { key: 'promesasDia', label: 'Promesas de Pago del Día' }, { key: 'montoPromesas', label: 'Monto de Promesas Generadas' }] },
+                        { group: 'Saneamiento y Contención', color: 'amber', iconName: 'Activity', fields: [{ key: 'saldoSaneadoDia', label: 'Saldo Saneado Día' }, { key: 'contencionMas30', label: 'Contención +30 días' }, { key: 'contencionMas60', label: 'Contención +60 días' }, { key: 'contencionMas89', label: 'Contención +89 días' }] },
+                    ]
+                };
+
+                // Asignamos la configuración que corresponde al rol logueado
+                const configForRole = DB_KPI_CONFIG[selectedRole.id] || [];
+                setFieldGroups(configForRole);
+
+            } catch (error) {
+                console.error("Error al cargar la configuración de KPIs", error);
+            } finally {
+                setLoadingConfig(false);
+            }
+        };
+
+        fetchKpiConfig();
+    }, [selectedRole]);
+
+
+    if (selectedRole?.category !== 'Operativo') return null;
+
+    if (loadingConfig) {
+        return (
+            <div className="mb-16 flex items-center justify-center p-10 text-slate-400">
+                <Loader2 size={24} className="animate-spin" />
+                <span className="ml-3 text-xs font-black uppercase tracking-widest">Cargando KPIs...</span>
+            </div>
+        );
     }
 
-    // Only operatives fill this form
-    if (!fieldGroups || selectedRole?.category !== 'Operativo') return null;
+    if (fieldGroups.length === 0) return null;
 
     return (
         <div className="mb-16 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Section header — matches SegmentSection style */}
+            {/* Section header */}
             <div className="gradient-header shadow-lg relative z-10 !rounded-t-3xl">
                 <div className="flex items-center gap-3">
                     <div className="w-1.5 h-5 bg-yellow-400 rounded-full" />
@@ -275,7 +216,7 @@ const KpiCompromisos = () => {
                         key={group.group}
                         group={group.group}
                         color={group.color}
-                        icon={group.icon}
+                        iconName={group.iconName}
                         fields={group.fields}
                         kpi={kpi}
                         onUpdate={updateKpi}
