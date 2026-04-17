@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRole } from '../../context/RoleContext';
-import {
-    agruparPorZona, agendasDeEjecutivo, contarEstados, STATUS_STYLES,
-    AgendaApiService // <-- Importamos el servicio de API que simula el Backend
-} from '../../data/agendaMockData';
+import api from '../../api/axiosConfig'; // <-- Importamos tu cliente real de Axios
 import {
     CheckCircle2, Clock, AlertTriangle, ChevronRight, ChevronDown,
     User, Building2, MapPin, FileText, X, Send, RotateCcw,
@@ -11,13 +8,42 @@ import {
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
+// HELPERS RESCATADOS DEL MOCK
 // ─────────────────────────────────────────────────────────────────────────────
+const STATUS_STYLES = {
+    borrador: { label: 'Borrador', bg: 'bg-slate-100', text: 'text-slate-500', dot: 'bg-slate-400' },
+    pendiente: { label: 'Pendiente', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-400' },
+    aprobada: { label: 'Autorizada', bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' },
+    requiere_modificacion: { label: 'Req. Modificación', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
+};
+
 const formatCurrency = (v) => {
     if (!v) return '$0.00';
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(v));
 };
 
+const agruparPorZona = (agendas) => {
+    return agendas.reduce((acc, ag) => {
+        if (!acc[ag.zona]) acc[ag.zona] = {};
+        if (!acc[ag.zona][ag.sucursal]) acc[ag.zona][ag.sucursal] = [];
+        acc[ag.zona][ag.sucursal].push(ag);
+        return acc;
+    }, {});
+};
+
+const agendasDeEjecutivo = (allAgendas, ejecutivoId) =>
+    allAgendas.filter(ag => ag.ejecutivoId === ejecutivoId);
+
+const contarEstados = (agendasList) => ({
+    total: agendasList.length,
+    pendiente: agendasList.filter(a => a.status?.toLowerCase() === 'pendiente').length,
+    aprobada: agendasList.filter(a => a.status?.toLowerCase() === 'aprobada' || a.status?.toLowerCase() === 'autorizada').length,
+    requiere_modificacion: agendasList.filter(a => a.status?.toLowerCase() === 'requiere_modificacion').length,
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPONENTES UI COMPARTIDOS
+// ─────────────────────────────────────────────────────────────────────────────
 const StatusBadge = ({ status, size = 'sm' }) => {
     const s = STATUS_STYLES[status] || STATUS_STYLES.borrador;
     return (
@@ -262,7 +288,7 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
 
             {/* Segmentos */}
             {segmentOrder.map(seg => (
-                <SegmentReadOnly key={seg} title={seg} visits={agenda.segments[seg]} />
+                <SegmentReadOnly key={seg} title={seg} visits={agenda.segments[seg] || []} />
             ))}
 
             {/* Acciones */}
@@ -935,57 +961,60 @@ const VistaSubdirCobranza = ({ coordinadores, ejecutivos, allAgendas, rolName, o
 // ─────────────────────────────────────────────────────────────────────────────
 const PlaneacionJefe = () => {
     const { selectedRole } = useRole();
-    const { canal, nivel, name: roleName } = selectedRole;
+    const canal = selectedRole?.canal?.toLowerCase();
+    const roleName = selectedRole?.name;
 
     const [loading, setLoading] = useState(true);
     const [agendas, setAgendas] = useState([]);
+    // 🚀 ESTE ES EL ESTADO QUE FALTABA PARA EL DETALLE
+    const [agendaSeleccionada, setAgendaSeleccionada] = useState(null); 
     const [jerarquia, setJerarquia] = useState({ coordinadores: [], ejecutivos: [] });
 
-    // FASE 4: Carga dinámica del Dashboard
+    const counts = contarEstados(agendas);
+
     useEffect(() => {
         const fetchDashboardData = async () => {
             setLoading(true);
             try {
-                // 1. Cargar las agendas
-                const resAgendas = await AgendaApiService.getAgendasEquipo(canal);
-                if (resAgendas.codigo === 'OK') {
-                    setAgendas(resAgendas.contenido || []);
-                }
-
-                // 2. Cargar jerarquía si es cobranza
-                if (canal === 'cobranza') {
-                    const resJerarquia = await AgendaApiService.getJerarquiaCobranza();
-                    if (resJerarquia.codigo === 'OK') {
-                        setJerarquia(resJerarquia.contenido || { coordinadores: [], ejecutivos: [] });
+                const hoy = new Date().toISOString().split('T')[0];
+                const resAgendas = await api.get(`/agenda/equipo?fecha=${hoy}`);
+                const dataAgendas = resAgendas.data?.contenido || [];
+                
+                const parsedAgendas = dataAgendas.map(ag => {
+                    let parsedSegments = ag.segments || {};
+                    if (typeof parsedSegments === 'string') {
+                        try { parsedSegments = JSON.parse(parsedSegments); } catch (e) { }
                     }
-                }
+                    return { ...ag, segments: parsedSegments };
+                });
+                setAgendas(parsedAgendas);
             } catch (err) {
-                console.error("Error al cargar dashboard de jefes", err);
+                console.error("Error al cargar dashboard", err);
             } finally {
                 setLoading(false);
             }
         };
-
-        fetchDashboardData();
+        if (canal) fetchDashboardData();
     }, [canal]);
 
-    // Handlers que conectan la UI con el API (PUT)
     const handleApproveAgenda = async (idPlan) => {
         try {
-            await AgendaApiService.actualizarEstatusAgenda(idPlan, 'aprobada');
-            // Opcional: recargar agendas para forzar sincronía con BD, o dejar que la UI cambie localmente.
+            await api.put(`/agenda/plan/autorizar`, { idPlan, estatus: 'aprobada' });
+            setAgendas(prev => prev.map(ag => ag.id === idPlan ? { ...ag, status: 'aprobada' } : ag));
+            // Si estamos en el detalle, cerramos o actualizamos
+            setAgendaSeleccionada(null); 
         } catch (error) {
-            console.error("Error autorizando agenda", error);
-            alert("No se pudo autorizar la agenda");
+            alert("No se pudo autorizar");
         }
     };
 
     const handleModAgenda = async (idPlan, nota) => {
         try {
-            await AgendaApiService.actualizarEstatusAgenda(idPlan, 'requiere_modificacion', nota);
+            await api.put(`/agenda/plan/autorizar`, { idPlan, estatus: 'requiere_modificacion', observaciones: nota });
+            setAgendas(prev => prev.map(ag => ag.id === idPlan ? { ...ag, status: 'requiere_modificacion', notaJefe: nota } : ag));
+            setAgendaSeleccionada(null);
         } catch (error) {
-            console.error("Error solicitando modificación", error);
-            alert("No se pudo solicitar la modificación");
+            alert("No se pudo procesar");
         }
     };
 
@@ -993,79 +1022,46 @@ const PlaneacionJefe = () => {
         <div className="max-w-[1400px] mx-auto pb-20 px-4 md:px-8 pt-6">{children}</div>
     );
 
-    if (loading) {
+    if (loading) return <div className="flex flex-col items-center justify-center py-32"><Loader2 className="animate-spin text-blue-500" /></div>;
+
+    // ── LÓGICA DE RENDERIZADO CON NAVEGACIÓN ──
+    
+    // 1. SI HAY UNA AGENDA SELECCIONADA, MOSTRAMOS EL DETALLE
+    if (agendaSeleccionada) {
         return (
-            <div className="flex flex-col items-center justify-center py-32 text-slate-400">
-                <Loader2 size={36} className="animate-spin mb-4 text-blue-500" />
-                <p className="text-xs font-black uppercase tracking-widest text-slate-500">Cargando Tablero de Supervisión...</p>
-            </div>
+            <WRAP>
+                <AgendaDetalle
+                    agenda={agendaSeleccionada}
+                    onBack={() => setAgendaSeleccionada(null)}
+                    onApprove={handleApproveAgenda}
+                    onRequestMod={handleModAgenda}
+                />
+            </WRAP>
         );
     }
 
-    // ── CANAL COBRANZA ─────────────────────────────────────────────
-    if (canal === 'cobranza') {
-        if (nivel === 1) {
-            const miEjecutivo = jerarquia.ejecutivos[0] || {};
-            const misAgendas = agendasDeEjecutivo(agendas, miEjecutivo.id);
-            return (
-                <WRAP>
-                    <VistaEjecutivoCobranza 
-                        ejecutivo={miEjecutivo} 
-                        agendas={misAgendas} 
-                        rolName={roleName} 
-                        onApproveAgenda={handleApproveAgenda}
-                        onModAgenda={handleModAgenda}
+    // 2. SI NO, MOSTRAMOS EL LISTADO (DASHBOARD)
+    return (
+        <WRAP>
+            <KpiBar 
+                counts={counts} 
+                title={`Panel de Supervisión`} 
+                subtitle={`${roleName} · ${agendas.length} Agendas Hoy`} 
+                icon={Shield} 
+            />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {agendas.map(ag => (
+                    <AgendaCard 
+                        key={ag.id} 
+                        agenda={ag} 
+                        onSelect={(item) => setAgendaSeleccionada(item)} // 🚀 AHORA SÍ PASAMOS LA AGENDA
+                        onApprove={handleApproveAgenda} 
+                        onRequestMod={handleModAgenda} 
                     />
-                </WRAP>
-            );
-        }
-        if (nivel === 2) {
-            const miCoord = jerarquia.coordinadores[0] || {};
-            const misEjecutivos = jerarquia.ejecutivos.filter(e => e.coordinadorId === miCoord.id);
-            const misAgendas = agendas.filter(ag => misEjecutivos.some(e => e.id === ag.ejecutivoId));
-            return (
-                <WRAP>
-                    <VistaCoordCobranza
-                        coordinador={miCoord}
-                        ejecutivos={misEjecutivos}
-                        allAgendas={misAgendas}
-                        rolName={roleName}
-                        onApproveAgenda={handleApproveAgenda}
-                        onModAgenda={handleModAgenda}
-                    />
-                </WRAP>
-            );
-        }
-        if (nivel === 3) {
-            return (
-                <WRAP>
-                    <VistaSubdirCobranza
-                        coordinadores={jerarquia.coordinadores}
-                        ejecutivos={jerarquia.ejecutivos}
-                        allAgendas={agendas}
-                        rolName={roleName}
-                        onApproveAgenda={handleApproveAgenda}
-                        onModAgenda={handleModAgenda}
-                    />
-                </WRAP>
-            );
-        }
-        return null;
-    }
-
-    // ── CANAL COMERCIAL ────────────────────────────────────────────
-    const zonasData = agruparPorZona(agendas);
-    // TODO: Obtener zona/sucursal de sesión. Para demo, forzamos valores que hagan match.
-    const miZona = 'ZONA I';
-    const miSucursal = 'HERMOSILLO';
-    const misSucursalesEnZona = zonasData[miZona] || {};
-    const misAgendas = misSucursalesEnZona[miSucursal] || [];
-
-    if (nivel === 1) return <WRAP><VistaGerente agendas={misAgendas} sucursal={miSucursal} zona={miZona} rolName={roleName} canal="comercial" onApproveAgenda={handleApproveAgenda} onModAgenda={handleModAgenda} /></WRAP>;
-    if (nivel === 2) return <WRAP><VistaSubdirector zona={miZona} sucursalesData={misSucursalesEnZona} rolName={roleName} canal="comercial" onApproveAgenda={handleApproveAgenda} onModAgenda={handleModAgenda} /></WRAP>;
-    if (nivel === 3) return <WRAP><VistaDirector zonasData={zonasData} rolName={roleName} canal="comercial" onApproveAgenda={handleApproveAgenda} onModAgenda={handleModAgenda} /></WRAP>;
-
-    return null;
+                ))}
+            </div>
+        </WRAP>
+    );
 };
 
 export default PlaneacionJefe;

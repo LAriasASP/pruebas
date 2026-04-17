@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRole } from './RoleContext';
-import { AGENDAS_COMERCIAL, AGENDAS_COBRANZA } from '../data/agendaMockData';
-import axios from 'axios'; 
+// Importamos tu cliente de Axios ya configurado (Ajusta la ruta si es necesario)
+import api from '../api/axiosConfig';
 
 const AgendaContext = createContext();
 
@@ -16,39 +16,11 @@ export const AgendaProvider = ({ children }) => {
         try {
             setLoadingDirectorio(true);
             
-            /**
-             * TODO: EP Lógico -> GET /api/v1/contactos/directorio
-             * Cuando el backend esté listo, reemplaza la data estática por esto:
-             * const res = await axios.get('/api/v1/contactos/directorio', { withCredentials: true });
-             * const rawData = res.data.contenido || [];
-             */
-            await new Promise(resolve => setTimeout(resolve, 800)); // Simulación de red
+            // EP Lógico -> GET /api/v1/agenda/contactos-usuario
+            const res = await api.get('/agenda/contactos-usuario');
+            const rawData = res.data?.contenido || res.data || [];
 
-            // ESTA ES TU DATA REAL TRAÍDA DE LA BASE DE DATOS
-            const rawData = [
-                { id_contacto: 1, id_cliente: null, name: "JUAN PEREZ", classification: "CONTACTO", city: "León", colony: "Centro", streets: "Madero 123", phones: "[\"5512345678\", \"5511112222\", \"\"]", product: "NA", idCredito: null, estimatedAmount: null, annualRate: null, subProduct: null, program: null, moraInicioMes: null, moraActual: null, moraDays: null, saldoInicioMes: null, saldoActual: null, portfolioStatus: null, ultimoEstatus: null, fechaIngreso: null, saldoOcupado: null, saldoDisponible: null, ultimaFechaPago: null, fechaVencimiento: null, montoAmortizacion: null, montoRequeridoCorriente: null, herramientaAplicada: null, categoriaGestion: null },
-                { id_contacto: 2, id_cliente: null, name: "MARIA GARCIA", classification: "CONTACTO", city: "León", colony: "Centro", streets: "Madero 124", phones: "[\"5523456789\", \"\", \"\"]", product: "NA", idCredito: null, estimatedAmount: null, annualRate: null, subProduct: null, program: null, moraInicioMes: null, moraActual: null, moraDays: null, saldoInicioMes: null, saldoActual: null, portfolioStatus: null, ultimoEstatus: null, fechaIngreso: null, saldoOcupado: null, saldoDisponible: null, ultimaFechaPago: null, fechaVencimiento: null, montoAmortizacion: null, montoRequeridoCorriente: null, herramientaAplicada: null, categoriaGestion: null },
-                { id_contacto: 3, id_cliente: null, name: "RICARDO TAPIA", classification: "CONTACTO", city: "León", colony: "Zapata", streets: "Hidalgo 456", phones: "[\"5534567890\", \"5588889999\", \"5577776666\"]", product: "NA", idCredito: null, estimatedAmount: null, annualRate: null, subProduct: null, program: null, moraInicioMes: null, moraActual: null, moraDays: null, saldoInicioMes: null, saldoActual: null, portfolioStatus: null, ultimoEstatus: null, fechaIngreso: null, saldoOcupado: null, saldoDisponible: null, ultimaFechaPago: null, fechaVencimiento: null, montoAmortizacion: null, montoRequeridoCorriente: null, herramientaAplicada: null, categoriaGestion: null },
-                { id_contacto: 4, id_cliente: null, name: "LAURA SANCHEZ", classification: "CONTACTO", city: "León", colony: "Zapata", streets: "Hidalgo 457", phones: "[\"5545678901\", \"\", \"\"]", product: "NA", idCredito: null, estimatedAmount: null, annualRate: null, subProduct: null, program: null, moraInicioMes: null, moraActual: null, moraDays: null, saldoInicioMes: null, saldoActual: null, portfolioStatus: null, ultimoEstatus: null, fechaIngreso: null, saldoOcupado: null, saldoDisponible: null, ultimaFechaPago: null, fechaVencimiento: null, montoAmortizacion: null, montoRequeridoCorriente: null, herramientaAplicada: null, categoriaGestion: null },
-                { id_contacto: 5, id_cliente: null, name: "CARLOS LOPEZ", classification: "CONTACTO", city: "León", colony: "Obregon", streets: "Juarez 88", phones: "[\"5556789012\", \"\", \"\"]", product: "NA", idCredito: null, estimatedAmount: null, annualRate: null, subProduct: null, program: null, moraInicioMes: null, moraActual: null, moraDays: null, saldoInicioMes: null, saldoActual: null, portfolioStatus: null, ultimoEstatus: null, fechaIngreso: null, saldoOcupado: null, saldoDisponible: null, ultimaFechaPago: null, fechaVencimiento: null, montoAmortizacion: null, montoRequeridoCorriente: null, herramientaAplicada: null, categoriaGestion: null },
-                { id_contacto: 6, id_cliente: null, name: "LOLA BELTRAN", classification: "CONTACTO", city: "Silao", colony: "Centro", streets: "5 de Mayo 10", phones: "[\"5588990011\", \"\", \"\"]", product: "NA", idCredito: null, estimatedAmount: null, annualRate: null, subProduct: null, program: null, moraInicioMes: null, moraActual: null, moraDays: null, saldoInicioMes: null, saldoActual: null, portfolioStatus: null, ultimoEstatus: null, fechaIngreso: null, saldoOcupado: null, saldoDisponible: null, ultimaFechaPago: null, fechaVencimiento: null, montoAmortizacion: null, montoRequeridoCorriente: null, herramientaAplicada: null, categoriaGestion: null },
-                { id_contacto: 7, id_cliente: null, name: "BRENDA RUIZ", classification: "PROSPECTO", city: "Irapuato", colony: "Juarez", streets: "Reforma 789", phones: "[\"5567890123\", \"\", \"\"]", product: "Microcrédito", idCredito: null, estimatedAmount: null, annualRate: null, subProduct: null, program: null, moraInicioMes: null, moraActual: null, moraDays: null, saldoInicioMes: null, saldoActual: null, portfolioStatus: null, ultimoEstatus: null, fechaIngreso: null, saldoOcupado: null, saldoDisponible: null, ultimaFechaPago: null, fechaVencimiento: null, montoAmortizacion: null, montoRequeridoCorriente: null, herramientaAplicada: null, categoriaGestion: null },
-                { id_contacto: 8, id_cliente: null, name: "FABIAN MORALES", classification: "PROSPECTO", city: "Irapuato", colony: "Juarez", streets: "Reforma 790", phones: "[\"5578901234\", \"\", \"\"]", product: "Consumo", idCredito: null, estimatedAmount: null, annualRate: null, subProduct: null, program: null, moraInicioMes: null, moraActual: null, moraDays: null, saldoInicioMes: null, saldoActual: null, portfolioStatus: null, ultimoEstatus: null, fechaIngreso: null, saldoOcupado: null, saldoDisponible: null, ultimaFechaPago: null, fechaVencimiento: null, montoAmortizacion: null, montoRequeridoCorriente: null, herramientaAplicada: null, categoriaGestion: null },
-                { id_contacto: 9, id_cliente: null, name: "SOFIA HERRERA", classification: "PROSPECTO", city: "Silao", colony: "Centro", streets: "Aldama 12", phones: "[\"5589012345\", \"\", \"\"]", product: "PYME", idCredito: null, estimatedAmount: null, annualRate: null, subProduct: null, program: null, moraInicioMes: null, moraActual: null, moraDays: null, saldoInicioMes: null, saldoActual: null, portfolioStatus: null, ultimoEstatus: null, fechaIngreso: null, saldoOcupado: null, saldoDisponible: null, ultimaFechaPago: null, fechaVencimiento: null, montoAmortizacion: null, montoRequeridoCorriente: null, herramientaAplicada: null, categoriaGestion: null },
-                { id_contacto: 10, id_cliente: null, name: "DIEGO VARGAS", classification: "PROSPECTO", city: "Silao", colony: "Centro", streets: "Aldama 13", phones: "[\"5590123456\", \"\", \"\"]", product: "Microcrédito", idCredito: null, estimatedAmount: null, annualRate: null, subProduct: null, program: null, moraInicioMes: null, moraActual: null, moraDays: null, saldoInicioMes: null, saldoActual: null, portfolioStatus: null, ultimoEstatus: null, fechaIngreso: null, saldoOcupado: null, saldoDisponible: null, ultimaFechaPago: null, fechaVencimiento: null, montoAmortizacion: null, montoRequeridoCorriente: null, herramientaAplicada: null, categoriaGestion: null },
-                { id_contacto: 11, id_cliente: null, name: "ELENA MORENO", classification: "PROSPECTO", city: "Guanajuato", colony: "Marfil", streets: "Callejon 4", phones: "[\"5501234567\", \"\", \"\"]", product: "Captación", idCredito: null, estimatedAmount: null, annualRate: null, subProduct: null, program: null, moraInicioMes: null, moraActual: null, moraDays: null, saldoInicioMes: null, saldoActual: null, portfolioStatus: null, ultimoEstatus: null, fechaIngreso: null, saldoOcupado: null, saldoDisponible: null, ultimaFechaPago: null, fechaVencimiento: null, montoAmortizacion: null, montoRequeridoCorriente: null, herramientaAplicada: null, categoriaGestion: null },
-                { id_contacto: 12, id_cliente: null, name: "JAVIER SOLIS", classification: "PROSPECTO", city: "Irapuato", colony: "Centro", streets: "Pino 5", phones: "[\"5577889900\", \"\", \"\"]", product: "Microcrédito", idCredito: null, estimatedAmount: null, annualRate: null, subProduct: null, program: null, moraInicioMes: null, moraActual: null, moraDays: null, saldoInicioMes: null, saldoActual: null, portfolioStatus: null, ultimoEstatus: null, fechaIngreso: null, saldoOcupado: null, saldoDisponible: null, ultimaFechaPago: null, fechaVencimiento: null, montoAmortizacion: null, montoRequeridoCorriente: null, herramientaAplicada: null, categoriaGestion: null },
-                { id_contacto: 13, id_cliente: null, name: "JOSE ALFREDO", classification: "PROSPECTO", city: "Guanajuato", colony: "Centro", streets: "Dolores 3", phones: "[\"5511002233\", \"\", \"\"]", product: "Captación", idCredito: null, estimatedAmount: null, annualRate: null, subProduct: null, program: null, moraInicioMes: null, moraActual: null, moraDays: null, saldoInicioMes: null, saldoActual: null, portfolioStatus: null, ultimoEstatus: null, fechaIngreso: null, saldoOcupado: null, saldoDisponible: null, ultimaFechaPago: null, fechaVencimiento: null, montoAmortizacion: null, montoRequeridoCorriente: null, herramientaAplicada: null, categoriaGestion: null },
-                { id_contacto: 14, id_cliente: 1, name: "KARLA MEDELLIN", classification: "CLIENTE", city: "Guanajuato", colony: "Marfil", streets: "Callejon de la Paz 5", phones: "[\"5511223344\", \"\", \"\"]", product: "Microcrédito", idCredito: "CR-8829-2025", estimatedAmount: 45000.00, annualRate: 35.00, subProduct: "PREFERENCIAL", program: "SCORE 500", moraInicioMes: 0, moraActual: 2, moraDays: 2, saldoInicioMes: 45000.00, saldoActual: 44200.00, portfolioStatus: "Abono/ Pago Parcial", ultimoEstatus: "Vigente", fechaIngreso: "15/05/2024", saldoOcupado: 45000.00, saldoDisponible: 5000.00, ultimaFechaPago: "10/02/2026", fechaVencimiento: "15/03/2026", montoAmortizacion: 2500.00, montoRequeridoCorriente: 0.00, herramientaAplicada: "Ninguna", categoriaGestion: "Preventivo" },
-                { id_contacto: 15, id_cliente: 2, name: "HUGO GALAVAN", classification: "CLIENTE", city: "León", colony: "Centro", streets: "Pino Suarez 10", phones: "[\"5522334455\", \"\", \"\"]", product: "Consumo", idCredito: "CR-9012-2025", estimatedAmount: 12000.00, annualRate: 42.50, subProduct: "NINGUNO", program: "NINGUNO", moraInicioMes: 5, moraActual: 0, moraDays: 0, saldoInicioMes: 12000.00, saldoActual: 10500.00, portfolioStatus: "Compromiso de pago", ultimoEstatus: "Vigente", fechaIngreso: "20/06/2024", saldoOcupado: 12000.00, saldoDisponible: 8000.00, ultimaFechaPago: "20/02/2026", fechaVencimiento: "20/03/2026", montoAmortizacion: 1200.00, montoRequeridoCorriente: 0.00, herramientaAplicada: "Ninguna", categoriaGestion: "Control" },
-                { id_contacto: 16, id_cliente: 3, name: "ANA VICTORIA", classification: "CLIENTE", city: "Silao", colony: "Centro", streets: "Morelos 22", phones: "[\"5533445566\", \"\", \"\"]", product: "PYME", idCredito: "CR-1122-2025", estimatedAmount: 150000.00, annualRate: 28.00, subProduct: "BOLSÓN", program: "ATRACCIÓN DE LA COMPETENCIA", moraInicioMes: 0, moraActual: 0, moraDays: 0, saldoInicioMes: 85000.00, saldoActual: 80000.00, portfolioStatus: "Sin contacto", ultimoEstatus: "Vigente", fechaIngreso: "10/01/2024", saldoOcupado: 85000.00, saldoDisponible: 15000.00, ultimaFechaPago: "05/02/2026", fechaVencimiento: "10/03/2026", montoAmortizacion: 8500.00, montoRequeridoCorriente: 0.00, herramientaAplicada: "Ninguna", categoriaGestion: "Preventivo" },
-                { id_contacto: 17, id_cliente: 4, name: "ROBERTO GOMEZ", classification: "CLIENTE", city: "León", colony: "Lomas", streets: "Roble 12", phones: "[\"5544556677\", \"\", \"\"]", product: "Microcrédito", idCredito: "CR-3344-2025", estimatedAmount: 15000.00, annualRate: 45.00, subProduct: "FASTCREDIT", program: "OTRO", moraInicioMes: 30, moraActual: 32, moraDays: 32, saldoInicioMes: 15000.00, saldoActual: 15000.00, portfolioStatus: "Promesa de pago", ultimoEstatus: "Vencido", fechaIngreso: "12/03/2024", saldoOcupado: 15000.00, saldoDisponible: 0.00, ultimaFechaPago: "12/01/2026", fechaVencimiento: "12/02/2026", montoAmortizacion: 4500.00, montoRequeridoCorriente: 4500.00, herramientaAplicada: "Ninguna", categoriaGestion: "Recuperación" },
-                { id_contacto: 18, id_cliente: 5, name: "SANDRA LUZ", classification: "CLIENTE", city: "Irapuato", colony: "Centro", streets: "Juarez 1", phones: "[\"5555667788\", \"\", \"\"]", product: "Captación", idCredito: "CR-5566-2025", estimatedAmount: 0.00, annualRate: 0.00, subProduct: "NINGUNO", program: "NINGUNO", moraInicioMes: 0, moraActual: 0, moraDays: 0, saldoInicioMes: 0.00, saldoActual: 0.00, portfolioStatus: null, ultimoEstatus: "Vigente", fechaIngreso: "05/07/2024", saldoOcupado: 0.00, saldoDisponible: 25000.00, ultimaFechaPago: null, fechaVencimiento: null, montoAmortizacion: 0.00, montoRequeridoCorriente: 0.00, herramientaAplicada: "Ninguna", categoriaGestion: "Preventivo" },
-                { id_contacto: 19, id_cliente: 6, name: "PEDRO INFANTE", classification: "CLIENTE", city: "León", colony: "Obregon", streets: "Revolucion 45", phones: "[\"5566778899\", \"\", \"\"]", product: "Consumo", idCredito: "CR-7788-2025", estimatedAmount: 5000.00, annualRate: 38.00, subProduct: "LIQUIDEZ", program: "NINGUNO", moraInicioMes: 0, moraActual: 0, moraDays: 0, saldoInicioMes: 5000.00, saldoActual: 2000.00, portfolioStatus: "Abono/ Pago Parcial", ultimoEstatus: "Vigente", fechaIngreso: "10/08/2024", saldoOcupado: 5000.00, saldoDisponible: 3000.00, ultimaFechaPago: "15/02/2026", fechaVencimiento: "15/03/2026", montoAmortizacion: 500.00, montoRequeridoCorriente: 0.00, herramientaAplicada: "Ninguna", categoriaGestion: "Preventivo" },
-                { id_contacto: 20, id_cliente: 7, name: "VICENTE FERNANDEZ", classification: "CLIENTE", city: "Irapuato", colony: "Juarez", streets: "Libertad 100", phones: "[\"5599001122\", \"\", \"\"]", product: "PYME", idCredito: "CR-9900-2025", estimatedAmount: 150000.00, annualRate: 25.00, subProduct: "BACK TO BACK", program: "SCORE 500", moraInicioMes: 10, moraActual: 12, moraDays: 12, saldoInicioMes: 150000.00, saldoActual: 150000.00, portfolioStatus: "Promesa de pago", ultimoEstatus: "Vencido", fechaIngreso: "01/01/2024", saldoOcupado: 150000.00, saldoDisponible: 0.00, ultimaFechaPago: "01/01/2026", fechaVencimiento: "01/02/2026", montoAmortizacion: 15000.00, montoRequeridoCorriente: 15000.00, herramientaAplicada: "Ninguna", categoriaGestion: "Legal" }
-            ];
-
-            // PRE-PROCESAMIENTO: Convertimos la cadena JSON de teléfonos a un arreglo real para que el UI no truene
+            // PRE-PROCESAMIENTO: Convertimos la cadena JSON de teléfonos a un arreglo real
             const formattedData = rawData.map(item => {
                 let parsedPhones = ['', '', ''];
                 try {
@@ -82,7 +54,38 @@ export const AgendaProvider = ({ children }) => {
         cargarDirectorio();
     }, []);
 
-    // Esta función devuelve un solo objeto en blanco, sin importar cuántas filas pidas.
+    // ── FASE 4: CARGA DE CONFIGURACIÓN DE KPIS ──
+    const [kpiConfig, setKpiConfig] = useState([]);
+    const [loadingKpiConfig, setLoadingKpiConfig] = useState(true);
+
+    useEffect(() => {
+        if (!selectedRole?.id) return;
+
+        const fetchKpiConfig = async () => {
+            setLoadingKpiConfig(true);
+            try {
+                // EP Lógico -> GET /api/v1/compromisos/config
+                const res = await api.get('/compromisos/config');
+                const rawConfig = res.data?.contenido || res.data || [];
+
+                // Validamos si el backend manda 'fields' como string JSON y lo parseamos
+                const parsedConfig = rawConfig.map(group => ({
+                    ...group,
+                    fields: typeof group.fields === 'string' ? JSON.parse(group.fields) : group.fields
+                }));
+
+                setKpiConfig(parsedConfig);
+            } catch (error) {
+                console.error("Error cargando la configuración de KPIs", error);
+            } finally {
+                setLoadingKpiConfig(false);
+            }
+        };
+
+        fetchKpiConfig();
+    }, [selectedRole?.id]);
+
+    // ── CREACIÓN DE FILAS VACÍAS ──
     const createEmptyRows = (segmentName, count = 1) => {
         return Array.from({ length: count }, (_, i) => {
             const base = { id: Math.random().toString(36).substr(2, 9), time: '', name: '', isNew: true };
@@ -112,7 +115,7 @@ export const AgendaProvider = ({ children }) => {
 
     const emptyKpi = {};
 
-    // ── FASE 3: El estado inicial comienza completamente vacío (0 filas) ──
+    // ── FASE 3: ESTADO INICIAL DE LA AGENDA ──
     const [currentAgenda, setCurrentAgenda] = useState({
         id: null,
         status: 'borrador',
@@ -130,7 +133,7 @@ export const AgendaProvider = ({ children }) => {
             captureDate: '',
             captureTime: '',
             role: '',
-            userName: 'Usuario Demo',
+            userName: 'Usuario Activo',
             hasModifications: false
         }
     });
@@ -138,35 +141,93 @@ export const AgendaProvider = ({ children }) => {
     const [loadingAgenda, setLoadingAgenda] = useState(false);
     const [scheduledFollowUps, setScheduledFollowUps] = useState([]);
 
-    // ── FASE 3: CARGA DE LA AGENDA DEL OPERATIVO ──
+    // ── FASE 3: CARGA DE LA AGENDA DEL DÍA ──
     useEffect(() => {
         if (!selectedRole || selectedRole.category !== 'Operativo') return;
 
         const cargarAgendaDelDia = async () => {
             setLoadingAgenda(true);
             try {
-                /**
-                 * TODO: EP Lógico -> GET /api/v1/agendas/operativo/hoy
-                 * Aquí puedes hacer la petición real. Si el backend no devuelve
-                 * nada para hoy, el estado se queda vacío como lo definimos arriba.
-                 */
-                await new Promise(resolve => setTimeout(resolve, 800)); // Simulación
-
-                // Simulación: Si es un coordinador-l en nuestra demo, lo dejamos en borrador
-                // (vacío para que empiece a planear).
-                // Nota: Removí el cargado de la data mockeada anterior.
-                const isBorrador = selectedRole.id === 'coordinador-l';
+                // EP Lógico -> GET /api/v1/agenda/operativo/hoy
+                const res = await api.get('/agenda/operativo/hoy');
                 
-                setCurrentAgenda(prev => ({
-                    ...prev,
-                    status: isBorrador ? 'borrador' : 'aprobada', // Si es 'aprobada', bloqueará la edición en la UI. Ajusta a tu lógica real.
-                    metadata: {
-                        ...prev.metadata,
-                        role: selectedRole.name,
+                // Extraemos el primer elemento si devuelve un arreglo, o el objeto directo
+                const agendaData = Array.isArray(res.data?.contenido) ? res.data.contenido[0] : (res.data?.contenido || res.data);
+
+                if (agendaData && Object.keys(agendaData).length > 0) {
+                    // Validamos si los segmentos vienen como JSON String desde PostgreSQL
+                    let parsedSegments = agendaData.segments || {};
+                    if (typeof parsedSegments === 'string') {
+                        parsedSegments = JSON.parse(parsedSegments);
                     }
-                }));
+
+                    // 👇 NUEVO: Parseamos los KPIs que ahora manda el Backend
+                    let parsedKpiCompromisos = agendaData.kpiCompromisos || {};
+                    if (typeof parsedKpiCompromisos === 'string') {
+                        parsedKpiCompromisos = JSON.parse(parsedKpiCompromisos);
+                    }
+
+                    let parsedKpiReal = agendaData.kpiReal || {};
+                    if (typeof parsedKpiReal === 'string') {
+                        parsedKpiReal = JSON.parse(parsedKpiReal);
+                    }
+
+                    // Aseguramos que existan las llaves principales aunque vengan vacías
+                    const safeSegments = {
+                        'Promoción': parsedSegments['Promoción'] || [],
+                        'Evaluación e Integración': parsedSegments['Evaluación e Integración'] || [],
+                        'Seguimiento de Cartera': parsedSegments['Seguimiento de Cartera'] || [],
+                        'Gestión de Empresarias': parsedSegments['Gestión de Empresarias'] || []
+                    };
+
+                    setCurrentAgenda(prev => ({
+                        ...prev,
+                        id: agendaData.id,
+                        status: agendaData.status?.toLowerCase() || 'borrador',
+                        segments: safeSegments,
+                        kpiCompromisos: parsedKpiCompromisos, // <--- INYECTAMOS LOS COMPROMISOS
+                        kpiReal: parsedKpiReal,               // <--- INYECTAMOS EL AVANCE REAL
+                        metadata: {
+                            ...prev.metadata,
+                            role: selectedRole.name,
+                        }
+                    }));
+                } else {
+                    // Si el backend responde 200 pero vacío (no tiene agenda hoy)
+                    const isBorrador = selectedRole.id === 'coordinador-l';
+                    setCurrentAgenda(prev => ({ 
+                        ...prev, 
+                        status: isBorrador ? 'borrador' : 'borrador',
+                        id: null,
+                        segments: {
+                            'Promoción': [], 
+                            'Evaluación e Integración': [],
+                            'Seguimiento de Cartera': [],
+                            'Gestión de Empresarias': []
+                        }
+                    }));
+                }
+
             } catch (error) {
-                console.error("Error al cargar la agenda del día", error);
+                // Manejo inteligente del "error" del backend cuando es un día nuevo
+                const mensajeError = error.response?.data?.mensaje || "";
+                
+                if (error.response?.status === 404 || mensajeError.includes("No se encontró información de la agenda")) {
+                    console.log("No hay agenda para hoy. Iniciando en modo Borrador limpio.");
+                    setCurrentAgenda(prev => ({ 
+                        ...prev, 
+                        status: 'borrador',
+                        id: null,
+                        segments: {
+                            'Promoción': [], 
+                            'Evaluación e Integración': [],
+                            'Seguimiento de Cartera': [],
+                            'Gestión de Empresarias': []
+                        }
+                    }));
+                } else {
+                    console.error("Error crítico al cargar la agenda del día", error);
+                }
             } finally {
                 setLoadingAgenda(false);
             }
@@ -183,7 +244,7 @@ export const AgendaProvider = ({ children }) => {
         return ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera', 'Gestión de Empresarias'];
     };
 
-    const updateVisit = (segmentName, index, field, value) => {
+   const updateVisit = (segmentName, index, field, value) => {
         setCurrentAgenda(prev => {
             const newSegments = { ...prev.segments };
             const updatedRow = { ...newSegments[segmentName][index], [field]: value };
@@ -194,6 +255,8 @@ export const AgendaProvider = ({ children }) => {
                     Object.keys(match).forEach(key => {
                         updatedRow[key] = match[key];
                     });
+                    
+                    updatedRow.idContacto = match.id || match.idContacto || match.id_contacto || null;
                 }
             }
 
@@ -210,31 +273,97 @@ export const AgendaProvider = ({ children }) => {
     };
 
     const updateKpiReal = async (field, value) => {
-        setCurrentAgenda(prev => ({
-            ...prev,
-            kpiReal: { ...prev.kpiReal, [field]: value }
-        }));
+        try {
+            // Actualización optimista en el UI para que se sienta rápido
+            setCurrentAgenda(prev => ({
+                ...prev,
+                kpiReal: { ...prev.kpiReal, [field]: value }
+            }));
+
+            // LLAMADA REAL AL BACKEND EN SEGUNDO PLANO
+            if (currentAgenda.id) {
+                await api.put('/gestion-diaria/kpis/real', {
+                    idPlan: currentAgenda.id,
+                    llaveFront: field,
+                    nuevoValor: value || 0
+                });
+            }
+        } catch (error) {
+            console.error("Error actualizando KPI real en el servidor", error);
+            // Podrías revertir el valor si falla, pero para KPIs suele ser suficiente con loguearlo
+        }
     };
 
-    const registerCheckIn = async (visitId, data) => {
-        const checkInTime = new Date().toISOString();
-        setCurrentAgenda(prev => ({
-            ...prev,
-            checkIns: {
-                ...prev.checkIns,
-                [visitId]: { ...data, registeredAt: checkInTime }
-            }
-        }));
+   const registerCheckIn = async (visitId, data) => {
+        try {
+            const payload = {
+                idVisita: visitId,
+                visitaRealizada: data.visitaRealizada,
+                clienteEncontrado: data.clienteEncontrado,
+                actividadRealizada: data.actividadRealizada,
+                motivoNoVisita: data.motivoNoVisita,
+                motivoNoActividad: data.motivoNoActividad,
+                resultado: data.resultado,
+                tipoGestion: data.tipoGestion,
+                checkInTime: data.checkInTime,
+                visitaDuration: data.visitaDuration,
+                lat: data.lat,
+                lng: data.lng,
+                gpsStatus: data.gpsStatus,
+                pagoMonto: data.pagoMonto,
+                pagoFecha: data.pagoFecha,
+                notes: data.notes
+            };
+
+            //LLAMADA REAL AL BACKEND
+            await api.post('/gestion-diaria/ejecucion', payload);
+
+            // Actualizamos la memoria de React para que el UI pinte la palomita verde
+            const checkInTime = new Date().toISOString();
+            setCurrentAgenda(prev => ({
+                ...prev,
+                checkIns: {
+                    ...prev.checkIns,
+                    [visitId]: { ...data, registeredAt: checkInTime }
+                }
+            }));
+
+        } catch (error) {
+            console.error("Error al registrar el check-in", error);
+            alert("No se pudo guardar la gestión en el servidor.");
+        }
     };
+
 
     const addUnplannedVisit = async (data) => {
-        const id = Math.random().toString(36).substr(2, 9);
-        const newVisit = { id, ...data, isUnplanned: true };
-        
-        setCurrentAgenda(prev => ({
-            ...prev,
-            unplannedVisits: [...(prev.unplannedVisits || []), newVisit]
-        }));
+        try {
+            const payload = {
+                idVisita: null, // Null porque es imprevisto
+                name: data.name,
+                resultado: data.resultado,
+                tipoGestion: data.tipoGestion,
+                checkInTime: data.checkInTime,
+                pagoMonto: data.pagoMonto,
+                pagoFecha: data.pagoFecha,
+                notes: data.notes
+            };
+
+            // LLAMADA REAL AL BACKEND
+            await api.post('/gestion-diaria/ejecucion/no-planeada', payload);
+
+            // Actualizamos el UI
+            const id = Math.random().toString(36).substr(2, 9);
+            const newVisit = { id, ...data, isUnplanned: true };
+            
+            setCurrentAgenda(prev => ({
+                ...prev,
+                unplannedVisits: [...(prev.unplannedVisits || []), newVisit]
+            }));
+
+        } catch (error) {
+            console.error("Error al registrar visita no planeada", error);
+            alert("Hubo un error al registrar el imprevisto.");
+        }
     };
 
     const scheduleFollowUp = (visitSource, { fecha, monto }) => {
@@ -310,7 +439,8 @@ export const AgendaProvider = ({ children }) => {
         return { valid: true };
     };
 
-    const sendForAuthorization = async () => {
+   const sendForAuthorization = async () => {
+        // 1. Validamos que haya al menos una visita
         const activeVisits = Object.entries(currentAgenda.segments)
             .filter(([name]) => getVisibleSegments().includes(name))
             .flatMap(([_, visits]) => visits.filter(v => v.name));
@@ -320,48 +450,77 @@ export const AgendaProvider = ({ children }) => {
             return;
         }
 
+        // 2. Validamos que no haya empalmes de tiempo
         const validation = validateAgenda();
         if (!validation.valid) {
             alert(validation.message);
             return;
         }
 
-        try {
-            const now = new Date();
-            setCurrentAgenda(prev => ({
-                ...prev,
-                status: 'pendiente',
-                metadata: {
-                    ...prev.metadata,
-                    captureDate: now.toLocaleDateString(),
-                    captureTime: now.toLocaleTimeString(),
-                    role: selectedRole.name
-                }
-            }));
+       try {
+            const payload = {
+                idPlan: currentAgenda.id, // Viaja como null si es nueva, o con el número si ya existía
+                kpiCompromisos: currentAgenda.kpiCompromisos,
+                segments: currentAgenda.segments
+            };
+
+            // SIEMPRE le pegamos al mismo endpoint
+            const response = await api.post(`/agenda/plan/certificar`, payload);
+
+           // ... dentro del try de sendForAuthorization
+            if (response.data && response.data.codigo === 'OK') {
+                setCurrentAgenda(prev => ({
+                    ...prev,
+                    id: response.data.contenido?.id || prev.id,
+                    status: 'pendiente', 
+                    segments: { // 👈 Limpiamos los segmentos locales para forzar que Ejecución no vea nada viejo
+                        'Promoción': [],
+                        'Evaluación e Integración': [],
+                        'Seguimiento de Cartera': [],
+                        'Gestión de Empresarias': []
+                    }
+                }));
+                alert("Agenda certificada.");
+            } else {
+                alert("El servidor respondió, pero hubo un problema al guardar la agenda.");
+            }
+
         } catch (error) {
             console.error("Error al certificar agenda", error);
-            alert("Hubo un error al enviar la agenda.");
+            alert("Hubo un error de conexión al certificar la agenda.");
         }
     };
 
-    const resetAgenda = () => {
+    const resetAgenda = async () => {
         if (window.confirm("¿Seguro que deseas borrar toda la planificación? Esta acción no se puede deshacer.")) {
-            // Reinicia a cero (arreglos vacíos)
-            setCurrentAgenda({
-                status: 'borrador',
-                segments: {
-                    'Promoción': [],
-                    'Evaluación e Integración': [],
-                    'Seguimiento de Cartera': [],
-                    'Gestión de Empresarias': []
-                },
-                kpiCompromisos: { ...emptyKpi },
-                kpiReal: {},
-                checkIns: {},
-                unplannedVisits: [],
-                metadata: { ...currentAgenda.metadata, hasModifications: false }
-            });
-            setScheduledFollowUps([]);
+            
+            try {
+                // Si la agenda ya existía en BD, podríamos avisarle al backend que borre las acciones
+                if (currentAgenda.id) {
+                    // await api.delete(`/agenda/plan/${currentAgenda.id}/acciones`);
+                }
+
+                setCurrentAgenda(prev => ({
+                    ...prev,
+                    status: 'borrador',
+                    segments: {
+                        'Promoción': [],
+                        'Evaluación e Integración': [],
+                        'Seguimiento de Cartera': [],
+                        'Gestión de Empresarias': []
+                    },
+                    kpiCompromisos: { ...emptyKpi },
+                    kpiReal: {},
+                    checkIns: {},
+                    unplannedVisits: [],
+                    metadata: { ...prev.metadata, hasModifications: false }
+                }));
+                setScheduledFollowUps([]);
+
+            } catch(error) {
+                console.error("Error borrando agenda", error);
+                alert("Hubo un error al borrar. Intenta de nuevo.");
+            }
         }
     };
 
@@ -389,7 +548,9 @@ export const AgendaProvider = ({ children }) => {
             updateAgendaStatus,
             mockDatabase: directorio,
             loadingDirectorio,
-            loadingAgenda 
+            loadingAgenda,
+            kpiConfig,
+            loadingKpiConfig
         }}>
             {children}
         </AgendaContext.Provider>

@@ -1,31 +1,105 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, createContext, useContext } from 'react';
 import { useRole } from '../../context/RoleContext';
 import { useAgenda } from '../../context/AgendaContext';
-import { useCatalogs } from '../../context/CatalogContext'; // <-- Importamos los catálogos globales
+import { useCatalogs } from '../../context/CatalogContext';
+import api from '../../api/axiosConfig'; 
 import {
     MapPin, CheckCircle2, Clock, Camera, Plus, X, AlertCircle,
-    Navigation, FileText, Loader2, Calendar, Image, Shield
+    Navigation, FileText, Loader2, Calendar, Image, Shield,
+    User, Building2, Activity, Users, TrendingUp, Target, ArrowLeft, DollarSign
 } from 'lucide-react';
 
-// ── Configuración Visual (Frontend Only) ─────────────────────────────────────
-const SEG_CFG = {
-    'Promoción': { label: 'PROMO', dot: 'bg-blue-500', badge: 'bg-blue-50 text-blue-700' },
-    'Evaluación e Integración': { label: 'EVAL', dot: 'bg-violet-500', badge: 'bg-violet-50 text-violet-700' },
-    'Seguimiento de Cartera': { label: 'CARTERA', dot: 'bg-amber-500', badge: 'bg-amber-50 text-amber-700' },
-    'Gestión de Empresarias': { label: 'EMPRES', dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700' },
-    'Imprevisto': { label: 'IMPREV', dot: 'bg-rose-500', badge: 'bg-rose-50 text-rose-700' },
+// ── Diccionario Dinámico de Iconos ───────────────────────────────────────────
+const ICON_MAP = {
+    DollarSign: DollarSign,
+    TrendingUp: TrendingUp,
+    Activity: Activity,
+    Users: Users,
+    Target: Target
 };
 
-const RESULTADO_BADGE = {
-    'Abono/ Pago Parcial': 'bg-emerald-100 text-emerald-700',
-    'Compromiso de pago': 'bg-blue-100 text-blue-700',
-    'Promesa de pago': 'bg-indigo-100 text-indigo-700',
-    'Negativa de pago': 'bg-red-100 text-red-700',
-    'Ilocalizable': 'bg-orange-100 text-orange-700',
-    'Sin contacto': 'bg-slate-100 text-slate-600',
-    'Convenio': 'bg-purple-100 text-purple-700',
-    'Finado': 'bg-gray-200 text-gray-600',
+// ── Custom Hook: UI Dinámica Basada en Base de Datos ─────────────────────────
+const useDynamicUI = () => {
+    const { 
+        bloques = [], 
+        resultadosGestion = [], 
+        estadosAgenda = [] 
+    } = useCatalogs() || {};
+
+    const SEG_CFG = useMemo(() => {
+        const palette = [
+            { dot: 'bg-blue-500', badge: 'bg-blue-50 text-blue-700' },
+            { dot: 'bg-violet-500', badge: 'bg-violet-50 text-violet-700' },
+            { dot: 'bg-amber-500', badge: 'bg-amber-50 text-amber-700' },
+            { dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700' },
+            { dot: 'bg-cyan-500', badge: 'bg-cyan-50 text-cyan-700' }
+        ];
+        const config = {};
+        bloques.forEach((b, idx) => {
+            config[b.nombre] = { 
+                label: b.nombre.substring(0, 6).toUpperCase(), 
+                ...palette[idx % palette.length] 
+            };
+        });
+        config['Imprevisto'] = { label: 'IMPREV', dot: 'bg-rose-500', badge: 'bg-rose-50 text-rose-700' };
+        return config;
+    }, [bloques]);
+
+    const RESULTADO_BADGE = useMemo(() => {
+        const palette = [
+            'bg-emerald-100 text-emerald-700', 'bg-blue-100 text-blue-700',
+            'bg-indigo-100 text-indigo-700', 'bg-purple-100 text-purple-700',
+            'bg-orange-100 text-orange-700', 'bg-teal-100 text-teal-700'
+        ];
+        const config = {};
+        resultadosGestion.forEach((res, idx) => {
+            const n = res.nombre.toLowerCase();
+            if (n.includes('negativa')) config[res.nombre] = 'bg-red-100 text-red-700';
+            else if (n.includes('sin contacto') || n.includes('finado')) config[res.nombre] = 'bg-slate-100 text-slate-600';
+            else config[res.nombre] = palette[idx % palette.length];
+        });
+        return config;
+    }, [resultadosGestion]);
+
+    const MOCK_RESULTADOS = useMemo(() => {
+        if (resultadosGestion.length === 0) return ['Realizado', 'No realizado'];
+        return resultadosGestion.map(r => r.nombre);
+    }, [resultadosGestion]);
+
+    const STATUS_STYLES = useMemo(() => {
+        const config = {};
+        estadosAgenda.forEach(est => {
+            const key = est.nombre.toLowerCase();
+            if (key.includes('borrador')) config[key] = { label: est.nombre, bg: 'bg-slate-100', text: 'text-slate-500', dot: 'bg-slate-400' };
+            else if (key.includes('pendient')) config[key] = { label: est.nombre, bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-400' };
+            else if (key.includes('aprobada') || key.includes('autoriz')) config[key] = { label: est.nombre, bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' };
+            else if (key.includes('modif') || key.includes('rechaz')) config[key] = { label: est.nombre, bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' };
+            else config[key] = { label: est.nombre, bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-500' };
+        });
+        
+        // Salvavidas por si el catálogo no carga a tiempo
+        if (!config['borrador']) config['borrador'] = { label: 'Borrador', bg: 'bg-slate-100', text: 'text-slate-500', dot: 'bg-slate-400' };
+        if (!config['pendiente']) config['pendiente'] = { label: 'Pendiente', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-400' };
+        if (!config['aprobada']) config['aprobada'] = { label: 'Autorizada', bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' };
+        if (!config['requiere_modificacion']) config['requiere_modificacion'] = { label: 'Req. Modificación', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' };
+        
+        return config;
+    }, [estadosAgenda]);
+
+    const blockedScreenCfg = useMemo(() => ({
+        borrador: { Icon: FileText, bg: 'bg-slate-50', ic: 'text-slate-400', title: 'Agenda no certificada', msg: 'Completa y certifica tu agenda en Planeación para habilitar la ejecución.' },
+        pendiente: { Icon: Clock, bg: 'bg-amber-50', ic: 'text-amber-500', title: 'Esperando autorización', msg: 'Tu agenda está en revisión. Tu jefe debe aprobarla antes de que puedas iniciar la ruta.' },
+        requiere_modificacion: { Icon: AlertCircle, bg: 'bg-red-50', ic: 'text-red-500', title: 'Requiere modificaciones', msg: 'Tu jefe solicitó ajustes. Revisa la pestaña Planeación, corrige y re-certifica.' },
+    }), []);
+
+    return { SEG_CFG, RESULTADO_BADGE, MOCK_RESULTADOS, STATUS_STYLES, blockedScreenCfg };
 };
+
+
+// ── Contexto para proveer UI Dinámica a los subcomponentes ───────────────────
+const DynamicUIContext = createContext();
+const useDynamicUIContext = () => useContext(DynamicUIContext);
+
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const ProgressRing = ({ done, total, size = 68 }) => {
@@ -47,14 +121,19 @@ const ProgressRing = ({ done, total, size = 68 }) => {
         </div>
     );
 };
+
 const SegBadge = ({ seg }) => {
-    const c = SEG_CFG[seg] || SEG_CFG['Imprevisto'];
+    const { SEG_CFG } = useDynamicUIContext();
+    const c = SEG_CFG[seg] || SEG_CFG['Imprevisto'] || { badge: 'bg-slate-100 text-slate-700', label: 'OTRO' };
     return <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${c.badge}`}>{c.label}</span>;
 };
+
 const ResultBadge = ({ resultado }) => {
+    const { RESULTADO_BADGE } = useDynamicUIContext();
     const cls = RESULTADO_BADGE[resultado] || 'bg-slate-100 text-slate-600';
     return <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide ${cls}`}>{resultado}</span>;
 };
+
 const nowTimeStr = () => {
     const n = new Date();
     return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
@@ -78,12 +157,8 @@ const useGPS = (active) => {
 
 // ── Blocked Screen ────────────────────────────────────────────────────────────
 const BlockedScreen = ({ status }) => {
-    const cfg = {
-        borrador: { Icon: FileText, bg: 'bg-slate-50', ic: 'text-slate-400', title: 'Agenda no certificada', msg: 'Completa y certifica tu agenda en Planeación para habilitar la ejecución.' },
-        pendiente: { Icon: Clock, bg: 'bg-amber-50', ic: 'text-amber-500', title: 'Esperando autorización', msg: 'Tu agenda está en revisión. Tu jefe debe aprobarla antes de que puedas iniciar la ruta.' },
-        requiere_modificacion: { Icon: AlertCircle, bg: 'bg-red-50', ic: 'text-red-500', title: 'Requiere modificaciones', msg: 'Tu jefe solicitó ajustes. Revisa la pestaña Planeación, corrige y re-certifica.' },
-    };
-    const c = cfg[status] || cfg['borrador'];
+    const { blockedScreenCfg } = useDynamicUIContext();
+    const c = blockedScreenCfg[status?.toLowerCase()] || blockedScreenCfg['borrador'];
     return (
         <div className="flex flex-col items-center justify-center py-24 px-8 text-center animate-in fade-in duration-500">
             <div className={`w-24 h-24 rounded-full ${c.bg} flex items-center justify-center mb-8`}>
@@ -111,7 +186,6 @@ const YesNo = ({ value, onChange }) => (
 const CARTERA_SEGS = ['Seguimiento de Cartera', 'Gestión de Empresarias'];
 
 const CheckInModal = ({ visit, onClose, onSubmit }) => {
-    // ── Extraemos los catálogos globales ──
     const { 
         motivosNoVisita = [], 
         estatusCartera = [], 
@@ -140,9 +214,9 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
     const gps = useGPS(true);
     const fileRef = useRef(null);
     
-    // Logica para saber si es compromiso/promesa basándonos en el texto (o ID a futuro)
-    const isCompromiso = form.resultado === 'Compromiso de pago';
-    const isPromesa = form.resultado === 'Promesa de pago';
+    // Logica para saber si es compromiso/promesa
+    const isCompromiso = form.resultado.toLowerCase().includes('compromiso');
+    const isPromesa = form.resultado.toLowerCase().includes('promesa');
     const needsAmountDate = isCompromiso || isPromesa;
     const visitaNoRealizada = form.visitaRealizada === false;
 
@@ -187,10 +261,6 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                 ? form.resultado
                 : form.actividadRealizada ? 'Actividad realizada' : 'Actividad no realizada';
         
-        /**
-         * TODO: EP Lógico para registrar el check-in (Gestión / Ejecución en ruta).
-         * EP Sugerido: POST /api/v1/gestiones/ejecucion
-         */
         onSubmit({
             ...form,
             resultado: resultadoFinal,
@@ -302,6 +372,7 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                         <div className="animate-in fade-in duration-200">
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Sub-estatus</label>
                             <select value={form.subestatus} onChange={e => setForm(p => ({ ...p, subestatus: e.target.value }))} className="input-cell">
+                                <option value="N/A">N/A</option>
                                 {subEstatus.map(s => <option key={s.id} value={s.nombre}>{s.nombre}</option>)}
                             </select>
                         </div>
@@ -395,12 +466,11 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
 
 // ── Unplanned Visit Form ──────────────────────────────────────────────────────
 const UnplannedForm = ({ onAdd, onCancel }) => {
-    // ── Extraemos los catálogos globales para este componente ──
     const { tiposGestionNoPlaneada = [], estatusCartera = [] } = useCatalogs() || {};
 
     const [form, setForm] = useState({ name: '', tipoGestion: '', resultado: '', notes: '', pagoMonto: '', pagoFecha: '' });
-    const isCompromiso = form.resultado === 'Compromiso de pago';
-    const isPromesa = form.resultado === 'Promesa de pago';
+    const isCompromiso = form.resultado.toLowerCase().includes('compromiso');
+    const isPromesa = form.resultado.toLowerCase().includes('promesa');
     const needsAmountDate = isCompromiso || isPromesa;
     
     const ok = form.name
@@ -410,11 +480,6 @@ const UnplannedForm = ({ onAdd, onCancel }) => {
     
     const submit = () => {
         if (!ok) return;
-        
-        /**
-         * TODO: EP Lógico para registrar el check-in (Gestión No Planeada).
-         * EP Sugerido: POST /api/v1/gestiones/ejecucion/no-planeada
-         */
         onAdd({
             name: form.name.toUpperCase(), _segment: 'Imprevisto',
             checkInTime: nowTimeStr(), tipoGestion: form.tipoGestion,
@@ -485,24 +550,17 @@ const UnplannedForm = ({ onAdd, onCancel }) => {
 
 // ── Visit Card ───────────────────────────────────────────────────────────────
 const VisitCard = ({ visit, checkIn, onCheckIn }) => {
-    const segCfg = SEG_CFG[visit._segment] || SEG_CFG['Imprevisto'];
+    const { SEG_CFG, RESULTADO_BADGE } = useDynamicUIContext();
+    const segCfg = SEG_CFG[visit._segment] || SEG_CFG['Imprevisto'] || { dot: 'bg-slate-400' };
     const isDone = !!checkIn;
 
     return (
         <div className={`flex items-center gap-4 px-5 py-4 transition-all duration-200 ${isDone ? 'bg-emerald-50/60' : 'bg-white hover:bg-slate-50/80'}`}>
-
-            {/* Status dot */}
             <div className={`w-3 h-3 rounded-full flex-shrink-0 ring-2 border-2 border-white transition-all ${isDone ? 'bg-emerald-500 ring-emerald-200' : `${segCfg.dot} ring-slate-100`}`} />
-
-            {/* Hora */}
             <span className="text-[11px] font-black text-accent w-14 flex-shrink-0 font-mono">
                 {visit.time || '—:——'}
             </span>
-
-            {/* Segment badge */}
             <SegBadge seg={visit._segment} />
-
-            {/* Nombre y actividad */}
             <div className="flex-1 min-w-0">
                 <p className={`text-[13px] font-black uppercase truncate leading-tight ${isDone ? 'text-emerald-700 line-through decoration-emerald-300' : 'text-primary'}`}>
                     {visit.name}
@@ -519,7 +577,6 @@ const VisitCard = ({ visit, checkIn, onCheckIn }) => {
                 )}
             </div>
 
-            {/* Cartera mini-info (solo en cartera/empresarias) */}
             {CARTERA_SEGS.includes(visit._segment) && (visit.moraActual || visit.saldoActual) && (
                 <div className="hidden md:flex flex-col items-end gap-0.5 flex-shrink-0 text-right">
                     {visit.moraActual && Number(visit.moraActual) > 0 && (
@@ -538,7 +595,6 @@ const VisitCard = ({ visit, checkIn, onCheckIn }) => {
                 </div>
             )}
 
-            {/* Tiempo + GPS si completado */}
             {isDone && (
                 <div className="hidden md:flex items-center gap-2 flex-shrink-0 text-slate-400">
                     {checkIn.checkInTime && (
@@ -554,7 +610,6 @@ const VisitCard = ({ visit, checkIn, onCheckIn }) => {
                 </div>
             )}
 
-            {/* Action */}
             {isDone ? (
                 <div className="flex items-center gap-1.5 text-emerald-600 flex-shrink-0">
                     <CheckCircle2 size={16} />
@@ -571,35 +626,69 @@ const VisitCard = ({ visit, checkIn, onCheckIn }) => {
     );
 };
 
-// ── KPI Field Definitions (mirrored from KpiCompromisos for reuse) ─────────────
-const FIELDS_BY_ROLE = {
-    'asesor-f': [
-        { group: 'Captación', color: 'blue', fields: [{ key: 'captNueva', label: 'Captación Nueva' }, { key: 'captReinversion', label: 'Captación Reinversión' }] },
-        { group: 'Colocación', color: 'emerald', fields: [{ key: 'colocInicial', label: 'Colocación Inicial' }, { key: 'colocRedisposicion', label: 'Colocación Redisposición' }] },
-        { group: 'Recuperación', color: 'amber', fields: [{ key: 'rec0', label: 'Recup. 0 días' }, { key: 'rec1_7', label: '1–7 días' }, { key: 'rec8_30', label: '8–30 días' }, { key: 'rec31_60', label: '31–60 días' }, { key: 'recMas61', label: '+61 días' }] },
-    ],
-    'asesor-c': [
-        { group: 'Captación', color: 'blue', fields: [{ key: 'captNueva', label: 'Captación Nueva' }, { key: 'captReinversion', label: 'Captación Reinversión' }] },
-        { group: 'Dispersión', color: 'violet', fields: [{ key: 'dispersion', label: 'Dispersión' }, { key: 'dispersionNueva', label: 'Dispersión Nueva' }, { key: 'aperturasCredFacil', label: '# Apert. Créd. Fácil', count: true }, { key: 'montoLineasApertura', label: 'Monto Líneas' }] },
-        { group: 'Recuperación', color: 'amber', fields: [{ key: 'rec0', label: 'Recup. 0 días' }, { key: 'rec1_7', label: '1–7 días' }, { key: 'rec8_30', label: '8–30 días' }, { key: 'rec31_60', label: '31–60 días' }, { key: 'recMas61', label: '+61 días' }] },
-    ],
-    'gestor-i': [
-        { group: 'Cobranza', color: 'emerald', fields: [{ key: 'cobranzaTotalDia', label: 'Cobranza Total' }, { key: 'cobranza1_30', label: 'Cobr. 1–30 días' }, { key: 'cobranza31_60', label: 'Cobr. 31–60 días' }, { key: 'opCobradas', label: 'Ops. Cobradas', count: true }] },
-        { group: 'Visitas y Promesas', color: 'blue', fields: [{ key: 'visitasRealizadas', label: '# Visitas', count: true }, { key: 'promesasDia', label: 'Promesas del Día', count: true }, { key: 'montoPromesas', label: 'Monto Promesas' }] },
-        { group: 'Saneamiento', color: 'amber', fields: [{ key: 'saldoSaneadoDia', label: 'Saldo Saneado' }, { key: 'contencionMas30', label: 'Contencion +30d' }, { key: 'contencionMas60', label: '+60d' }, { key: 'contencionMas89', label: '+89d' }] },
-    ],
-};
-FIELDS_BY_ROLE['coordinador-l'] = FIELDS_BY_ROLE['asesor-c'];
-FIELDS_BY_ROLE['gestor-e'] = FIELDS_BY_ROLE['asesor-c'];
+// ── Follow-Up Visit Card ─────────────────────────────────────────────────────
+const FollowUpCard = ({ followUp, checkIn, onSetTime, onCheckIn }) => {
+    const { RESULTADO_BADGE } = useDynamicUIContext();
+    const isDone = !!checkIn;
+    const fmtDate = (d) => { try { return new Date(d + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return d; } };
+    return (
+        <div className={`flex items-center gap-4 px-5 py-4 transition-all duration-200
+            ${isDone ? 'bg-emerald-50/60' : 'bg-white hover:bg-slate-50/80'}`}>
 
-const KPI_COLORS = {
-    blue: { badge: 'bg-blue-50 text-blue-700', bar: 'bg-blue-500' },
-    emerald: { badge: 'bg-emerald-50 text-emerald-700', bar: 'bg-emerald-500' },
-    amber: { badge: 'bg-amber-50 text-amber-700', bar: 'bg-amber-400' },
-    violet: { badge: 'bg-violet-50 text-violet-700', bar: 'bg-violet-500' },
-    rose: { badge: 'bg-rose-50 text-rose-700', bar: 'bg-rose-500' },
+            <div className={`w-3 h-3 rounded-full flex-shrink-0 ring-2 border-2 border-white transition-all
+                ${isDone ? 'bg-emerald-500 ring-emerald-200' : 'bg-blue-500 ring-blue-100'}`} />
+
+            <span className="text-[11px] font-black text-blue-600 flex-shrink-0">
+                📅 {fmtDate(followUp.compromisoFecha)}
+            </span>
+
+            <span className="text-[8px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider flex-shrink-0">Seguimiento</span>
+
+            <SegBadge seg={followUp._segment} />
+
+            <div className="flex-1 min-w-0">
+                <p className={`text-[13px] font-black uppercase truncate leading-tight
+                    ${isDone ? 'text-emerald-700 line-through decoration-emerald-300' : 'text-primary'}`}>
+                    {followUp.name}
+                </p>
+                {followUp.compromisoCuanto && (
+                    <span className="text-[10px] font-bold text-emerald-700">
+                        Compromiso: ${Number(followUp.compromisoCuanto).toLocaleString()}
+                    </span>
+                )}
+                {isDone && checkIn?.resultado && (
+                    <span className={`inline-block text-[8px] font-black px-2 py-0.5 rounded-full mt-1
+                        ${RESULTADO_BADGE[checkIn.resultado] || 'bg-slate-100 text-slate-600'}`}>
+                        {checkIn.resultado}
+                    </span>
+                )}
+            </div>
+
+            {!isDone && (
+                <div className="hidden md:flex items-center gap-2 flex-shrink-0">
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Hora:</label>
+                    <input type="time" defaultValue={followUp.time || ''}
+                        onChange={e => onSetTime(followUp.id, e.target.value)}
+                        className="text-[11px] font-black border border-slate-200 rounded-lg px-2 py-1 bg-white text-primary" />
+                </div>
+            )}
+
+            {isDone ? (
+                <div className="flex items-center gap-1.5 text-emerald-600 flex-shrink-0">
+                    <CheckCircle2 size={16} />
+                    <span className="text-[9px] font-black uppercase tracking-wide hidden md:inline">Registrado</span>
+                </div>
+            ) : (
+                <button onClick={() => onCheckIn(followUp)}
+                    className="flex-shrink-0 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest px-5 py-2.5 rounded-xl hover:bg-blue-700 active:scale-95 transition-all shadow-md shadow-blue-900/20 whitespace-nowrap">
+                    Registrar Avance
+                </button>
+            )}
+        </div>
+    );
 };
 
+// ── Paneles de KPI Dinámicos ─────────────────────────────────────────────────
 const kpiPct = (real, comp) => {
     const r = Number(real) || 0;
     const c = Number(comp) || 0;
@@ -621,21 +710,16 @@ const MoneyInput = ({ value, onChange, isCount }) => (
     />
 );
 
-const KpiRealPanel = ({ roleId, kpiCompromisos, kpiReal, onUpdate }) => {
-    const groups = FIELDS_BY_ROLE[roleId];
-    const hasCompromisos = groups && Object.keys(kpiCompromisos || {}).length > 0;
-    if (!groups || !hasCompromisos) return null;
+const KpiRealPanel = ({ kpiCompromisos, kpiReal, onUpdate }) => {
+    const { kpiConfig: groups } = useAgenda();
+
+    if (!groups || groups.length === 0) return null;
 
     const allFields = groups.flatMap(g => g.fields);
     const filledCount = allFields.filter(f => kpiReal?.[f.key]).length;
     const avgPct = allFields.length > 0
         ? Math.round(allFields.reduce((s, f) => s + kpiPct(kpiReal?.[f.key], kpiCompromisos?.[f.key]), 0) / allFields.length)
         : 0;
-
-    const GROUP_DOT = {
-        blue: 'bg-blue-400', emerald: 'bg-emerald-400',
-        amber: 'bg-amber-400', violet: 'bg-violet-400', rose: 'bg-rose-400',
-    };
 
     return (
         <div className="mt-10 mb-4">
@@ -653,13 +737,22 @@ const KpiRealPanel = ({ roleId, kpiCompromisos, kpiReal, onUpdate }) => {
             </div>
 
             <div className="space-y-6">
-                {groups.map(({ group, color, fields }) => {
-                    const dotCls = GROUP_DOT[color] || GROUP_DOT.blue;
+                {groups.map((groupData) => {
+                    const { group, color, fields, iconName } = groupData;
+                    const IconComponent = ICON_MAP[iconName] || Target;
+                    
+                    const bgHeaderMap = {
+                        blue: 'bg-blue-400', emerald: 'bg-emerald-400',
+                        amber: 'bg-amber-400', violet: 'bg-violet-400', rose: 'bg-rose-400'
+                    };
+                    const dotCls = bgHeaderMap[color] || bgHeaderMap.blue;
+
                     return (
                         <div key={group} className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-200">
                             <div className="gradient-header !rounded-t-2xl shadow-md">
                                 <div className="flex items-center gap-2">
                                     <div className={`w-1.5 h-4 rounded-full ${dotCls}`} />
+                                    <IconComponent size={14} className="text-white/80" />
                                     <span className="text-xs font-black uppercase tracking-widest text-white">{group}</span>
                                 </div>
                             </div>
@@ -670,6 +763,7 @@ const KpiRealPanel = ({ roleId, kpiCompromisos, kpiReal, onUpdate }) => {
                                     const pct = kpiPct(real, comp);
                                     const hasComp = comp !== undefined && comp !== '';
                                     const hasReal = !!real;
+                                    
                                     return (
                                         <div key={key} className="px-5 py-4 flex items-center gap-4">
                                             <div className={`w-4 h-4 rounded-full flex-shrink-0 transition-colors duration-300 ${kpiDotCls(pct, hasReal)}`} />
@@ -688,19 +782,14 @@ const KpiRealPanel = ({ roleId, kpiCompromisos, kpiReal, onUpdate }) => {
                                                 {hasComp && <span className="text-slate-300 font-bold text-lg mb-1">→</span>}
                                                 <div className="text-center">
                                                     <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">Real</p>
-                                                    <MoneyInput
-                                                        value={real}
-                                                        onChange={v => onUpdate(key, v)}
-                                                        isCount={isCount}
-                                                    />
+                                                    <MoneyInput value={real} onChange={v => onUpdate(key, v)} isCount={isCount} />
                                                 </div>
                                                 <div className="text-center min-w-[52px] mb-0.5">
                                                     {hasReal && hasComp ? (
                                                         <>
                                                             <p className={`text-base font-black ${kpiColor(pct)}`}>{pct}%</p>
                                                             <div className="w-full h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden">
-                                                                <div className={`h-full rounded-full transition-all duration-500 ${kpiBg(pct)}`}
-                                                                    style={{ width: `${Math.min(pct, 100)}%` }} />
+                                                                <div className={`h-full rounded-full transition-all duration-500 ${kpiBg(pct)}`} style={{ width: `${Math.min(pct, 100)}%` }} />
                                                             </div>
                                                         </>
                                                     ) : (
@@ -720,77 +809,8 @@ const KpiRealPanel = ({ roleId, kpiCompromisos, kpiReal, onUpdate }) => {
     );
 };
 
-// ── Follow-Up Visit Card (Compromiso de pago agendado) ──────────────────────
-const FollowUpCard = ({ followUp, checkIn, onSetTime, onCheckIn }) => {
-    const isDone = !!checkIn;
-    const fmtDate = (d) => { try { return new Date(d + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return d; } };
-    return (
-        <div className={`flex items-center gap-4 px-5 py-4 transition-all duration-200
-            ${isDone ? 'bg-emerald-50/60' : 'bg-white hover:bg-slate-50/80'}`}>
-
-            {/* Status dot */}
-            <div className={`w-3 h-3 rounded-full flex-shrink-0 ring-2 border-2 border-white transition-all
-                ${isDone ? 'bg-emerald-500 ring-emerald-200' : 'bg-blue-500 ring-blue-100'}`} />
-
-            {/* Date badge */}
-            <span className="text-[11px] font-black text-blue-600 flex-shrink-0">
-                📅 {fmtDate(followUp.compromisoFecha)}
-            </span>
-
-            {/* Seguimiento badge */}
-            <span className="text-[8px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider flex-shrink-0">Seguimiento</span>
-
-            {/* Segment */}
-            <SegBadge seg={followUp._segment} />
-
-            {/* Nombre + monto comprometido */}
-            <div className="flex-1 min-w-0">
-                <p className={`text-[13px] font-black uppercase truncate leading-tight
-                    ${isDone ? 'text-emerald-700 line-through decoration-emerald-300' : 'text-primary'}`}>
-                    {followUp.name}
-                </p>
-                {followUp.compromisoCuanto && (
-                    <span className="text-[10px] font-bold text-emerald-700">
-                        Compromiso: ${Number(followUp.compromisoCuanto).toLocaleString()}
-                    </span>
-                )}
-                {isDone && checkIn?.resultado && (
-                    <span className={`inline-block text-[8px] font-black px-2 py-0.5 rounded-full mt-1
-                        ${RESULTADO_BADGE[checkIn.resultado] || 'bg-slate-100 text-slate-600'}`}>
-                        {checkIn.resultado}
-                    </span>
-                )}
-            </div>
-
-            {/* Hora input (solo si no está registrado) */}
-            {!isDone && (
-                <div className="hidden md:flex items-center gap-2 flex-shrink-0">
-                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Hora:</label>
-                    <input type="time" defaultValue={followUp.time || ''}
-                        onChange={e => onSetTime(followUp.id, e.target.value)}
-                        className="text-[11px] font-black border border-slate-200 rounded-lg px-2 py-1 bg-white text-primary" />
-                </div>
-            )}
-
-            {/* Action */}
-            {isDone ? (
-                <div className="flex items-center gap-1.5 text-emerald-600 flex-shrink-0">
-                    <CheckCircle2 size={16} />
-                    <span className="text-[9px] font-black uppercase tracking-wide hidden md:inline">Registrado</span>
-                </div>
-            ) : (
-                <button onClick={() => onCheckIn(followUp)}
-                    className="flex-shrink-0 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest px-5 py-2.5 rounded-xl hover:bg-blue-700 active:scale-95 transition-all shadow-md shadow-blue-900/20 whitespace-nowrap">
-                    Registrar Avance
-                </button>
-            )}
-        </div>
-    );
-};
-
-// ── Main Component ────────────────────────────────────────────────────────────
-const EjecucionOperativo = () => {
-    const { selectedRole } = useRole();
+// ── COMPONENTE RAÍZ — EjecucionOperativo (El principal que exportamos) ───────
+const EjecucionOperativoContent = () => {
     const { currentAgenda, registerCheckIn, addUnplannedVisit, getVisibleSegments,
         scheduleFollowUp, scheduledFollowUps, updateKpiReal } = useAgenda();
     const [modalVisit, setModalVisit] = useState(null);
@@ -801,15 +821,12 @@ const EjecucionOperativo = () => {
     const unplannedVisits = currentAgenda.unplannedVisits || [];
     const todayISO = new Date().toISOString().slice(0, 10);
 
-    // Follow-ups scheduled for today (or show all in demo if none match today)
     const allFollowUps = scheduledFollowUps || [];
     const todayFollowUps = allFollowUps
         .filter(fu => !fu.compromisoFecha || fu.compromisoFecha === todayISO)
         .map(fu => ({ ...fu, time: followUpTimes[fu.id] ?? fu.time }));
     const setFollowUpTime = (id, time) => setFollowUpTimes(prev => ({ ...prev, [id]: time }));
 
-    // Allow Ejecución when approved OR when there is pre-loaded visit data
-    // (coordinador-l shows as 'borrador' so Planning is editable, but still has demo visits)
     const hasSegmentData = Object.values(currentAgenda.segments || {})
         .some(seg => seg.some(v => v.name));
 
@@ -822,7 +839,6 @@ const EjecucionOperativo = () => {
         );
     }
 
-    // Build sorted visit list
     const getAllVisits = () => {
         const segs = getVisibleSegments();
         const visits = [];
@@ -862,11 +878,11 @@ const EjecucionOperativo = () => {
                 </div>
             </header>
 
-            {/* Completion Summary Banner — aparece cuando la ruta está al 100% */}
+            {/* Completion Summary Banner */}
             {pct === 100 && total > 0 && (() => {
-                const compromisos = Object.values(checkIns).filter(c => c.resultado === 'Compromiso de pago' || c.resultado === 'Promesa de pago');
+                const compromisos = Object.values(checkIns).filter(c => c.resultado?.toLowerCase().includes('compromiso') || c.resultado?.toLowerCase().includes('promesa'));
                 const totalMonto = compromisos.reduce((s, c) => s + (Number(c.pagoMonto) || 0), 0);
-                const noRealizadas = Object.values(checkIns).filter(c => c.resultado === 'No realizada').length;
+                const noRealizadas = Object.values(checkIns).filter(c => c.resultado?.toLowerCase().includes('no realizada')).length;
                 return (
                     <div className="mb-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-3xl p-6 text-white shadow-xl animate-in fade-in slide-in-from-top-4 duration-500">
                         <div className="flex items-start justify-between">
@@ -903,7 +919,6 @@ const EjecucionOperativo = () => {
                 );
             })()}
 
-            {/* Visit list — grouped by segment, matching Planeación style */}
             <div className="space-y-6">
                 {allVisits.length === 0 ? (
                     <div className="text-center py-16 text-slate-400">
@@ -911,39 +926,28 @@ const EjecucionOperativo = () => {
                         <p className="text-xs font-black uppercase tracking-widest">No hay visitas agendadas</p>
                     </div>
                 ) : (() => {
-                    // Group by segment
                     const grouped = {};
                     allVisits.forEach(v => {
                         const seg = v._segment || 'Imprevisto';
                         if (!grouped[seg]) grouped[seg] = [];
                         grouped[seg].push(v);
                     });
-                    const SEG_DOT = {
-                        'Promoción': 'bg-blue-400',
-                        'Evaluación e Integración': 'bg-violet-400',
-                        'Seguimiento de Cartera': 'bg-amber-400',
-                        'Gestión de Empresarias': 'bg-emerald-400',
-                        'Imprevisto': 'bg-rose-400',
-                    };
+                    
                     return Object.entries(grouped).map(([seg, visits]) => {
                         const doneCount = visits.filter(v => checkIns[v.id]).length;
-                        const dot = SEG_DOT[seg] || 'bg-slate-400';
-                        const cfg = SEG_CFG[seg] || SEG_CFG['Imprevisto'];
                         return (
                             <div key={seg} className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-200">
-                                {/* Segment header — gradient-header matching Planeación */}
                                 <div className="gradient-header !rounded-t-3xl shadow-lg">
                                     <div className="flex items-center gap-2">
-                                        <div className={`w-1.5 h-4 rounded-full ${dot}`} />
-                                        <span className="text-xs font-black uppercase tracking-[0.2em] text-white">{seg}</span>
+                                        <SegBadge seg={seg} />
+                                        <span className="text-xs font-black uppercase tracking-[0.2em] text-white ml-2">{seg}</span>
                                         <span className="ml-1 text-[9px] font-black bg-white/20 text-white px-2 py-0.5 rounded-full">{visits.length}</span>
                                     </div>
                                     <span className="text-[9px] font-bold text-white/60">{doneCount}/{visits.length} completadas</span>
                                 </div>
-                                {/* Visit cards */}
                                 <div className="divide-y divide-slate-50">
                                     {visits.map((v, idx) => (
-                                        <VisitCard key={v.id} visit={v} checkIn={checkIns[v.id]} onCheckIn={setModalVisit} isLast={idx === visits.length - 1} />
+                                        <VisitCard key={v.id} visit={v} checkIn={checkIns[v.id]} onCheckIn={setModalVisit} />
                                     ))}
                                 </div>
                             </div>
@@ -952,10 +956,8 @@ const EjecucionOperativo = () => {
                 })()}
             </div>
 
-            {/* Seguimientos agendados (Compromisos de pago) */}
             {todayFollowUps.length > 0 && (
                 <div className="mt-6 bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-200">
-                    {/* Segment header — same style as visit segments */}
                     <div className="gradient-header !rounded-t-3xl shadow-lg">
                         <div className="flex items-center gap-2">
                             <div className="w-1.5 h-4 rounded-full bg-blue-400" />
@@ -966,38 +968,22 @@ const EjecucionOperativo = () => {
                             {todayFollowUps.filter(fu => checkIns[fu.id]).length}/{todayFollowUps.length} registrados
                         </span>
                     </div>
-                    {/* Follow-up rows */}
                     <div className="divide-y divide-slate-50">
                         {todayFollowUps.map(fu => (
-                            <FollowUpCard
-                                key={fu.id} followUp={fu}
-                                checkIn={checkIns[fu.id]}
-                                onSetTime={setFollowUpTime}
-                                onCheckIn={setModalVisit}
-                            />
+                            <FollowUpCard key={fu.id} followUp={fu} checkIn={checkIns[fu.id]} onSetTime={setFollowUpTime} onCheckIn={setModalVisit} />
                         ))}
                     </div>
                 </div>
             )}
 
-            {/* KPI Compromisos vs Real */}
-            {/**
-             * TODO: EP Lógico para actualizar los KPIs Reales del día en la Base de Datos.
-             * EP Sugerido: PUT /api/v1/kpis/real
-             */}
             <KpiRealPanel
-                roleId={selectedRole?.id}
                 kpiCompromisos={currentAgenda.kpiCompromisos || {}}
                 kpiReal={currentAgenda.kpiReal || {}}
                 onUpdate={updateKpiReal || (() => { })}
             />
 
-            {/* Unplanned form / button */}
             {showUnplanned ? (
-                <UnplannedForm
-                    onAdd={data => { addUnplannedVisit(data); setShowUnplanned(false); }}
-                    onCancel={() => setShowUnplanned(false)}
-                />
+                <UnplannedForm onAdd={data => { addUnplannedVisit(data); setShowUnplanned(false); }} onCancel={() => setShowUnplanned(false)} />
             ) : (
                 <button onClick={() => setShowUnplanned(true)}
                     className="w-full mt-4 flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 hover:border-rose-300 text-slate-400 hover:text-rose-500 py-5 rounded-2xl transition-all text-[10px] font-black uppercase tracking-widest">
@@ -1005,23 +991,27 @@ const EjecucionOperativo = () => {
                 </button>
             )}
 
-            {/* Check-in Modal */}
             {modalVisit && (
-                <CheckInModal
-                    visit={modalVisit}
-                    onClose={() => setModalVisit(null)}
-                    onSubmit={data => {
-                        registerCheckIn(modalVisit.id, data);
-                        // Auto-schedule follow-up if Compromiso de pago
-                        if (data.resultado === 'Compromiso de pago' && data.pagoFecha) {
-                            scheduleFollowUp(modalVisit, { fecha: data.pagoFecha, monto: data.pagoMonto });
-                        }
-                        setModalVisit(null);
-                    }}
-                />
+                <CheckInModal visit={modalVisit} onClose={() => setModalVisit(null)} onSubmit={data => {
+                    registerCheckIn(modalVisit.id, data);
+                    if (data.resultado?.toLowerCase().includes('compromiso') && data.pagoFecha) {
+                        scheduleFollowUp(modalVisit, { fecha: data.pagoFecha, monto: data.pagoMonto });
+                    }
+                    setModalVisit(null);
+                }} />
             )}
         </div>
     );
 };
 
-export default EjecucionOperativo;
+// ── Wrapper Component: Provee el contexto dinámico ───────────────────────────
+const EjecucionOperativoWrapper = () => {
+    const dynamicUI = useDynamicUI();
+    return (
+        <DynamicUIContext.Provider value={dynamicUI}>
+            <EjecucionOperativoContent />
+        </DynamicUIContext.Provider>
+    );
+};
+
+export default EjecucionOperativoWrapper;

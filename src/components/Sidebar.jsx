@@ -79,7 +79,9 @@ const Sidebar = () => {
                             <UserCircle size={28} className="text-slate-400" />
                         </div>
                         <div className="flex flex-col min-w-0">
-                            <span className="text-xs font-black truncate leading-none mb-1">{session?.name || 'Usuario'}</span>
+                            <span className="text-xs font-black truncate leading-none mb-1">
+                                {session?.userName || session?.name || 'Usuario'}
+                            </span>
                             <span className="text-[9px] text-slate-500 truncate uppercase font-bold tracking-widest">{session?.sucursal || 'Matriz'}</span>
                             {session?.email && <span className="text-[9px] text-slate-600 truncate font-semibold mt-1">{session.email}</span>}
                         </div>

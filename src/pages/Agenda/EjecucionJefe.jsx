@@ -1,27 +1,41 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRole } from '../../context/RoleContext';
-import {
-    agruparPorZona, agendasDeEjecutivo, STATUS_STYLES,
-    AgendaApiService
-} from '../../data/agendaMockData';
+import api from '../../api/axiosConfig'; // <-- Importamos tu cliente real de Axios
 import {
     CheckCircle2, Clock, AlertTriangle, ChevronRight, ArrowLeft,
     User, Building2, MapPin, Activity, Users, TrendingUp, Navigation, Target, Loader2
 } from 'lucide-react';
 
-// ── Mock CheckIn Generator ────────────────────────────────────────────────────
+// ── Helpers Rescatados del Mock ──────────────────────────────────────────────
+const STATUS_STYLES = {
+    borrador: { label: 'Borrador', bg: 'bg-slate-100', text: 'text-slate-500', dot: 'bg-slate-400' },
+    pendiente: { label: 'Pendiente', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-400' },
+    aprobada: { label: 'Autorizada', bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' },
+    requiere_modificacion: { label: 'Req. Modificación', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
+};
+
+const agruparPorZona = (agendas) => {
+    return agendas.reduce((acc, ag) => {
+        if (!acc[ag.zona]) acc[ag.zona] = {};
+        if (!acc[ag.zona][ag.sucursal]) acc[ag.zona][ag.sucursal] = [];
+        acc[ag.zona][ag.sucursal].push(ag);
+        return acc;
+    }, {});
+};
+
+// ── Mock CheckIn Generator (Visual) ──────────────────────────────────────────
 const MOCK_RESULTADOS = [
     'Abono/ Pago Parcial', 'Compromiso de pago', 'Promesa de pago',
     'Negativa de pago', 'Sin contacto', 'Ilocalizable', 'Convenio',
 ];
 function simCheckIns(agenda) {
     if (agenda.status !== 'aprobada') return {};
-    const allVisits = Object.values(agenda.segments).flat().filter(v => v.name && v.time);
+    const allVisits = Object.values(agenda.segments || {}).flat().filter(v => v.name && v.time);
     const sorted = [...allVisits].sort((a, b) => a.time.localeCompare(b.time));
     const doneCount = Math.floor(sorted.length * 0.65);
     const result = {};
     sorted.slice(0, doneCount).forEach((visit, idx) => {
-        const rIdx = (visit.id.charCodeAt(0) + idx) % MOCK_RESULTADOS.length;
+        const rIdx = (String(visit.id).charCodeAt(0) + idx) % MOCK_RESULTADOS.length;
         const [h, m] = visit.time.split(':').map(Number);
         const checkH = Math.min(h + Math.floor(idx * 0.2), 20);
         const checkM = (m + 8 + idx * 3) % 60;
@@ -35,7 +49,7 @@ function simCheckIns(agenda) {
     return result;
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Componentes UI ───────────────────────────────────────────────────────────
 const StatusBadge = ({ status }) => {
     const s = STATUS_STYLES[status] || STATUS_STYLES['borrador'];
     return (
@@ -45,6 +59,7 @@ const StatusBadge = ({ status }) => {
         </span>
     );
 };
+
 const ProgressBar = ({ done, total, color = 'blue' }) => {
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     const barColor = { blue: 'bg-blue-500', emerald: 'bg-emerald-500', amber: 'bg-amber-400', violet: 'bg-violet-500' };
@@ -60,8 +75,8 @@ const ProgressBar = ({ done, total, color = 'blue' }) => {
 
 // ── Operative Progress Card ──────────────────────────────────────────────────
 const OperativeCard = ({ agenda, onClick }) => {
-    const mockCIs = useMemo(() => simCheckIns(agenda), [agenda.id]);
-    const allVisits = Object.values(agenda.segments).flat().filter(v => v.name);
+    const mockCIs = useMemo(() => simCheckIns(agenda), [agenda.id, agenda.status, agenda.segments]);
+    const allVisits = Object.values(agenda.segments || {}).flat().filter(v => v.name);
     const done = Object.keys(mockCIs).length;
     const total = allVisits.length;
     const lastCI = Object.values(mockCIs).sort((a, b) => b.checkInTime?.localeCompare(a.checkInTime))[0];
@@ -83,8 +98,8 @@ const OperativeCard = ({ agenda, onClick }) => {
                             </span>
                         )}
                     </div>
-                    <p className="font-black text-[13px] text-primary uppercase leading-tight truncate">{agenda.operativo.nombre}</p>
-                    <p className="text-[10px] text-accent mt-0.5">{agenda.operativo.puesto}</p>
+                    <p className="font-black text-[13px] text-primary uppercase leading-tight truncate">{agenda.operativo?.nombre}</p>
+                    <p className="text-[10px] text-accent mt-0.5">{agenda.operativo?.puesto}</p>
                 </div>
                 <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-400 transition-colors mt-1 flex-shrink-0" />
             </div>
@@ -109,9 +124,9 @@ const OperativeCard = ({ agenda, onClick }) => {
 
 // ── Agenda Execution Detail ───────────────────────────────────────────────────
 const AgendaExecDetail = ({ agenda, onBack }) => {
-    const mockCIs = useMemo(() => simCheckIns(agenda), [agenda.id]);
+    const mockCIs = useMemo(() => simCheckIns(agenda), [agenda.id, agenda.status, agenda.segments]);
     const nowStr = (() => { const n = new Date(); return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`; })();
-    const allVisits = Object.entries(agenda.segments)
+    const allVisits = Object.entries(agenda.segments || {})
         .flatMap(([seg, visits]) => visits.filter(v => v.name && v.time).map(v => ({ ...v, _seg: seg })))
         .sort((a, b) => a.time.localeCompare(b.time));
 
@@ -141,6 +156,7 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
         if (puesto?.includes('Interno')) return 'gestor-i';
         return null;
     };
+    
     const roleId = puestoToRoleId(agenda.operativo?.puesto);
     const compromisos = (agenda.kpiCompromisos && Object.keys(agenda.kpiCompromisos).length > 0)
         ? agenda.kpiCompromisos
@@ -160,8 +176,8 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
                 <div className="flex items-start justify-between gap-3">
                     <div>
                         <StatusBadge status={agenda.status} />
-                        <p className="font-black text-lg text-primary uppercase mt-2">{agenda.operativo.nombre}</p>
-                        <p className="text-xs text-accent">{agenda.operativo.puesto} · {agenda.sucursal}</p>
+                        <p className="font-black text-lg text-primary uppercase mt-2">{agenda.operativo?.nombre}</p>
+                        <p className="text-xs text-accent">{agenda.operativo?.puesto} · {agenda.sucursal}</p>
                     </div>
                     <div className="text-right">
                         <p className="text-[8px] text-slate-400 uppercase tracking-widest font-black">Completadas</p>
@@ -249,9 +265,9 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
 const KpiBar = ({ agendas }) => {
     const total = agendas.length;
     const conCheckIns = agendas.filter(ag => ag.status === 'aprobada').length;
-    const allVisits = agendas.flatMap(ag => Object.values(ag.segments).flat().filter(v => v.name));
+    const allVisits = agendas.flatMap(ag => Object.values(ag.segments || {}).flat().filter(v => v.name));
     const mockDone = agendas.filter(ag => ag.status === 'aprobada')
-        .reduce((acc, ag) => acc + Math.floor(Object.values(ag.segments).flat().filter(v => v.name).length * 0.65), 0);
+        .reduce((acc, ag) => acc + Math.floor(Object.values(ag.segments || {}).flat().filter(v => v.name).length * 0.65), 0);
 
     const stats = [
         { label: 'Operativos en Ruta', value: conCheckIns, Icon: Users, color: 'text-emerald-600' },
@@ -311,8 +327,8 @@ const VistaZona = ({ zonaData, rolName }) => {
             <KpiBar agendas={Object.values(zonaData).flat()} />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {Object.entries(zonaData).map(([suc, agendas]) => {
-                    const done = agendas.filter(ag => ag.status === 'aprobada').reduce((a, ag) => a + Math.floor(Object.values(ag.segments).flat().filter(v => v.name).length * 0.65), 0);
-                    const total = agendas.reduce((a, ag) => a + Object.values(ag.segments).flat().filter(v => v.name).length, 0);
+                    const done = agendas.filter(ag => ag.status === 'aprobada').reduce((a, ag) => a + Math.floor(Object.values(ag.segments || {}).flat().filter(v => v.name).length * 0.65), 0);
+                    const total = agendas.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name).length, 0);
                     return (
                         <div key={suc} onClick={() => setSelected({ suc, agendas })}
                             className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:border-blue-200 cursor-pointer transition-all group">
@@ -361,27 +377,36 @@ const EjecucionJefe = () => {
     const [agendas, setAgendas] = useState([]);
     const [jerarquia, setJerarquia] = useState({ coordinadores: [], ejecutivos: [] });
 
-    // FIX: Todos los hooks de estado deben ir al principio, antes de cualquier `if` o `return`
     const [selectedZona, setSelectedZona] = useState(null);
     const [selectedEj, setSelectedEj] = useState(null);
 
-    // FASE 4: Carga dinámica del Dashboard de Ejecución
+    // Carga dinámica del Dashboard de Ejecución desde la API
     useEffect(() => {
         const fetchDashboardData = async () => {
             setLoading(true);
             try {
+                // TODO: Cuando la app esté en productivo, usa const hoy = new Date().toISOString().split('T')[0];
+                const hoy = '2026-02-24'; 
+
                 // 1. Cargar las agendas
-                const resAgendas = await AgendaApiService.getAgendasEquipo(canal);
-                if (resAgendas.codigo === 'OK') {
-                    setAgendas(resAgendas.contenido || []);
-                }
+                const resAgendas = await api.get(`/agenda/equipo?fecha=${hoy}`);
+                const dataAgendas = resAgendas.data?.contenido || resAgendas.data || [];
+
+                const parsedAgendas = dataAgendas.map(ag => {
+                    let parsedSegments = ag.segments || {};
+                    if (typeof parsedSegments === 'string') {
+                        try { parsedSegments = JSON.parse(parsedSegments); } catch (e) { }
+                    }
+                    return { ...ag, segments: parsedSegments };
+                });
+                
+                setAgendas(parsedAgendas);
 
                 // 2. Cargar jerarquía si es cobranza
                 if (canal === 'cobranza') {
-                    const resJerarquia = await AgendaApiService.getJerarquiaCobranza();
-                    if (resJerarquia.codigo === 'OK') {
-                        setJerarquia(resJerarquia.contenido || { coordinadores: [], ejecutivos: [] });
-                    }
+                    const resJerarquia = await api.get('/agenda/jerarquia/cobranza');
+                    const dataJerarquia = resJerarquia.data?.contenido || resJerarquia.data || { coordinadores: [], ejecutivos: [] };
+                    setJerarquia(dataJerarquia);
                 }
             } catch (err) {
                 console.error("Error al cargar dashboard de jefes (Ejecución)", err);
@@ -407,7 +432,7 @@ const EjecucionJefe = () => {
         const zonas = agruparPorZona(agendas);
 
         if (nivel === 1) { // Gerente
-            // TODO: Ajustar a la sucursal del jefe logueado
+            // TODO: Ajustar a la sucursal del jefe logueado cuando el backend lo envíe
             const myAgendas = agendas.filter(ag => ag.sucursal === 'HERMOSILLO');
             return (
                 <div className="max-w-4xl mx-auto pb-20 pt-8 px-4 animate-in fade-in duration-500">
@@ -461,8 +486,8 @@ const EjecucionJefe = () => {
                         { id: 'ZONA III', nombre: 'ZONA III' }, { id: 'ZONA IV', nombre: 'ZONA IV' },
                     ].map(z => {
                         const zAgendas = agendas.filter(ag => ag.zona === z.id);
-                        const done = zAgendas.filter(ag => ag.status === 'aprobada').reduce((a, ag) => a + Math.floor(Object.values(ag.segments).flat().filter(v => v.name).length * 0.65), 0);
-                        const total = zAgendas.reduce((a, ag) => a + Object.values(ag.segments).flat().filter(v => v.name).length, 0);
+                        const done = zAgendas.filter(ag => ag.status === 'aprobada').reduce((a, ag) => a + Math.floor(Object.values(ag.segments || {}).flat().filter(v => v.name).length * 0.65), 0);
+                        const total = zAgendas.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name).length, 0);
                         return (
                             <div key={z.id} onClick={() => setSelectedZona(z)}
                                 className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:border-blue-200 cursor-pointer transition-all group">
@@ -521,8 +546,8 @@ const EjecucionJefe = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {jerarquia.ejecutivos.map(ej => {
                         const ejAg = agendas.filter(ag => ag.ejecutivoId === ej.id);
-                        const done = ejAg.filter(ag => ag.status === 'aprobada').reduce((a, ag) => a + Math.floor(Object.values(ag.segments).flat().filter(v => v.name).length * 0.65), 0);
-                        const total = ejAg.reduce((a, ag) => a + Object.values(ag.segments).flat().filter(v => v.name).length, 0);
+                        const done = ejAg.filter(ag => ag.status === 'aprobada').reduce((a, ag) => a + Math.floor(Object.values(ag.segments || {}).flat().filter(v => v.name).length * 0.65), 0);
+                        const total = ejAg.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name).length, 0);
                         return (
                             <div key={ej.id} onClick={() => setSelectedEj(ej)}
                                 className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:border-blue-200 cursor-pointer transition-all group">

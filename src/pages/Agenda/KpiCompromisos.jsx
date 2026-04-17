@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useRole } from '../../context/RoleContext';
 import { useAgenda } from '../../context/AgendaContext';
 import { Target, Lock, TrendingUp, DollarSign, Users, Activity, Loader2 } from 'lucide-react';
@@ -93,82 +93,15 @@ const KpiGroup = ({ group, color, iconName, fields, kpi, onUpdate, disabled }) =
 
 const KpiCompromisos = () => {
     const { selectedRole } = useRole();
-    const { currentAgenda, updateKpi } = useAgenda();
+    // Consumimos kpiConfig y loadingKpiConfig directo de tu AgendaContext real
+    const { currentAgenda, updateKpi, kpiConfig, loadingKpiConfig } = useAgenda();
 
     const isLocked = currentAgenda.status === 'pendiente' || currentAgenda.status === 'aprobada';
-    
-    /**
-     * TODO: Los valores capturados aquí se extraen y envían al backend
-     * al momento de certificar la agenda (PlaneacionOperativo.jsx).
-     * EP de Inserción: POST /api/v1/agendas/{idPlan}/kpis-compromisos
-     */
     const kpi = currentAgenda.kpiCompromisos || {};
-
-    // ── FASE 2B: ESTADO DE CONFIGURACIÓN DE KPIS ──
-    const [fieldGroups, setFieldGroups] = useState([]);
-    const [loadingConfig, setLoadingConfig] = useState(true);
-
-    useEffect(() => {
-        // Solo intentamos cargar si hay un rol seleccionado y es operativo
-        if (!selectedRole || selectedRole.category !== 'Operativo') {
-            setLoadingConfig(false);
-            return;
-        }
-
-        const fetchKpiConfig = async () => {
-            try {
-                setLoadingConfig(true);
-
-                /**
-                 * TODO: EP Lógico -> GET /api/v1/catalogos/kpis-config?rol={roleId}
-                 * Cuando el backend esté listo, reemplaza el setTimeout por la llamada Axios.
-                 */
-                await new Promise(resolve => setTimeout(resolve, 600)); // Simulación de red
-
-                // Diccionario gigante simulando la respuesta de la Base de Datos
-                const DB_KPI_CONFIG = {
-                    'asesor-f': [
-                        { group: 'Captación', color: 'blue', iconName: 'DollarSign', fields: [{ key: 'captNueva', label: 'Captación Nueva' }, { key: 'captReinversion', label: 'Captación Reinversión' }] },
-                        { group: 'Colocación', color: 'emerald', iconName: 'TrendingUp', fields: [{ key: 'colocInicial', label: 'Colocación Inicial' }, { key: 'colocRedisposicion', label: 'Colocación Redisposición' }] },
-                        { group: 'Recuperación', color: 'amber', iconName: 'Activity', fields: [{ key: 'rec0', label: 'Recuperación 0 días' }, { key: 'rec1_7', label: 'Recuperación 1 a 7 días' }, { key: 'rec8_30', label: 'Recuperación 8 a 30 días' }, { key: 'rec31_60', label: 'Recuperación 31 a 60 días' }, { key: 'recMas61', label: 'Recuperación +61 días' }] },
-                    ],
-                    'asesor-c': [
-                        { group: 'Captación', color: 'blue', iconName: 'DollarSign', fields: [{ key: 'captNueva', label: 'Captación Nueva' }, { key: 'captReinversion', label: 'Captación Reinversión' }] },
-                        { group: 'Dispersión', color: 'violet', iconName: 'TrendingUp', fields: [{ key: 'dispersion', label: 'Dispersión' }, { key: 'dispersionNueva', label: 'Dispersión Nueva' }, { key: 'aperturasCredFacil', label: '# Aperturas Crédito Fácil' }, { key: 'montoLineasApertura', label: 'Monto Líneas de Apertura' }] },
-                        { group: 'Recuperación', color: 'amber', iconName: 'Activity', fields: [{ key: 'rec0', label: 'Recuperación 0 días' }, { key: 'rec1_7', label: 'Recuperación 1 a 7 días' }, { key: 'rec8_30', label: 'Recuperación 8 a 30 días' }, { key: 'rec31_60', label: 'Recuperación 31 a 60 días' }, { key: 'recMas61', label: 'Recuperación +61 días' }] },
-                        { group: 'Servicio', color: 'rose', iconName: 'Users', fields: [{ key: 'servicioPremiumPendiente', label: 'Servicio Premium Pendiente' }] },
-                    ],
-                    'coordinador-l': [
-                        { group: 'Captación', color: 'blue', iconName: 'DollarSign', fields: [{ key: 'captNueva', label: 'Captación Nueva' }, { key: 'captReinversion', label: 'Captación Reinversión' }] },
-                        { group: 'Dispersión', color: 'violet', iconName: 'TrendingUp', fields: [{ key: 'dispersion', label: 'Dispersión' }, { key: 'dispersionNueva', label: 'Dispersión Nueva' }, { key: 'aperturasCredFacil', label: '# Aperturas Crédito Fácil' }, { key: 'montoLineasApertura', label: 'Monto Líneas de Apertura' }] },
-                        { group: 'Recuperación', color: 'amber', iconName: 'Activity', fields: [{ key: 'rec0', label: 'Recuperación 0 días' }, { key: 'rec1_7', label: 'Recuperación 1 a 7 días' }, { key: 'rec8_30', label: 'Recuperación 8 a 30 días' }, { key: 'rec31_60', label: 'Recuperación 31 a 60 días' }, { key: 'recMas61', label: 'Recuperación +61 días' }] },
-                        { group: 'Servicio', color: 'rose', iconName: 'Users', fields: [{ key: 'servicioPremiumPendiente', label: 'Servicio Premium Pendiente' }] },
-                    ],
-                    'gestor-i': [
-                        { group: 'Cobranza', color: 'emerald', iconName: 'DollarSign', fields: [{ key: 'cobranzaTotalDia', label: 'Cobranza Total Día' }, { key: 'cobranza1_30', label: 'Cobranza 1 a 30 días' }, { key: 'cobranza31_60', label: 'Cobranza 31 a 60 días' }, { key: 'opCobradas', label: 'Operaciones Cobradas' }] },
-                        { group: 'Visitas y Promesas', color: 'blue', iconName: 'Users', fields: [{ key: 'visitasRealizadas', label: '# Visitas Realizadas' }, { key: 'promesasDia', label: 'Promesas de Pago del Día' }, { key: 'montoPromesas', label: 'Monto de Promesas Generadas' }] },
-                        { group: 'Saneamiento y Contención', color: 'amber', iconName: 'Activity', fields: [{ key: 'saldoSaneadoDia', label: 'Saldo Saneado Día' }, { key: 'contencionMas30', label: 'Contención +30 días' }, { key: 'contencionMas60', label: 'Contención +60 días' }, { key: 'contencionMas89', label: 'Contención +89 días' }] },
-                    ]
-                };
-
-                // Asignamos la configuración que corresponde al rol logueado
-                const configForRole = DB_KPI_CONFIG[selectedRole.id] || [];
-                setFieldGroups(configForRole);
-
-            } catch (error) {
-                console.error("Error al cargar la configuración de KPIs", error);
-            } finally {
-                setLoadingConfig(false);
-            }
-        };
-
-        fetchKpiConfig();
-    }, [selectedRole]);
-
 
     if (selectedRole?.category !== 'Operativo') return null;
 
-    if (loadingConfig) {
+    if (loadingKpiConfig) {
         return (
             <div className="mb-16 flex items-center justify-center p-10 text-slate-400">
                 <Loader2 size={24} className="animate-spin" />
@@ -177,7 +110,7 @@ const KpiCompromisos = () => {
         );
     }
 
-    if (fieldGroups.length === 0) return null;
+    if (!kpiConfig || kpiConfig.length === 0) return null;
 
     return (
         <div className="mb-16 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -211,7 +144,7 @@ const KpiCompromisos = () => {
                     </div>
                 )}
 
-                {fieldGroups.map(group => (
+                {kpiConfig.map(group => (
                     <KpiGroup
                         key={group.group}
                         group={group.group}

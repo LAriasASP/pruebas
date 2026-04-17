@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, RotateCcw, Plus, MapPin, Search, Navigation, Calendar, Clock, Trash2, Phone, MoreHorizontal, User, Tag, CheckCircle2 } from 'lucide-react';
 import { useAgenda } from '../../context/AgendaContext';
-import { useCatalogs } from '../../context/CatalogContext'; // <-- Importamos el contexto de catálogos
+import { useCatalogs } from '../../context/CatalogContext';
 import KpiCompromisos from './KpiCompromisos';
 
 const timeOptions = [];
@@ -46,7 +46,6 @@ const ClientNameInput = ({ value, idx, segmentName, updateVisit, mockDatabase })
     const [showSuggestions, setShowSuggestions] = useState(false);
     const containerRef = useRef(null);
 
-    // Filter suggestions based on input
     const suggestions = mockDatabase.filter(item =>
         query.length > 1 &&
         item.name.toLowerCase().includes(query.toLowerCase()) &&
@@ -69,7 +68,6 @@ const ClientNameInput = ({ value, idx, segmentName, updateVisit, mockDatabase })
 
     const handleSelect = (item) => {
         setQuery(item.name);
-        // Force classification if it's Portfolio or Management
         const isClientOnlySegment = segmentName === 'Seguimiento de Cartera' || segmentName === 'Gestión de Empresarias';
         if (isClientOnlySegment) {
             updateVisit(segmentName, idx, 'classification', 'Cliente');
