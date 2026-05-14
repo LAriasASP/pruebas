@@ -1,26 +1,33 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRole } from './RoleContext';
-// Importamos tu cliente de Axios ya configurado (Ajusta la ruta si es necesario)
+import { useCatalogs } from './CatalogContext'; 
 import api from '../api/axiosConfig';
+import UIModal from '../components/UIModal'; 
 
 const AgendaContext = createContext();
 
 export const AgendaProvider = ({ children }) => {
     const { selectedRole } = useRole();
+    const catalogos = useCatalogs() || {}; 
 
-    // ── FASE 2: ESTADO DEL DIRECTORIO DE CLIENTES ──
+    // ESTADO GLOBAL PARA ALERTAS
+    const [alertModal, setAlertModal] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+
+    // ── ESTADO DEL DIRECTORIO DE CLIENTES ──
     const [directorio, setDirectorio] = useState([]);
     const [loadingDirectorio, setLoadingDirectorio] = useState(true);
 
     const cargarDirectorio = async () => {
         try {
             setLoadingDirectorio(true);
-            
-            // EP Lógico -> GET /api/v1/agenda/contactos-usuario
             const res = await api.get('/agenda/contactos-usuario');
             const rawData = res.data?.contenido || res.data || [];
 
-            // PRE-PROCESAMIENTO: Convertimos la cadena JSON de teléfonos a un arreglo real
             const formattedData = rawData.map(item => {
                 let parsedPhones = ['', '', ''];
                 try {
@@ -33,7 +40,6 @@ export const AgendaProvider = ({ children }) => {
                     console.error("Error parseando teléfonos del cliente", item.name, e);
                 }
                 
-                // Aseguramos que siempre haya 3 posiciones para los inputs
                 while (parsedPhones.length < 3) parsedPhones.push('');
                 
                 return {
@@ -54,21 +60,25 @@ export const AgendaProvider = ({ children }) => {
         cargarDirectorio();
     }, []);
 
-    // ── FASE 4: CARGA DE CONFIGURACIÓN DE KPIS ──
+    // ── CARGA DE CONFIGURACIÓN DE KPIS ──
     const [kpiConfig, setKpiConfig] = useState([]);
     const [loadingKpiConfig, setLoadingKpiConfig] = useState(true);
 
     useEffect(() => {
         if (!selectedRole?.id) return;
 
+        if (selectedRole?.category !== 'Operativo') {
+            setKpiConfig([]);
+            setLoadingKpiConfig(false);
+            return; 
+        }
+
         const fetchKpiConfig = async () => {
             setLoadingKpiConfig(true);
             try {
-                // EP Lógico -> GET /api/v1/compromisos/config
                 const res = await api.get('/compromisos/config');
                 const rawConfig = res.data?.contenido || res.data || [];
 
-                // Validamos si el backend manda 'fields' como string JSON y lo parseamos
                 const parsedConfig = rawConfig.map(group => ({
                     ...group,
                     fields: typeof group.fields === 'string' ? JSON.parse(group.fields) : group.fields
@@ -115,7 +125,7 @@ export const AgendaProvider = ({ children }) => {
 
     const emptyKpi = {};
 
-    // ── FASE 3: ESTADO INICIAL DE LA AGENDA ──
+    // ── ESTADO INICIAL DE LA AGENDA ──
     const [currentAgenda, setCurrentAgenda] = useState({
         id: null,
         status: 'borrador',
@@ -141,39 +151,27 @@ export const AgendaProvider = ({ children }) => {
     const [loadingAgenda, setLoadingAgenda] = useState(false);
     const [scheduledFollowUps, setScheduledFollowUps] = useState([]);
 
-    // ── FASE 3: CARGA DE LA AGENDA DEL DÍA ──
     useEffect(() => {
         if (!selectedRole || selectedRole.category !== 'Operativo') return;
 
         const cargarAgendaDelDia = async () => {
             setLoadingAgenda(true);
             try {
-                // EP Lógico -> GET /api/v1/agenda/operativo/hoy
                 const res = await api.get('/agenda/operativo/hoy');
-                
-                // Extraemos el primer elemento si devuelve un arreglo, o el objeto directo
                 const agendaData = Array.isArray(res.data?.contenido) ? res.data.contenido[0] : (res.data?.contenido || res.data);
 
                 if (agendaData && Object.keys(agendaData).length > 0) {
-                    // Validamos si los segmentos vienen como JSON String desde PostgreSQL
                     let parsedSegments = agendaData.segments || {};
-                    if (typeof parsedSegments === 'string') {
-                        parsedSegments = JSON.parse(parsedSegments);
-                    }
+                    if (typeof parsedSegments === 'string') parsedSegments = JSON.parse(parsedSegments);
 
-                    // 👇 NUEVO: Parseamos los KPIs que ahora manda el Backend
                     let parsedKpiCompromisos = agendaData.kpiCompromisos || {};
-                    if (typeof parsedKpiCompromisos === 'string') {
-                        parsedKpiCompromisos = JSON.parse(parsedKpiCompromisos);
-                    }
+                    if (typeof parsedKpiCompromisos === 'string') parsedKpiCompromisos = JSON.parse(parsedKpiCompromisos);
 
                     let parsedKpiReal = agendaData.kpiReal || {};
-                    if (typeof parsedKpiReal === 'string') {
-                        parsedKpiReal = JSON.parse(parsedKpiReal);
-                    }
+                    if (typeof parsedKpiReal === 'string') parsedKpiReal = JSON.parse(parsedKpiReal);
 
-                    // Aseguramos que existan las llaves principales aunque vengan vacías
                     const safeSegments = {
+                        ...parsedSegments,
                         'Promoción': parsedSegments['Promoción'] || [],
                         'Evaluación e Integración': parsedSegments['Evaluación e Integración'] || [],
                         'Seguimiento de Cartera': parsedSegments['Seguimiento de Cartera'] || [],
@@ -185,44 +183,29 @@ export const AgendaProvider = ({ children }) => {
                         id: agendaData.id,
                         status: agendaData.status?.toLowerCase() || 'borrador',
                         segments: safeSegments,
-                        kpiCompromisos: parsedKpiCompromisos, // <--- INYECTAMOS LOS COMPROMISOS
-                        kpiReal: parsedKpiReal,               // <--- INYECTAMOS EL AVANCE REAL
-                        metadata: {
-                            ...prev.metadata,
-                            role: selectedRole.name,
-                        }
+                        kpiCompromisos: parsedKpiCompromisos,
+                        kpiReal: parsedKpiReal,
+                        metadata: { ...prev.metadata, role: selectedRole.name }
                     }));
                 } else {
-                    // Si el backend responde 200 pero vacío (no tiene agenda hoy)
                     const isBorrador = selectedRole.id === 'coordinador-l';
                     setCurrentAgenda(prev => ({ 
                         ...prev, 
                         status: isBorrador ? 'borrador' : 'borrador',
                         id: null,
                         segments: {
-                            'Promoción': [], 
-                            'Evaluación e Integración': [],
-                            'Seguimiento de Cartera': [],
-                            'Gestión de Empresarias': []
+                            'Promoción': [], 'Evaluación e Integración': [], 'Seguimiento de Cartera': [], 'Gestión de Empresarias': []
                         }
                     }));
                 }
 
             } catch (error) {
-                // Manejo inteligente del "error" del backend cuando es un día nuevo
                 const mensajeError = error.response?.data?.mensaje || "";
-                
                 if (error.response?.status === 404 || mensajeError.includes("No se encontró información de la agenda")) {
-                    console.log("No hay agenda para hoy. Iniciando en modo Borrador limpio.");
                     setCurrentAgenda(prev => ({ 
-                        ...prev, 
-                        status: 'borrador',
-                        id: null,
+                        ...prev, status: 'borrador', id: null,
                         segments: {
-                            'Promoción': [], 
-                            'Evaluación e Integración': [],
-                            'Seguimiento de Cartera': [],
-                            'Gestión de Empresarias': []
+                            'Promoción': [], 'Evaluación e Integración': [], 'Seguimiento de Cartera': [], 'Gestión de Empresarias': []
                         }
                     }));
                 } else {
@@ -236,15 +219,25 @@ export const AgendaProvider = ({ children }) => {
         cargarAgendaDelDia();
     }, [selectedRole?.id]);
 
+    // ── RENDERIZADO CONDICIONAL POR ROLES (RBAC) ──
     const getVisibleSegments = () => {
+        const isCobranza = selectedRole?.canal?.toUpperCase() === 'COBRANZA';
         const roleId = selectedRole?.id;
+
+        let segments = ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera', 'Gestión de Empresarias'];
+
+        if (isCobranza) {
+            return ['Seguimiento de Cartera']; 
+        }
+
         if (roleId === 'asesor-f') return ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera'];
         if (roleId === 'gestor-i') return ['Evaluación e Integración', 'Seguimiento de Cartera'];
         if (roleId === 'gestor-e') return ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera'];
-        return ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera', 'Gestión de Empresarias'];
+        
+        return segments;
     };
 
-   const updateVisit = (segmentName, index, field, value) => {
+    const updateVisit = (segmentName, index, field, value) => {
         setCurrentAgenda(prev => {
             const newSegments = { ...prev.segments };
             const updatedRow = { ...newSegments[segmentName][index], [field]: value };
@@ -252,11 +245,9 @@ export const AgendaProvider = ({ children }) => {
             if (field === 'name' && value) {
                 const match = directorio.find(item => item.name === value.toUpperCase());
                 if (match) {
-                    Object.keys(match).forEach(key => {
-                        updatedRow[key] = match[key];
-                    });
-                    
+                    Object.keys(match).forEach(key => { updatedRow[key] = match[key]; });
                     updatedRow.idContacto = match.id || match.idContacto || match.id_contacto || null;
+                    updatedRow.idControl = match.idControl || match.id_control || null;
                 }
             }
 
@@ -274,118 +265,106 @@ export const AgendaProvider = ({ children }) => {
 
     const updateKpiReal = async (field, value) => {
         try {
-            // Actualización optimista en el UI para que se sienta rápido
             setCurrentAgenda(prev => ({
-                ...prev,
-                kpiReal: { ...prev.kpiReal, [field]: value }
+                ...prev, kpiReal: { ...prev.kpiReal, [field]: value }
             }));
-
-            // LLAMADA REAL AL BACKEND EN SEGUNDO PLANO
             if (currentAgenda.id) {
                 await api.put('/gestion-diaria/kpis/real', {
-                    idPlan: currentAgenda.id,
-                    llaveFront: field,
-                    nuevoValor: value || 0
+                    idPlan: currentAgenda.id, llaveFront: field, nuevoValor: value || 0
                 });
             }
         } catch (error) {
             console.error("Error actualizando KPI real en el servidor", error);
-            // Podrías revertir el valor si falla, pero para KPIs suele ser suficiente con loguearlo
         }
     };
 
-   const registerCheckIn = async (visitId, data) => {
+    const registerCheckIn = async (visitId, data) => {
         try {
             const payload = {
-                idVisita: visitId,
-                visitaRealizada: data.visitaRealizada,
-                clienteEncontrado: data.clienteEncontrado,
-                actividadRealizada: data.actividadRealizada,
-                motivoNoVisita: data.motivoNoVisita,
-                motivoNoActividad: data.motivoNoActividad,
-                resultado: data.resultado,
-                tipoGestion: data.tipoGestion,
-                checkInTime: data.checkInTime,
-                visitaDuration: data.visitaDuration,
-                lat: data.lat,
-                lng: data.lng,
-                gpsStatus: data.gpsStatus,
-                pagoMonto: data.pagoMonto,
-                pagoFecha: data.pagoFecha,
-                notes: data.notes
+                idVisita: visitId, visitaRealizada: data.visitaRealizada, clienteEncontrado: data.clienteEncontrado,
+                actividadRealizada: data.actividadRealizada, motivoNoVisita: data.motivoNoVisita,
+                motivoNoActividad: data.motivoNoActividad, resultado: data.resultado, tipoGestion: data.tipoGestion,
+                checkInTime: data.checkInTime, visitaDuration: data.visitaDuration, lat: data.lat, lng: data.lng,
+                gpsStatus: data.gpsStatus, pagoMonto: data.pagoMonto, pagoFecha: data.pagoFecha, notes: data.notes
             };
-
-            //LLAMADA REAL AL BACKEND
             await api.post('/gestion-diaria/ejecucion', payload);
 
-            // Actualizamos la memoria de React para que el UI pinte la palomita verde
             const checkInTime = new Date().toISOString();
             setCurrentAgenda(prev => ({
                 ...prev,
-                checkIns: {
-                    ...prev.checkIns,
-                    [visitId]: { ...data, registeredAt: checkInTime }
-                }
+                checkIns: { ...prev.checkIns, [visitId]: { ...data, registeredAt: checkInTime } }
             }));
-
         } catch (error) {
             console.error("Error al registrar el check-in", error);
-            alert("No se pudo guardar la gestión en el servidor.");
+            setAlertModal({
+                isOpen: true,
+                title: 'Error de Sincronización',
+                message: 'No se pudo guardar la gestión en el servidor.',
+                type: 'danger'
+            });
         }
     };
-
 
     const addUnplannedVisit = async (data) => {
         try {
             const payload = {
-                idVisita: null, // Null porque es imprevisto
-                name: data.name,
-                resultado: data.resultado,
+                idPlan: currentAgenda.id,      
+                idContacto: data.idContacto,   
+                idVisita: null, 
+                name: data.name, 
+                resultado: data.resultado, 
                 tipoGestion: data.tipoGestion,
-                checkInTime: data.checkInTime,
-                pagoMonto: data.pagoMonto,
-                pagoFecha: data.pagoFecha,
+                checkInTime: data.checkInTime, 
+                pagoMonto: data.pagoMonto, 
+                pagoFecha: data.pagoFecha, 
                 notes: data.notes
             };
 
-            // LLAMADA REAL AL BACKEND
             await api.post('/gestion-diaria/ejecucion/no-planeada', payload);
 
-            // Actualizamos el UI
             const id = Math.random().toString(36).substr(2, 9);
-            const newVisit = { id, ...data, isUnplanned: true };
             
-            setCurrentAgenda(prev => ({
-                ...prev,
-                unplannedVisits: [...(prev.unplannedVisits || []), newVisit]
+            const newVisit = { 
+                id, 
+                ...data, 
+                isUnplanned: true,
+                _segment: 'Visita No Planeada', 
+                estado: 'FINALIZADA',           
+                statusAction: 'FINALIZADA',
+                _dbCheckIn: {                   
+                    resultado: data.resultado,
+                    visitaRealizada: true,
+                    checkInTime: data.checkInTime,
+                    gpsStatus: 'ok'
+                }
+            };
+            
+            setCurrentAgenda(prev => ({ 
+                ...prev, 
+                unplannedVisits: [...(prev.unplannedVisits || []), newVisit] 
             }));
-
         } catch (error) {
             console.error("Error al registrar visita no planeada", error);
-            alert("Hubo un error al registrar el imprevisto.");
+            setAlertModal({
+                isOpen: true,
+                title: 'Error',
+                message: 'Hubo un error al registrar el imprevisto.',
+                type: 'danger'
+            });
         }
     };
 
     const scheduleFollowUp = (visitSource, { fecha, monto }) => {
         setScheduledFollowUps(prev => [...prev, {
-            ...visitSource,
-            id: `fu-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            isFollowUp: true,
-            time: null,          
-            compromisoFecha: fecha,
-            compromisoCuanto: monto,
-            isUnplanned: false,
-            createdAt: new Date().toISOString(),
+            ...visitSource, id: `fu-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            isFollowUp: true, time: null, compromisoFecha: fecha, compromisoCuanto: monto,
+            isUnplanned: false, createdAt: new Date().toISOString(),
         }]);
     };
 
     const addRow = (segmentName) => {
         setCurrentAgenda(prev => ({
-            ...prev,
-            segments: {
-                ...prev.segments,
-                [segmentName]: [...prev.segments[segmentName], createEmptyRows(segmentName, 1)[0]]
-            }
+            ...prev, segments: { ...prev.segments, [segmentName]: [...prev.segments[segmentName], createEmptyRows(segmentName, 1)[0]] }
         }));
     };
 
@@ -393,13 +372,7 @@ export const AgendaProvider = ({ children }) => {
         setCurrentAgenda(prev => {
             const segment = [...prev.segments[segmentName]];
             segment.splice(index, 1);
-            return {
-                ...prev,
-                segments: {
-                    ...prev.segments,
-                    [segmentName]: segment
-                }
-            };
+            return { ...prev, segments: { ...prev.segments, [segmentName]: segment } };
         });
     };
 
@@ -409,10 +382,7 @@ export const AgendaProvider = ({ children }) => {
             .flatMap(([_, visits]) => visits.filter(v => v.name && v.time));
 
         const times = allVisits.map(v => v.time);
-
-        if (times.length !== new Set(times).size) {
-            return { valid: false, message: "No se pueden empalmar horarios exactos." };
-        }
+        if (times.length !== new Set(times).size) return { valid: false, message: "No se pueden empalmar horarios exactos." };
 
         const timeToMin = (t) => {
             const [h, m] = t.split(':').map(Number);
@@ -420,139 +390,186 @@ export const AgendaProvider = ({ children }) => {
         };
 
         const promoVisits = currentAgenda.segments['Promoción'].filter(v => v.name && v.time);
-
         for (const promo of promoVisits) {
             const pMin = timeToMin(promo.time);
             for (const other of allVisits) {
                 if (promo.id === other.id) continue;
                 const oMin = timeToMin(other.time);
-                const diff = Math.abs(pMin - oMin);
-                if (diff < 30) {
-                    return {
-                        valid: false,
-                        message: `La visita de Promoción (${promo.time}) está muy cerca de "${other.name}" (${other.time}). Requiere al menos 30 min de espacio.`
-                    };
+                if (Math.abs(pMin - oMin) < 30) {
+                    return { valid: false, message: `La visita de Promoción (${promo.time}) está muy cerca de "${other.name}" (${other.time}). Requiere al menos 30 min de espacio.` };
                 }
             }
         }
-
         return { valid: true };
     };
 
-   const sendForAuthorization = async () => {
-        // 1. Validamos que haya al menos una visita
+    const sendForAuthorization = async () => {
         const activeVisits = Object.entries(currentAgenda.segments)
             .filter(([name]) => getVisibleSegments().includes(name))
             .flatMap(([_, visits]) => visits.filter(v => v.name));
 
         if (activeVisits.length === 0) {
-            alert("Debes registrar al menos una visita para enviar la agenda.");
+            setAlertModal({
+                isOpen: true,
+                title: 'Acción Requerida',
+                message: 'Debes registrar al menos una visita para enviar la agenda.',
+                type: 'info'
+            });
             return;
         }
 
-        // 2. Validamos que no haya empalmes de tiempo
         const validation = validateAgenda();
         if (!validation.valid) {
-            alert(validation.message);
+            setAlertModal({
+                isOpen: true,
+                title: 'Ajustes Necesarios',
+                message: validation.message,
+                type: 'danger'
+            });
             return;
         }
 
-       try {
-            const payload = {
-                idPlan: currentAgenda.id, // Viaja como null si es nueva, o con el número si ya existía
-                kpiCompromisos: currentAgenda.kpiCompromisos,
-                segments: currentAgenda.segments
+        try {
+            const idAreaMapeado = selectedRole?.canal?.toUpperCase() === 'COBRANZA' ? 2 : 1;
+
+            const findCatalogId = (arrayCatalog, textValue) => {
+                if (!textValue || !arrayCatalog) return null;
+                const match = arrayCatalog.find(item => 
+                    item.nombre?.toUpperCase().trim() === String(textValue).toUpperCase().trim()
+                );
+                if (match) return match.id_producto || match.id_programa || match.id_etiqueta || match.id_herramienta || match.id || null;
+                return null;
             };
 
-            // SIEMPRE le pegamos al mismo endpoint
+            const mappedSegments = {};
+            Object.keys(currentAgenda.segments).forEach(segmentName => {
+                mappedSegments[segmentName] = currentAgenda.segments[segmentName].map(v => {
+                    const herramientaStr = v.herramientaAplicar || v.herramientaAplicada;
+
+                    return {
+                        ...v,
+                        idProducto: findCatalogId(catalogos.productos, v.product),
+                        idSubProducto: findCatalogId(catalogos.subproductos, v.subProduct),
+                        idPrograma: findCatalogId(catalogos.programas, v.program),
+                        idPortfolioStatus: findCatalogId(catalogos.estatusCartera, v.portfolioStatus),
+                        idHerramienta: findCatalogId(catalogos.herramientas, herramientaStr)
+                    };
+                });
+            });
+
+            const payload = {
+                idPlan: currentAgenda.id,
+                idArea: idAreaMapeado,
+                kpiCompromisos: currentAgenda.kpiCompromisos,
+                segments: mappedSegments 
+            };
+
             const response = await api.post(`/agenda/plan/certificar`, payload);
 
-           // ... dentro del try de sendForAuthorization
             if (response.data && response.data.codigo === 'OK') {
                 setCurrentAgenda(prev => ({
                     ...prev,
                     id: response.data.contenido?.id || prev.id,
                     status: 'pendiente', 
-                    segments: { // 👈 Limpiamos los segmentos locales para forzar que Ejecución no vea nada viejo
-                        'Promoción': [],
-                        'Evaluación e Integración': [],
-                        'Seguimiento de Cartera': [],
-                        'Gestión de Empresarias': []
+                    segments: {
+                        'Promoción': [], 'Evaluación e Integración': [], 'Seguimiento de Cartera': [], 'Gestión de Empresarias': []
                     }
                 }));
-                alert("Agenda certificada.");
+                setAlertModal({
+                    isOpen: true,
+                    title: 'Ruta Certificada',
+                    message: 'Agenda certificada y enviada a revisión exitosamente.',
+                    type: 'success'
+                });
             } else {
-                alert("El servidor respondió, pero hubo un problema al guardar la agenda.");
+                setAlertModal({
+                    isOpen: true,
+                    title: 'Error de Sistema',
+                    message: 'El servidor respondió, pero hubo un problema al guardar la agenda.',
+                    type: 'danger'
+                });
             }
 
         } catch (error) {
             console.error("Error al certificar agenda", error);
-            alert("Hubo un error de conexión al certificar la agenda.");
+            setAlertModal({
+                isOpen: true,
+                title: 'Error de Red',
+                message: 'Hubo un error de conexión al certificar la agenda.',
+                type: 'danger'
+            });
         }
     };
 
     const resetAgenda = async () => {
-        if (window.confirm("¿Seguro que deseas borrar toda la planificación? Esta acción no se puede deshacer.")) {
-            
-            try {
-                // Si la agenda ya existía en BD, podríamos avisarle al backend que borre las acciones
-                if (currentAgenda.id) {
-                    // await api.delete(`/agenda/plan/${currentAgenda.id}/acciones`);
-                }
-
-                setCurrentAgenda(prev => ({
-                    ...prev,
-                    status: 'borrador',
-                    segments: {
-                        'Promoción': [],
-                        'Evaluación e Integración': [],
-                        'Seguimiento de Cartera': [],
-                        'Gestión de Empresarias': []
-                    },
-                    kpiCompromisos: { ...emptyKpi },
-                    kpiReal: {},
-                    checkIns: {},
-                    unplannedVisits: [],
-                    metadata: { ...prev.metadata, hasModifications: false }
-                }));
-                setScheduledFollowUps([]);
-
-            } catch(error) {
-                console.error("Error borrando agenda", error);
-                alert("Hubo un error al borrar. Intenta de nuevo.");
-            }
+        try {
+            setCurrentAgenda(prev => ({
+                ...prev, status: 'borrador', kpiCompromisos: { ...emptyKpi }, kpiReal: {}, checkIns: {}, unplannedVisits: [],
+                segments: { 'Promoción': [], 'Evaluación e Integración': [], 'Seguimiento de Cartera': [], 'Gestión de Empresarias': [] },
+                metadata: { ...prev.metadata, hasModifications: false }
+            }));
+            setScheduledFollowUps([]);
+        } catch(error) {
+            console.error("Error borrando agenda", error);
+            setAlertModal({
+                isOpen: true,
+                title: 'Error',
+                message: 'Ocurrió un problema al limpiar el formulario.',
+                type: 'danger'
+            });
         }
     };
 
-    const updateAgendaStatus = (id, status, notes = '') => {
-        if (id === 'AJ-LOCAL') {
-            setCurrentAgenda(prev => ({ ...prev, status, notes }));
+    // ── INTEGRACIÓN REAL: ACTUALIZAR ESTATUS (Guardado Definitivo) ──
+    const updateAgendaStatus = async (idPlan, nuevoEstatus, notes = '') => {
+        // En caso de que se llame de forma local sin ID real, mantenemos protección
+        if (!idPlan || idPlan === 'AJ-LOCAL') {
+            setCurrentAgenda(prev => ({ ...prev, status: nuevoEstatus, notes }));
+            return;
+        }
+
+        try {
+            // Se envía el payload correspondiente al ActualizarEstatusRequest que espera el backend
+            const payload = { estatus: nuevoEstatus, nota: notes };
+            
+            const response = await api.put(`/agenda/plan/${idPlan}/estatus`, payload);
+
+            if (response.data && response.data.codigo === 'OK') {
+                setCurrentAgenda(prev => ({ ...prev, status: nuevoEstatus, notes }));
+                setAlertModal({
+                    isOpen: true,
+                    title: 'Estatus Actualizado',
+                    message: `La agenda ha cambiado a estatus: ${nuevoEstatus}`,
+                    type: 'success'
+                });
+            }
+        } catch (error) {
+            console.error("Error al actualizar estatus de la agenda", error);
+            setAlertModal({
+                isOpen: true,
+                title: 'Error de Sincronización',
+                message: 'No se pudo actualizar el estatus de la agenda en el servidor.',
+                type: 'danger'
+            });
         }
     };
 
     return (
         <AgendaContext.Provider value={{
-            currentAgenda,
-            updateVisit,
-            updateKpi,
-            updateKpiReal,
-            registerCheckIn,
-            addUnplannedVisit,
-            scheduleFollowUp,
-            scheduledFollowUps,
-            addRow,
-            removeRow,
-            sendForAuthorization,
-            resetAgenda,
-            getVisibleSegments,
-            updateAgendaStatus,
-            mockDatabase: directorio,
-            loadingDirectorio,
-            loadingAgenda,
-            kpiConfig,
-            loadingKpiConfig
+            currentAgenda, updateVisit, updateKpi, updateKpiReal, registerCheckIn, addUnplannedVisit,
+            scheduleFollowUp, scheduledFollowUps, addRow, removeRow, sendForAuthorization, resetAgenda,
+            getVisibleSegments, updateAgendaStatus, mockDatabase: directorio, loadingDirectorio,
+            loadingAgenda, kpiConfig, loadingKpiConfig
         }}>
             {children}
+            
+            <UIModal
+                isOpen={alertModal.isOpen}
+                onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+                title={alertModal.title}
+                message={alertModal.message}
+                type={alertModal.type}
+            />
         </AgendaContext.Provider>
     );
 };

@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useRole } from '../../context/RoleContext';
-import api from '../../api/axiosConfig'; // <-- Importamos tu cliente real de Axios
+import api from '../../api/axiosConfig'; 
 import {
     CheckCircle2, Clock, AlertTriangle, ChevronRight, ChevronDown,
     User, Building2, MapPin, FileText, X, Send, RotateCcw,
     Users, TrendingUp, Briefcase, Eye, ArrowLeft, Shield, Layers, Loader2
 } from 'lucide-react';
+import UIModal from '../../components/UIModal'; // <-- 1. Importamos el UIModal
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS RESCATADOS DEL MOCK
+// ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS RESCATADOS DEL MOCK
 // ─────────────────────────────────────────────────────────────────────────────
@@ -15,8 +19,9 @@ const STATUS_STYLES = {
     pendiente: { label: 'Pendiente', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-400' },
     aprobada: { label: 'Autorizada', bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' },
     requiere_modificacion: { label: 'Req. Modificación', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
+    ejecutada: { label: 'Ejecutada', bg: 'bg-indigo-50', text: 'text-indigo-600', dot: 'bg-indigo-500' },
+    completada: { label: 'Completada', bg: 'bg-purple-50', text: 'text-purple-600', dot: 'bg-purple-500' }
 };
-
 const formatCurrency = (v) => {
     if (!v) return '$0.00';
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(v));
@@ -150,8 +155,12 @@ const SegmentReadOnly = ({ title, visits }) => {
         'Evaluación e Integración': { bg: 'bg-violet-500', light: 'bg-violet-50', border: 'border-violet-100', text: 'text-violet-700' },
         'Seguimiento de Cartera': { bg: 'bg-amber-500', light: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-700' },
         'Gestión de Empresarias': { bg: 'bg-emerald-500', light: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-700' },
+        // NUEVO: Colores para imprevistos y fallback de seguridad
+        'Visita No Planeada': { bg: 'bg-rose-500', light: 'bg-rose-50', border: 'border-rose-100', text: 'text-rose-700' }
     };
-    const c = SEGMENT_COLORS[title] || SEGMENT_COLORS['Promoción'];
+    
+    // Si llega un segmento desconocido, usa gris por defecto
+    const c = SEGMENT_COLORS[title] || { bg: 'bg-slate-500', light: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700' };
 
     return (
         <div className={`rounded-2xl border ${c.border} overflow-hidden mb-3`}>
@@ -172,7 +181,7 @@ const SegmentReadOnly = ({ title, visits }) => {
                         <div key={v.id} className="px-5 py-3 bg-white hover:bg-slate-50/50 grid grid-cols-12 gap-3 items-start text-[10px]">
                             <div className="col-span-1 font-mono-tech text-slate-400 pt-1">{idx + 1}</div>
                             <div className="col-span-2">
-                                <span className={`font-black uppercase px-2 py-1 rounded-lg ${c.light} ${c.text}`}>{v.time || '--:--'}</span>
+                                <span className={`font-black uppercase px-2 py-1 rounded-lg ${c.light} ${c.text}`}>{v.time || 'IMPREVISTO'}</span>
                             </div>
                             <div className="col-span-4">
                                 <p className="font-black text-primary uppercase text-[11px] leading-tight">{v.name || '—'}</p>
@@ -192,8 +201,12 @@ const SegmentReadOnly = ({ title, visits }) => {
                                     </div>
                                 )}
                                 {v.typeManagement && <p className="text-slate-500 font-bold">{v.typeManagement}</p>}
-                                {v.fechaIngreso && <p className="text-slate-400 font-bold">Ingreso: {v.fechaIngreso}</p>}
-                            </div>
+                                {v.managementResult && (
+                                    <p className="text-slate-600 font-bold bg-slate-100 border border-slate-200 p-1.5 rounded mt-1 inline-block">
+                                        {v.managementResult.split(' | ')[0]}
+                                    </p>
+                                )}
+                                </div>
                         </div>
                     ))}
                 </div>
@@ -208,7 +221,27 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
     const [localNota, setLocalNota] = useState(agenda.notaJefe || '');
     const [isProcessing, setIsProcessing] = useState(false);
 
-    const segmentOrder = ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera', 'Gestión de Empresarias'];
+    // NUEVO 1: Diccionario para traducir llaves técnicas a etiquetas elegantes
+    const KPI_LABELS = {
+        captNueva: 'Captación Nueva',
+        captReinversion: 'Captación Reinv.',
+        rec0: 'Recup. 0 días',
+        rec1_7: 'Recup. 1-7 días',
+        rec8_30: 'Recup. 8-30 días',
+        rec31_60: 'Recup. 31-60 días',
+        recMas61: 'Recup. +61 días',
+        colocInicial: 'Colocación Inic.',
+        colocRedisposicion: 'Coloc. Redisp.',
+        dispersion: 'Dispersión',
+        cobranzaTotalDia: 'Cobranza Total',
+        visitasRealizadas: 'Visitas Reales',
+        promesasDia: 'Promesas'
+    };
+
+    // NUEVO 2: Lógica dinámica de segmentos (atrapa "Visitas No Planeadas")
+    const baseSegments = ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera', 'Gestión de Empresarias'];
+    const extraSegments = Object.keys(agenda.segments || {}).filter(seg => !baseSegments.includes(seg));
+    const allSegments = [...baseSegments, ...extraSegments];
 
     const handleApprove = async () => {
         setIsProcessing(true);
@@ -266,7 +299,7 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
                     { label: 'Promociones', val: agenda.segments['Promoción']?.length || 0, color: 'text-blue-600', bg: 'bg-blue-50' },
                     { label: 'Evaluaciones', val: agenda.segments['Evaluación e Integración']?.length || 0, color: 'text-violet-600', bg: 'bg-violet-50' },
                     { label: 'Seguimiento', val: agenda.segments['Seguimiento de Cartera']?.length || 0, color: 'text-amber-600', bg: 'bg-amber-50' },
-                    { label: 'Empresarias', val: agenda.segments['Gestión de Empresarias']?.length || 0, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                    { label: 'Imprevistos', val: agenda.segments['Visita No Planeada']?.length || 0, color: 'text-rose-600', bg: 'bg-rose-50' },
                 ].map(s => (
                     <div key={s.label} className={`${s.bg} rounded-2xl p-4 text-center`}>
                         <p className={`text-3xl font-black ${s.color}`}>{s.val}</p>
@@ -275,6 +308,7 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
                 ))}
             </div>
 
+           
             {/* Nota de modificación anterior */}
             {(localStatus === 'requiere_modificacion' && localNota) && (
                 <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-5 flex gap-3">
@@ -286,8 +320,8 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
                 </div>
             )}
 
-            {/* Segmentos */}
-            {segmentOrder.map(seg => (
+            {/* NUEVO 3: Iteramos sobre los segmentos dinámicos */}
+            {allSegments.map(seg => (
                 <SegmentReadOnly key={seg} title={seg} visits={agenda.segments[seg] || []} />
             ))}
 
@@ -317,6 +351,36 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
                     <p className="text-[11px] font-black text-emerald-700 uppercase tracking-widest">Agenda autorizada por ti</p>
                 </div>
             )}
+
+             {/* Panel de Compromisos KPI con formato */}
+            {agenda.kpiCompromisos && Object.keys(agenda.kpiCompromisos).length > 0 && (
+                <div className="mb-6 bg-slate-900 rounded-3xl p-6 text-white shadow-lg mgt-8">
+                    <div className="flex items-center gap-2 mb-4">
+                        <div className="w-1.5 h-4 bg-yellow-400 rounded-full" />
+                        <h4 className="text-[12px] font-black uppercase tracking-[0.2em]">Compromisos KPI Solicitados</h4>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {Object.entries(agenda.kpiCompromisos).map(([key, value]) => {
+                            const valNum = Number(value);
+                            
+                            const formattedValue = new Intl.NumberFormat('es-MX', { 
+                                style: 'currency', 
+                                currency: 'MXN' 
+                            }).format(valNum);
+                            
+                            return (
+                                <div key={key} className="bg-white/10 border border-white/5 rounded-2xl p-4 hover:bg-white/20 transition-colors">                                    
+                                    <p className="text-md font-black text-white">{formattedValue}</p>
+                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                                        {KPI_LABELS[key] || key}
+                                    </p>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 };
@@ -566,6 +630,7 @@ const KpiBar = ({ counts, title, subtitle, icon: Icon }) => (
         </div>
     </div>
 );
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VISTA GERENTE (Nivel 1 Comercial / Nivel 1 Cobranza)
@@ -966,9 +1031,15 @@ const PlaneacionJefe = () => {
 
     const [loading, setLoading] = useState(true);
     const [agendas, setAgendas] = useState([]);
-    // 🚀 ESTE ES EL ESTADO QUE FALTABA PARA EL DETALLE
-    const [agendaSeleccionada, setAgendaSeleccionada] = useState(null); 
     const [jerarquia, setJerarquia] = useState({ coordinadores: [], ejecutivos: [] });
+
+    // <-- 2. NUEVO: ESTADO GLOBAL PARA EL MODAL DE ALERTAS -->
+    const [alertModal, setAlertModal] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
 
     const counts = contarEstados(agendas);
 
@@ -999,67 +1070,142 @@ const PlaneacionJefe = () => {
 
     const handleApproveAgenda = async (idPlan) => {
         try {
-            await api.put(`/agenda/plan/autorizar`, { idPlan, estatus: 'aprobada' });
-            setAgendas(prev => prev.map(ag => ag.id === idPlan ? { ...ag, status: 'aprobada' } : ag));
-            // Si estamos en el detalle, cerramos o actualizamos
-            setAgendaSeleccionada(null); 
+            const response = await api.put(`/agenda/plan/${idPlan}/estatus`, { 
+                estatus: 'aprobada', 
+                nota: 'Agenda autorizada por el jefe' 
+            });
+
+            if (response.data.codigo === 'OK') {
+                setAgendas(prev => prev.map(ag => ag.id === idPlan ? { ...ag, status: 'aprobada' } : ag));
+           
+                // <-- 3. SUSTITUIMOS EL ALERT NATIVO (Éxito) -->
+                setAlertModal({
+                    isOpen: true,
+                    title: 'Autorización Exitosa',
+                    message: 'Agenda autorizada con éxito.',
+                    type: 'success'
+                });
+            }
         } catch (error) {
-            alert("No se pudo autorizar");
+            console.error("Error al autorizar", error);
+            // <-- 3. SUSTITUIMOS EL ALERT NATIVO (Error) -->
+            setAlertModal({
+                isOpen: true,
+                title: 'Error de Autorización',
+                message: 'No se pudo autorizar la agenda.',
+                type: 'danger'
+            });
         }
     };
 
     const handleModAgenda = async (idPlan, nota) => {
         try {
-            await api.put(`/agenda/plan/autorizar`, { idPlan, estatus: 'requiere_modificacion', observaciones: nota });
-            setAgendas(prev => prev.map(ag => ag.id === idPlan ? { ...ag, status: 'requiere_modificacion', notaJefe: nota } : ag));
-            setAgendaSeleccionada(null);
+            await api.put(`/agenda/plan/${idPlan}/estatus`, { 
+                estatus: 'requiere_modificacion', 
+                nota: nota 
+            });
+
+            setAgendas(prev => prev.map(ag => 
+                ag.id === idPlan 
+                    ? { ...ag, status: 'requiere_modificacion', notaJefe: nota } 
+                    : ag
+            ));
+            
+            // <-- 3. SUSTITUIMOS EL ALERT NATIVO (Éxito) -->
+            setAlertModal({
+                isOpen: true,
+                title: 'Modificación Solicitada',
+                message: 'Se ha solicitado la modificación al asesor.',
+                type: 'success'
+            });
+
         } catch (error) {
-            alert("No se pudo procesar");
+            console.error("Error al solicitar modificación:", error);
+            // <-- 3. SUSTITUIMOS EL ALERT NATIVO (Error) -->
+            setAlertModal({
+                isOpen: true,
+                title: 'Error de Solicitud',
+                message: 'No se pudo procesar la solicitud.',
+                type: 'danger'
+            });
         }
     };
 
     const WRAP = ({ children }) => (
-        <div className="max-w-[1400px] mx-auto pb-20 px-4 md:px-8 pt-6">{children}</div>
+        <div className="max-w-[1400px] mx-auto pb-20 px-4 md:px-8 pt-6">
+            {children}
+            {/* <-- 4. INYECTAMOS EL COMPONENTE UIModal --> */}
+            <UIModal
+                isOpen={alertModal.isOpen}
+                onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+                title={alertModal.title}
+                message={alertModal.message}
+                type={alertModal.type}
+            />
+        </div>
     );
 
     if (loading) return <div className="flex flex-col items-center justify-center py-32"><Loader2 className="animate-spin text-blue-500" /></div>;
 
-    // ── LÓGICA DE RENDERIZADO CON NAVEGACIÓN ──
-    
-    // 1. SI HAY UNA AGENDA SELECCIONADA, MOSTRAMOS EL DETALLE
-    if (agendaSeleccionada) {
-        return (
-            <WRAP>
-                <AgendaDetalle
-                    agenda={agendaSeleccionada}
-                    onBack={() => setAgendaSeleccionada(null)}
-                    onApprove={handleApproveAgenda}
-                    onRequestMod={handleModAgenda}
-                />
-            </WRAP>
-        );
-    }
+    const renderVistaJerarquica = () => {
+        // 1. Agrupamos las agendas usando tu helper
+        const zonasData = agruparPorZona(agendas);
+        const zonasNombres = Object.keys(zonasData);
+        
+        // 2. Inferimos el nivel. Si tu Context tiene selectedRole.nivel úsalo, 
+        // si no, lo detectamos por el nombre del rol.
+        const nivel = selectedRole?.nivel || 
+                     (roleName?.toUpperCase().includes('N2') || roleName?.toLowerCase().includes('zona') || roleName?.toLowerCase().includes('subdirector') ? 2 : 1);
 
-    // 2. SI NO, MOSTRAMOS EL LISTADO (DASHBOARD)
+        // NIVEL 3: Director (Vista Nacional)
+        if (nivel === 3 || roleName?.toUpperCase().includes('N3')) {
+            return (
+                <VistaDirector 
+                    zonasData={zonasData} 
+                    rolName={roleName} 
+                    canal={canal} 
+                    onApproveAgenda={handleApproveAgenda} 
+                    onModAgenda={handleModAgenda} 
+                />
+            );
+        }
+
+        // NIVEL 2: Subdirector / Gerente de Zona
+        if (nivel === 2) {
+            const miZona = zonasNombres[0] || 'Mi Zona';
+            const sucursalesDeMiZona = zonasData[miZona] || {};
+            return (
+                <VistaSubdirector 
+                    zona={miZona} 
+                    sucursalesData={sucursalesDeMiZona} 
+                    rolName={roleName} 
+                    canal={canal} 
+                    onApproveAgenda={handleApproveAgenda} 
+                    onModAgenda={handleModAgenda} 
+                />
+            );
+        }
+
+        // NIVEL 1: Gerente de Sucursal (Por defecto)
+        const miZona = zonasNombres[0] || 'Mi Zona';
+        const miSucursal = zonasData[miZona] ? Object.keys(zonasData[miZona])[0] : 'Mi Sucursal';
+        
+        return (
+            <VistaGerente 
+                agendas={agendas} 
+                sucursal={miSucursal} 
+                zona={miZona} 
+                rolName={roleName} 
+                canal={canal} 
+                onApproveAgenda={handleApproveAgenda} 
+                onModAgenda={handleModAgenda} 
+            />
+        );
+    };
+
     return (
         <WRAP>
-            <KpiBar 
-                counts={counts} 
-                title={`Panel de Supervisión`} 
-                subtitle={`${roleName} · ${agendas.length} Agendas Hoy`} 
-                icon={Shield} 
-            />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {agendas.map(ag => (
-                    <AgendaCard 
-                        key={ag.id} 
-                        agenda={ag} 
-                        onSelect={(item) => setAgendaSeleccionada(item)} // 🚀 AHORA SÍ PASAMOS LA AGENDA
-                        onApprove={handleApproveAgenda} 
-                        onRequestMod={handleModAgenda} 
-                    />
-                ))}
-            </div>
+            {renderVistaJerarquica()}
         </WRAP>
     );
 };

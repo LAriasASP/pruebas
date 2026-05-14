@@ -12,6 +12,8 @@ const STATUS_STYLES = {
     pendiente: { label: 'Pendiente', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-400' },
     aprobada: { label: 'Autorizada', bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' },
     requiere_modificacion: { label: 'Req. Modificación', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
+    ejecutada: { label: 'Ejecutada', bg: 'bg-indigo-50', text: 'text-indigo-600', dot: 'bg-indigo-500' },
+    completada: { label: 'Completada', bg: 'bg-purple-50', text: 'text-purple-600', dot: 'bg-purple-500' }
 };
 
 const agruparPorZona = (agendas) => {
@@ -23,28 +25,28 @@ const agruparPorZona = (agendas) => {
     }, {});
 };
 
-// ── Mock CheckIn Generator (Visual) ──────────────────────────────────────────
-const MOCK_RESULTADOS = [
-    'Abono/ Pago Parcial', 'Compromiso de pago', 'Promesa de pago',
-    'Negativa de pago', 'Sin contacto', 'Ilocalizable', 'Convenio',
-];
-function simCheckIns(agenda) {
-    if (agenda.status !== 'aprobada') return {};
-    const allVisits = Object.values(agenda.segments || {}).flat().filter(v => v.name && v.time);
-    const sorted = [...allVisits].sort((a, b) => a.time.localeCompare(b.time));
-    const doneCount = Math.floor(sorted.length * 0.65);
+// ── Lector de Check-Ins Reales de la Base de Datos ──────────────────────────
+function getRealCheckIns(agenda) {
     const result = {};
-    sorted.slice(0, doneCount).forEach((visit, idx) => {
-        const rIdx = (String(visit.id).charCodeAt(0) + idx) % MOCK_RESULTADOS.length;
-        const [h, m] = visit.time.split(':').map(Number);
-        const checkH = Math.min(h + Math.floor(idx * 0.2), 20);
-        const checkM = (m + 8 + idx * 3) % 60;
-        result[visit.id] = {
-            checkInTime: `${String(checkH).padStart(2, '0')}:${String(checkM).padStart(2, '0')}`,
-            resultado: MOCK_RESULTADOS[rIdx],
-            lat: `29.0${idx + 1}`, lng: `-110.9${idx + 1}`,
-            gpsStatus: 'ok',
-        };
+    const validStatuses = ['aprobada', 'ejecutada', 'completada'];
+    if (!validStatuses.includes(agenda.status?.toLowerCase())) return {};
+    
+    // Extraemos todas las visitas de todos los segmentos
+    const allVisits = Object.values(agenda.segments || {}).flat().filter(v => v.name);
+    
+    allVisits.forEach(v => {
+        // Validamos si la BD dice que ya se gestionó
+        const isDone = v.statusAction === 'FINALIZADA' || v.statusAction === 'NO REALIZADA' || v.estado === 'FINALIZADA';
+        
+        if (isDone) {
+            const resultText = v.managementResult || v.resultado || 'Gestionada';
+            result[v.id] = {
+                checkInTime: v.time || '--:--', 
+                resultado: resultText.split(' | ')[0], // Extraemos solo la acción principal (ej. "Compromiso de pago")
+                resultadoCompleto: resultText,
+                gpsStatus: resultText.includes('GPS') ? 'ok' : 'idle'
+            };
+        }
     });
     return result;
 }
@@ -75,14 +77,19 @@ const ProgressBar = ({ done, total, color = 'blue' }) => {
 
 // ── Operative Progress Card ──────────────────────────────────────────────────
 const OperativeCard = ({ agenda, onClick }) => {
-    const mockCIs = useMemo(() => simCheckIns(agenda), [agenda.id, agenda.status, agenda.segments]);
+    // Usamos nuestra nueva función real
+    const realCIs = useMemo(() => getRealCheckIns(agenda), [agenda.id, agenda.status, agenda.segments]);
     const allVisits = Object.values(agenda.segments || {}).flat().filter(v => v.name);
-    const done = Object.keys(mockCIs).length;
+    
+    const done = Object.keys(realCIs).length;
     const total = allVisits.length;
-    const lastCI = Object.values(mockCIs).sort((a, b) => b.checkInTime?.localeCompare(a.checkInTime))[0];
+    
+    // Obtenemos el último Check-In real registrado
+    const lastCI = Object.values(realCIs).sort((a, b) => b.checkInTime?.localeCompare(a.checkInTime))[0];
 
     const nowStr = (() => { const n = new Date(); return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`; })();
-    const overdue = allVisits.filter(v => v.time && v.time < nowStr && !mockCIs[v.id]).length;
+    // Contamos retrasos solo en las que NO tienen Check-In real
+    const overdue = allVisits.filter(v => v.time && v.time < nowStr && !realCIs[v.id]).length;
 
     return (
         <div onClick={onClick}
@@ -108,11 +115,11 @@ const OperativeCard = ({ agenda, onClick }) => {
 
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
                 <div className="flex items-center gap-3 text-[9px] text-slate-400 font-bold">
-                    <span className="flex items-center gap-1"><CheckCircle2 size={10} className="text-emerald-500" /> {done}/{total} visitas</span>
+                    <span className="flex items-center gap-1"><CheckCircle2 size={10} className={done === total && total > 0 ? "text-emerald-500" : "text-slate-400"} /> {done}/{total} visitas</span>
                 </div>
                 {lastCI ? (
                     <span className="flex items-center gap-1 text-[9px] text-slate-400">
-                        <Clock size={9} /> Últ: {lastCI.checkInTime} · {lastCI.resultado?.split(' ').slice(0, 2).join(' ')}
+                        <Clock size={9} /> Últ: {lastCI.checkInTime} · {lastCI.resultado}
                     </span>
                 ) : (
                     <span className="text-[9px] text-slate-300 font-bold uppercase">Sin gestiones</span>
@@ -122,13 +129,14 @@ const OperativeCard = ({ agenda, onClick }) => {
     );
 };
 
-// ── Agenda Execution Detail ───────────────────────────────────────────────────
 const AgendaExecDetail = ({ agenda, onBack }) => {
-    const mockCIs = useMemo(() => simCheckIns(agenda), [agenda.id, agenda.status, agenda.segments]);
+    const realCIs = useMemo(() => getRealCheckIns(agenda), [agenda.id, agenda.status, agenda.segments]);
     const nowStr = (() => { const n = new Date(); return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`; })();
+    
+    // Lectura dinámica incluyendo imprevistos
     const allVisits = Object.entries(agenda.segments || {})
-        .flatMap(([seg, visits]) => visits.filter(v => v.name && v.time).map(v => ({ ...v, _seg: seg })))
-        .sort((a, b) => a.time.localeCompare(b.time));
+        .flatMap(([seg, visits]) => (visits || []).filter(v => v.name).map(v => ({ ...v, _seg: seg })))
+        .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
 
     const RESULTADO_BADGE = {
         'Abono/ Pago Parcial': 'bg-emerald-100 text-emerald-700', 'Compromiso de pago': 'bg-blue-100 text-blue-700',
@@ -181,16 +189,16 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
                     </div>
                     <div className="text-right">
                         <p className="text-[8px] text-slate-400 uppercase tracking-widest font-black">Completadas</p>
-                        <p className="text-2xl font-black text-primary">{Object.keys(mockCIs).length}<span className="text-sm text-accent">/{allVisits.length}</span></p>
+                        <p className="text-2xl font-black text-primary">{Object.keys(realCIs).length}<span className="text-sm text-accent">/{allVisits.length}</span></p>
                     </div>
                 </div>
-                <div className="mt-4"><ProgressBar done={Object.keys(mockCIs).length} total={allVisits.length} /></div>
+                <div className="mt-4"><ProgressBar done={Object.keys(realCIs).length} total={allVisits.length} /></div>
             </div>
 
             <div className="space-y-2">
                 {allVisits.map(v => {
-                    const ci = mockCIs[v.id];
-                    const isOverdue = !ci && v.time < nowStr;
+                    const ci = realCIs[v.id];
+                    const isOverdue = !ci && v.time && v.time < nowStr;
                     return (
                         <div key={v.id} className={`bg-white rounded-xl border p-4 flex items-center gap-4 transition-colors
                             ${ci ? 'border-emerald-100' : isOverdue ? 'border-amber-200 bg-amber-50/30' : 'border-slate-100'}`}>
@@ -202,7 +210,7 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-[9px] font-mono-tech text-accent">{v.time}</span>
+                                    <span className="text-[9px] font-mono-tech text-accent">{v.time || 'Imprevisto'}</span>
                                     {isOverdue && !ci && <span className="text-[8px] bg-amber-200 text-amber-700 font-black px-1.5 rounded uppercase">Retraso</span>}
                                 </div>
                                 <p className="font-black text-[12px] text-primary uppercase truncate">{v.name}</p>
@@ -221,7 +229,7 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
                 })}
             </div>
 
-            {kpiFields.length > 0 && Object.keys(compromisos).length > 0 && (
+           {agenda.kpiCompromisos && Object.keys(agenda.kpiCompromisos).length > 0 && (
                 <div className="mt-6">
                     <div className="flex items-center gap-2 mb-3">
                         <div className="w-1 h-5 bg-yellow-400 rounded-full" />
@@ -231,24 +239,37 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
                     </div>
                     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                         <div className="divide-y divide-slate-50">
-                            {kpiFields.map(({ key, label }, idx) => {
-                                const comp = compromisos[key];
-                                if (!comp) return null;
-                                const realVal = simReal(comp, idx + 1);
-                                const pct = Math.round((realVal / Number(comp)) * 100);
+                            {Object.entries(agenda.kpiCompromisos).map(([key, compValue]) => {
+                                const comp = Number(compValue);
+                                const realVal = Number(agenda.kpiReal?.[key] || 0);
+                                const pct = comp > 0 ? Math.round((realVal / comp) * 100) : 0;
+                                
+                                const kpiBullet = pct >= 90 ? '🟢' : pct >= 70 ? '🟡' : '🔴';
+                                const kpiClr = pct >= 90 ? 'text-emerald-600 bg-emerald-50' : pct >= 70 ? 'text-amber-600 bg-amber-50' : 'text-red-500 bg-red-50';
+                                
+                                const KPI_LABELS = {
+                                    captNueva: 'Captación Nueva', captReinversion: 'Captación Reinv.', rec0: 'Recup. 0 días', rec1_7: 'Recup. 1-7 días', rec8_30: 'Recup. 8-30 días', rec31_60: 'Recup. 31-60 días', recMas61: 'Recup. +61 días', colocInicial: 'Colocación Inic.', colocRedisposicion: 'Coloc. Redisp.', dispersion: 'Dispersión', cobranzaTotalDia: 'Cobranza Total', visitasRealizadas: 'Visitas Reales', promesasDia: 'Promesas'
+                                };
+                                const formatCurrency = (v) => {
+                                    return new Intl.NumberFormat('es-MX', { 
+                                        style: 'currency', 
+                                        currency: 'MXN' 
+                                    }).format(Number(v));
+                                };
+
                                 return (
                                     <div key={key} className="px-4 py-3 flex items-center gap-3">
-                                        <span className="text-[12px] flex-shrink-0">{kpiBullet(pct)}</span>
+                                        <span className="text-[12px] flex-shrink-0">{kpiBullet}</span>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider">{label}</p>
-                                            <p className="text-[8px] text-slate-400 mt-0.5">Comp: <span className="font-black text-slate-600">{fmtN(comp)}</span></p>
+                                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider">{KPI_LABELS[key] || key}</p>
+                                            <p className="text-[8px] text-slate-400 mt-0.5">Meta: <span className="font-black text-slate-600">{formatCurrency(comp)}</span></p>
                                         </div>
                                         <div className="flex items-center gap-2 flex-shrink-0">
                                             <div className="text-right">
                                                 <p className="text-[8px] text-slate-400 uppercase tracking-widest mb-0.5">Real</p>
-                                                <p className="text-[11px] font-black text-primary">{fmtN(realVal)}</p>
+                                                <p className="text-[11px] font-black text-primary">{formatCurrency(realVal)}</p>
                                             </div>
-                                            <div className={`text-[9px] font-black px-2 py-1 rounded-lg ${kpiClr(pct)}`}>{pct}%</div>
+                                            <div className={`text-[9px] font-black px-2 py-1 rounded-lg ${kpiClr}`}>{pct}%</div>
                                         </div>
                                     </div>
                                 );
@@ -263,17 +284,19 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
 
 // ── KPI Summary Bar ───────────────────────────────────────────────────────────
 const KpiBar = ({ agendas }) => {
-    const total = agendas.length;
-    const conCheckIns = agendas.filter(ag => ag.status === 'aprobada').length;
+    const validStatuses = ['aprobada', 'ejecutada', 'completada'];
+    const conCheckIns = agendas.filter(ag => validStatuses.includes(ag.status?.toLowerCase())).length;
     const allVisits = agendas.flatMap(ag => Object.values(ag.segments || {}).flat().filter(v => v.name));
-    const mockDone = agendas.filter(ag => ag.status === 'aprobada')
-        .reduce((acc, ag) => acc + Math.floor(Object.values(ag.segments || {}).flat().filter(v => v.name).length * 0.65), 0);
+    
+    // Calculamos las terminadas reales
+    const realDone = agendas.filter(ag => validStatuses.includes(ag.status?.toLowerCase()))
+        .reduce((acc, ag) => acc + Object.keys(getRealCheckIns(ag)).length, 0);
 
     const stats = [
         { label: 'Operativos en Ruta', value: conCheckIns, Icon: Users, color: 'text-emerald-600' },
         { label: 'Gestiones Totales', value: allVisits.length, Icon: Activity, color: 'text-blue-600' },
-        { label: 'Gestiones Realizadas', value: mockDone, Icon: CheckCircle2, color: 'text-indigo-600' },
-        { label: '% Avance Global', value: `${allVisits.length > 0 ? Math.round(mockDone / allVisits.length * 100) : 0}%`, Icon: TrendingUp, color: 'text-violet-600' },
+        { label: 'Gestiones Realizadas', value: realDone, Icon: CheckCircle2, color: 'text-indigo-600' },
+        { label: '% Avance Global', value: `${allVisits.length > 0 ? Math.round((realDone / allVisits.length) * 100) : 0}%`, Icon: TrendingUp, color: 'text-violet-600' },
     ];
     return (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
@@ -288,13 +311,101 @@ const KpiBar = ({ agendas }) => {
     );
 };
 
+// ── Nuevo Componente: Resumen Global de KPIs ─────────────────────────────
+const KpiGlobalSummary = ({ agendas }) => {
+    const validStatuses = ['aprobada', 'ejecutada', 'completada'];
+    const validAgendas = agendas.filter(ag => validStatuses.includes(ag.status?.toLowerCase()));
+
+    // Agrupamos y sumamos todos los compromisos y reales de los operativos
+    const aggregated = {};
+    validAgendas.forEach(ag => {
+        const compromisos = ag.kpiCompromisos || {};
+        const reales = ag.kpiReal || {};
+
+        Object.keys(compromisos).forEach(key => {
+            if (!aggregated[key]) {
+                aggregated[key] = { comp: 0, real: 0 };
+            }
+            aggregated[key].comp += Number(compromisos[key]) || 0;
+            aggregated[key].real += Number(reales[key]) || 0;
+        });
+    });
+
+    const keys = Object.keys(aggregated);
+    if (keys.length === 0) return null; // Si no hay KPIs en ruta, no pintamos nada
+
+    const KPI_LABELS = {
+        captNueva: 'Captación Nueva',
+        captReinversion: 'Captación Reinv.',
+        rec0: 'Recup. 0 días',
+        rec1_7: 'Recup. 1-7 días',
+        rec8_30: 'Recup. 8-30 días',
+        rec31_60: 'Recup. 31-60 días',
+        recMas61: 'Recup. +61 días',
+        colocInicial: 'Colocación Inic.',
+        colocRedisposicion: 'Coloc. Redisp.',
+        dispersion: 'Dispersión',
+        cobranzaTotalDia: 'Cobranza Total',
+        visitasRealizadas: 'Visitas Reales',
+        promesasDia: 'Promesas'
+    };
+
+   const formatCurrency = (valNum) => {
+        return new Intl.NumberFormat('es-MX', { 
+            style: 'currency', 
+            currency: 'MXN' 
+        }).format(Number(valNum));
+    };
+
+    return (
+        <div className="bg-slate-900 rounded-3xl p-6 mb-8 shadow-xl mt-10">
+            <div className="flex items-center gap-2 mb-6">
+                <div className="w-1.5 h-5 bg-blue-500 rounded-full" />
+                <h3 className="text-[13px] font-black uppercase tracking-[0.2em] text-white">Avance Global de KPIs</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {keys.map(key => {
+                    const { comp, real } = aggregated[key];
+                    const pct = comp > 0 ? Math.round((real / comp) * 100) : 0;
+                    
+                    // Lógica de colores estilo semáforo
+                    const pctColor = pct >= 90 ? 'text-emerald-400' : pct >= 70 ? 'text-amber-400' : 'text-rose-400';
+                    const barColor = pct >= 90 ? 'bg-emerald-500' : pct >= 70 ? 'bg-amber-500' : 'bg-rose-500';
+
+                    return (
+                        <div key={key} className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                            <div className="flex justify-between items-start mb-2">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{KPI_LABELS[key] || key}</p>
+                                <span className={`text-[11px] font-black ${pctColor}`}>{pct}%</span>
+                            </div>
+                            <div className="flex justify-between items-end">
+                                <div>
+                                    <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-0.5">Real</p>
+                                    <p className="text-lg font-black text-white">{formatCurrency(real)}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-0.5">Meta</p>
+                                    <p className="text-sm font-bold text-slate-400">{formatCurrency(comp)}</p>
+                                </div>
+                            </div>
+                            <div className="w-full bg-white/10 h-1.5 rounded-full mt-3 overflow-hidden">
+                                <div className={`h-full rounded-full ${barColor} transition-all duration-1000`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
 // ── Supervisor Views ──────────────────────────────────────────────────────────
 const VistaGerente = ({ agendas }) => {
     const [detail, setDetail] = useState(null);
     if (detail) return <AgendaExecDetail agenda={detail} onBack={() => setDetail(null)} />;
     return (
         <div>
-            <KpiBar agendas={agendas} />
+            <KpiBar agendas={agendas} />           
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {agendas.map(ag => <OperativeCard key={ag.id} agenda={ag} onClick={() => setDetail(ag)} />)}
             </div>
@@ -321,26 +432,48 @@ const VistaSucursal = ({ sucursal, agendas, onBack }) => {
 
 const VistaZona = ({ zonaData, rolName }) => {
     const [selected, setSelected] = useState(null);
+    
     if (selected) return <VistaSucursal sucursal={selected.suc} agendas={selected.agendas} onBack={() => setSelected(null)} />;
+    
     return (
         <div>
             <KpiBar agendas={Object.values(zonaData).flat()} />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            
+            {/* 1. Agregamos w-full para asegurar la estructura de la cuadrícula */}
+            <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
                 {Object.entries(zonaData).map(([suc, agendas]) => {
-                    const done = agendas.filter(ag => ag.status === 'aprobada').reduce((a, ag) => a + Math.floor(Object.values(ag.segments || {}).flat().filter(v => v.name).length * 0.65), 0);
+                    
+                    // 2. Usamos el cálculo real de check-ins en lugar de la fórmula hardcodeada
+                    const done = agendas.reduce((a, ag) => a + Object.keys(getRealCheckIns(ag) || {}).length, 0);
                     const total = agendas.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name).length, 0);
+                    
                     return (
-                        <div key={suc} onClick={() => setSelected({ suc, agendas })}
-                            className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:border-blue-200 cursor-pointer transition-all group">
-                            <div className="flex items-start justify-between mb-3">
-                                <div>
-                                    <Building2 size={14} className="text-slate-400 mb-1" />
-                                    <p className="font-black text-[14px] text-primary uppercase">{suc}</p>
-                                    <p className="text-[10px] text-accent">{agendas.length} operativo{agendas.length !== 1 ? 's' : ''}</p>
+                        <div 
+                            key={suc} 
+                            onClick={() => setSelected({ suc, agendas })}
+                            // 3. Estructura de bloque clásica (block w-full flex flex-col) para evitar colapsos
+                            className="block w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:shadow-md hover:border-blue-300 cursor-pointer transition-all group flex flex-col"
+                        >
+                            <div className="flex items-start justify-between mb-5 w-full">
+                                <div className="flex-1 min-w-0 pr-3">
+                                    <Building2 size={18} className="text-blue-500 mb-2" />
+                                    {/* 4. break-words asegura que baje de renglón si es muy largo */}
+                                    <h3 className="font-black text-[15px] text-primary uppercase leading-tight break-words">
+                                        {suc}
+                                    </h3>
+                                    <p className="text-xs font-bold text-slate-400 mt-1">
+                                        {agendas.length} operativo{agendas.length !== 1 ? 's' : ''}
+                                    </p>
                                 </div>
-                                <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-400 transition-colors" />
+                                <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-50 transition-colors">
+                                    <ChevronRight size={18} className="text-slate-400 group-hover:text-blue-600" />
+                                </div>
                             </div>
-                            <ProgressBar done={done} total={total} />
+                            
+                            {/* Pasamos los valores precisos a la barra de progreso */}
+                            <div className="w-full mt-auto">
+                                <ProgressBar done={done} total={total} />
+                            </div>
                         </div>
                     );
                 })}
@@ -348,6 +481,7 @@ const VistaZona = ({ zonaData, rolName }) => {
         </div>
     );
 };
+
 
 const VistaEjecutivo = ({ ejecutivo, agendas }) => {
     const [detail, setDetail] = useState(null);
@@ -360,7 +494,6 @@ const VistaEjecutivo = ({ ejecutivo, agendas }) => {
                 <p className="font-black text-lg text-primary uppercase">{ejecutivo.nombre}</p>
                 <p className="text-[10px] text-accent">{misAgendas.length} gestor{misAgendas.length !== 1 ? 'es' : ''} asignado{misAgendas.length !== 1 ? 's' : ''}</p>
             </div>
-            <KpiBar agendas={misAgendas} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {misAgendas.map(ag => <OperativeCard key={ag.id} agenda={ag} onClick={() => setDetail(ag)} />)}
             </div>
@@ -380,15 +513,12 @@ const EjecucionJefe = () => {
     const [selectedZona, setSelectedZona] = useState(null);
     const [selectedEj, setSelectedEj] = useState(null);
 
-    // Carga dinámica del Dashboard de Ejecución desde la API
+    // Carga de datos al inicio
     useEffect(() => {
         const fetchDashboardData = async () => {
             setLoading(true);
             try {
-                // TODO: Cuando la app esté en productivo, usa const hoy = new Date().toISOString().split('T')[0];
-                const hoy = '2026-02-24'; 
-
-                // 1. Cargar las agendas
+                const hoy = new Date().toISOString().split('T')[0];
                 const resAgendas = await api.get(`/agenda/equipo?fecha=${hoy}`);
                 const dataAgendas = resAgendas.data?.contenido || resAgendas.data || [];
 
@@ -402,7 +532,6 @@ const EjecucionJefe = () => {
                 
                 setAgendas(parsedAgendas);
 
-                // 2. Cargar jerarquía si es cobranza
                 if (canal === 'cobranza') {
                     const resJerarquia = await api.get('/agenda/jerarquia/cobranza');
                     const dataJerarquia = resJerarquia.data?.contenido || resJerarquia.data || { coordinadores: [], ejecutivos: [] };
@@ -418,6 +547,48 @@ const EjecucionJefe = () => {
         fetchDashboardData();
     }, [canal]);
 
+    // Conexión WebSockets
+    useEffect(() => {
+        const wsUrl = 'ws://localhost:8090/business-control-cobranza/api/v1/ws/dashboard';
+        let socket;
+
+        try {
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = () => {
+                console.log('🔌 Conectado al WebSocket Real del Dashboard');
+            };
+
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'AGENDA_UPDATE' && data.payload) {
+                        setAgendas(prevAgendas => 
+                            prevAgendas.map(ag => 
+                                ag.id === data.payload.idPlan ? data.payload : ag
+                            )
+                        );
+                    }
+                } catch (error) {
+                    console.error('Error parseando el mensaje WebSocket:', error);
+                }
+            };
+
+            socket.onerror = (error) => {
+                console.error('❌ Error en la conexión WebSocket:', error);
+            };
+
+        } catch (error) {
+            console.error("No se pudo establecer la conexión de WebSockets", error);
+        }
+
+        return () => {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.close();
+            }
+        };
+    }, []);
+
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center py-32 text-slate-400">
@@ -431,26 +602,26 @@ const EjecucionJefe = () => {
     if (canal === 'comercial') {
         const zonas = agruparPorZona(agendas);
 
-        if (nivel === 1) { // Gerente
-            // TODO: Ajustar a la sucursal del jefe logueado cuando el backend lo envíe
-            const myAgendas = agendas.filter(ag => ag.sucursal === 'HERMOSILLO');
+        if (nivel === 1) { 
+            const myAgendas = agendas; 
+            const miSucursal = myAgendas[0]?.sucursal || 'Mi Sucursal';
+
             return (
-                <div className="max-w-4xl mx-auto pb-20 pt-8 px-4 animate-in fade-in duration-500">
+                <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8 animate-in fade-in duration-500">
                     <header className="mb-8">
                         <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Supervisión de Ruta</h2>
-                        <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Operativos en campo · Sucursal Hermosillo</p>
+                        <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Operativos en campo · {miSucursal}</p>
                     </header>
                     <VistaGerente agendas={myAgendas} />
                 </div>
             );
         }
 
-        if (nivel === 2) { // Subdirector
-            // TODO: Ajustar a la zona del jefe logueado
+        if (nivel === 2) { 
             const myZonaName = Object.keys(zonas)[0] || 'ZONA I';
             const myZona = zonas[myZonaName]; 
             return (
-                <div className="max-w-5xl mx-auto pb-20 pt-8 px-4 animate-in fade-in duration-500">
+                <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8 animate-in fade-in duration-500">
                     <header className="mb-8">
                         <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Supervisión de Zona</h2>
                         <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">{myZonaName} · Ejecución en curso</p>
@@ -460,10 +631,9 @@ const EjecucionJefe = () => {
             );
         }
 
-        // Director
         if (selectedZona) {
             return (
-                <div className="max-w-5xl mx-auto pb-20 pt-8 px-4">
+                <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8">
                     <button onClick={() => setSelectedZona(null)} className="flex items-center gap-2 text-[10px] font-black text-accent hover:text-primary uppercase tracking-widest mb-6 transition-colors">
                         <ArrowLeft size={14} /> Todas las Zonas
                     </button>
@@ -474,31 +644,41 @@ const EjecucionJefe = () => {
         }
         
         return (
-            <div className="max-w-5xl mx-auto pb-20 pt-8 px-4 animate-in fade-in duration-500">
+            <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8 animate-in fade-in duration-500">
                 <header className="mb-8">
                     <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Supervisión Nacional</h2>
                     <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Ejecución en Ruta · Todas las Zonas</p>
                 </header>
                 <KpiBar agendas={agendas} />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {[
-                        { id: 'ZONA I', nombre: 'ZONA I' }, { id: 'ZONA II', nombre: 'ZONA II' },
-                        { id: 'ZONA III', nombre: 'ZONA III' }, { id: 'ZONA IV', nombre: 'ZONA IV' },
-                    ].map(z => {
-                        const zAgendas = agendas.filter(ag => ag.zona === z.id);
-                        const done = zAgendas.filter(ag => ag.status === 'aprobada').reduce((a, ag) => a + Math.floor(Object.values(ag.segments || {}).flat().filter(v => v.name).length * 0.65), 0);
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {Object.keys(zonas).map(zonaName => {
+                        const zAgendas = agendas.filter(ag => ag.zona === zonaName);
+                        const done = zAgendas.reduce((a, ag) => a + Object.keys(getRealCheckIns(ag) || {}).length, 0);
                         const total = zAgendas.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name).length, 0);
+                        
                         return (
-                            <div key={z.id} onClick={() => setSelectedZona(z)}
-                                className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:border-blue-200 cursor-pointer transition-all group">
-                                <div className="flex items-start justify-between mb-3">
-                                    <div>
-                                        <MapPin size={14} className="text-blue-400 mb-1" />
-                                        <p className="font-black text-[15px] text-primary">{z.nombre}</p>
-                                        <p className="text-[10px] text-accent">{zAgendas.length} operativos</p>
+                            <div 
+                                key={zonaName} 
+                                onClick={() => setSelectedZona({ id: zonaName, nombre: zonaName })}
+                                // Estructura de bloque clásica que garantiza el ancho correcto en CSS Grid
+                                className="block w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:shadow-md hover:border-blue-300 cursor-pointer transition-all group"
+                            >
+                                <div className="flex items-start justify-between mb-5">
+                                    <div className="pr-4">
+                                        <MapPin size={18} className="text-blue-500 mb-2" />
+                                        {/* break-words asegura que baje de renglón si es muy largo, sin colapsar la tarjeta */}
+                                        <h3 className="font-black text-lg text-primary uppercase leading-tight break-words">
+                                            {zonaName}
+                                        </h3>
+                                        <p className="text-xs font-bold text-slate-400 mt-1">
+                                            {zAgendas.length} operativos
+                                        </p>
                                     </div>
-                                    <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-400 transition-colors" />
+                                    <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-50 transition-colors">
+                                        <ChevronRight size={18} className="text-slate-400 group-hover:text-blue-600" />
+                                    </div>
                                 </div>
+                                
                                 <ProgressBar done={done} total={total} />
                             </div>
                         );
@@ -510,11 +690,10 @@ const EjecucionJefe = () => {
 
     // ── CANAL COBRANZA ─────────────────────────────────────────────
     if (canal === 'cobranza') {
-
-        if (nivel === 1) { // Ejecutivo
+        if (nivel === 1) { 
             const myEj = jerarquia.ejecutivos[0] || {}; 
             return (
-                <div className="max-w-4xl mx-auto pb-20 pt-8 px-4 animate-in fade-in duration-500">
+                <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8 animate-in fade-in duration-500">
                     <header className="mb-8">
                         <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Mis Gestores en Ruta</h2>
                         <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Región Ejecutivo · Ejecución en curso</p>
@@ -524,10 +703,9 @@ const EjecucionJefe = () => {
             );
         }
 
-        // N2/N3 — sees all ejecutivos
         if (selectedEj) {
             return (
-                <div className="max-w-4xl mx-auto pb-20 pt-8 px-4">
+                <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8">
                     <button onClick={() => setSelectedEj(null)} className="flex items-center gap-2 text-[10px] font-black text-accent hover:text-primary uppercase tracking-widest mb-6 transition-colors">
                         <ArrowLeft size={14} /> Todos los Ejecutivos
                     </button>
@@ -537,16 +715,16 @@ const EjecucionJefe = () => {
         }
         
         return (
-            <div className="max-w-4xl mx-auto pb-20 pt-8 px-4 animate-in fade-in duration-500">
+            <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8 animate-in fade-in duration-500">
                 <header className="mb-8">
                     <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Supervisión Cobranza</h2>
                     <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Ejecutivos en Campo · Ruta en Curso</p>
                 </header>
                 <KpiBar agendas={agendas} />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {jerarquia.ejecutivos.map(ej => {
                         const ejAg = agendas.filter(ag => ag.ejecutivoId === ej.id);
-                        const done = ejAg.filter(ag => ag.status === 'aprobada').reduce((a, ag) => a + Math.floor(Object.values(ag.segments || {}).flat().filter(v => v.name).length * 0.65), 0);
+                        const done = ejAg.reduce((a, ag) => a + Object.keys(getRealCheckIns(ag)).length, 0);
                         const total = ejAg.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name).length, 0);
                         return (
                             <div key={ej.id} onClick={() => setSelectedEj(ej)}

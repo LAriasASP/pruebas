@@ -3,10 +3,13 @@ import { useRole } from '../../context/RoleContext';
 import { useAgenda } from '../../context/AgendaContext';
 import { useCatalogs } from '../../context/CatalogContext';
 import api from '../../api/axiosConfig'; 
+import FormattedNumberInput from '../../components/FormattedNumberInput';
+import UIModal from '../../components/UIModal';
+import LoggerService from '../../services/LoggerService';
 import {
     MapPin, CheckCircle2, Clock, Camera, Plus, X, AlertCircle,
     Navigation, FileText, Loader2, Calendar, Image, Shield,
-    User, Building2, Activity, Users, TrendingUp, Target, ArrowLeft, DollarSign
+    User, Building2, Activity, Users, TrendingUp, Target, ArrowLeft, DollarSign, Lock
 } from 'lucide-react';
 
 // ── Diccionario Dinámico de Iconos ───────────────────────────────────────────
@@ -41,7 +44,8 @@ const useDynamicUI = () => {
                 ...palette[idx % palette.length] 
             };
         });
-        config['Imprevisto'] = { label: 'IMPREV', dot: 'bg-rose-500', badge: 'bg-rose-50 text-rose-700' };
+        config['Visita No Planeada'] = { label: 'IMPREV', dot: 'bg-rose-500', badge: 'bg-rose-50 text-rose-700' };
+        config['Imprevisto'] = { label: 'IMPREV', dot: 'bg-rose-500', badge: 'bg-rose-50 text-rose-700' }; // Por si acaso hay locales
         return config;
     }, [bloques]);
 
@@ -171,8 +175,8 @@ const BlockedScreen = ({ status }) => {
 };
 
 // ── Yes/No Toggle Button ─────────────────────────────────────────────────────
-const YesNo = ({ value, onChange }) => (
-    <div className="flex gap-2">
+const YesNo = ({ id, value, onChange }) => (
+    <div id={id} tabIndex="-1" className="flex gap-2 outline-none focus:ring-2 focus:ring-rose-400 rounded-2xl transition-all">
         {[{ label: 'SÍ', val: true }, { label: 'NO', val: false }].map(opt => (
             <button key={opt.label} type="button" onClick={() => onChange(opt.val)}
                 className={`flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${value === opt.val ? (opt.val ? 'bg-emerald-500 text-white shadow-lg' : 'bg-red-500 text-white shadow-lg') : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>
@@ -186,15 +190,29 @@ const YesNo = ({ value, onChange }) => (
 const CARTERA_SEGS = ['Seguimiento de Cartera', 'Gestión de Empresarias'];
 
 const CheckInModal = ({ visit, onClose, onSubmit }) => {
+    // 1. Agregamos useRole y extraemos tiposGestion del catálogo
+    const { selectedRole } = useRole();
     const { 
         motivosNoVisita = [], 
         estatusCartera = [], 
         motivosNoActividad = [], 
         resultadosGestion = [], 
-        subEstatus = [] 
+        subEstatus = [],
+        tiposGestion = [] // NUEVO: Extraemos el catálogo
     } = useCatalogs() || {};
 
     const isCarteraSegment = CARTERA_SEGS.includes(visit._segment);
+
+    // 2. Filtramos los tipos de gestión según el rol (igual que en UnplannedForm)
+    const tiposGestionFiltrados = useMemo(() => {
+        if (!tiposGestion || tiposGestion.length === 0) return [];
+        const canal = selectedRole?.canal?.toUpperCase();
+        if (canal === 'COBRANZA') {
+            const excluidos = ['PROMOCIÓN', 'VENTA', 'COLOCACIÓN'];
+            return tiposGestion.filter(t => !excluidos.some(termino => t.nombre.toUpperCase().includes(termino)));
+        }
+        return tiposGestion;
+    }, [tiposGestion, selectedRole]);
 
     const [form, setForm] = useState({
         visitaRealizada: null,
@@ -203,20 +221,23 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
         motivoNoVisita: '',
         motivoNoActividad: '',
         resultado: '',
+        // 3. NUEVO: Inicializamos tipoGestion con lo planeado (o vacío si no se planeó)
+        tipoGestion: visit.activity || visit.typeVisitManagement || visit.typeManagement || visit.typeIntegration || '',
         subestatus: 'N/A',
         estatusCartera: '',
         pagoMonto: '', pagoFecha: '',
         notes: '', photoUrl: null
     });
+    
+    const [alertConfig, setAlertConfig] = useState({ isOpen: false, message: '', focusId: null });
     const [photoPreview, setPhotoPreview] = useState(null);
     const [startMs] = useState(() => Date.now());
     const [openTime] = useState(nowTimeStr);
     const gps = useGPS(true);
     const fileRef = useRef(null);
     
-    // Logica para saber si es compromiso/promesa
-    const isCompromiso = form.resultado.toLowerCase().includes('compromiso');
-    const isPromesa = form.resultado.toLowerCase().includes('promesa');
+    const isCompromiso = form.resultado?.toLowerCase().includes('compromiso');
+    const isPromesa = form.resultado?.toLowerCase().includes('promesa');
     const needsAmountDate = isCompromiso || isPromesa;
     const visitaNoRealizada = form.visitaRealizada === false;
 
@@ -230,20 +251,6 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                     : !!form.resultado
             );
 
-    const canSave = form.visitaRealizada !== null && (
-        visitaNoRealizada
-            ? form.motivoNoVisita && form.motivoNoVisita !== ''
-            : isCarteraSegment
-                ? form.clienteEncontrado !== null
-                && form.resultado && form.resultado !== ''
-                && (!needsAmountDate || (form.pagoMonto && form.pagoFecha))
-                : form.actividadRealizada !== null && (
-                    form.actividadRealizada === false
-                        ? !!form.motivoNoActividad
-                        : !!form.resultado
-                )
-    );
-
     const handlePhoto = e => {
         const f = e.target.files[0];
         if (!f) return;
@@ -252,19 +259,71 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
         r.readAsDataURL(f);
     };
 
+    const handleCloseAlert = () => {
+        setAlertConfig(prev => ({ ...prev, isOpen: false }));
+        if (alertConfig.focusId) {
+            setTimeout(() => document.getElementById(alertConfig.focusId)?.focus(), 100);
+        }
+    };
+
+    const validateForm = () => {
+        if (form.visitaRealizada === null) return { msg: 'Indica si se realizó la visita.', id: 'visitaRealizada' };
+        
+        if (visitaNoRealizada) {
+            if (!form.motivoNoVisita) return { msg: 'Selecciona el motivo por el cual no se realizó la visita.', id: 'motivoNoVisita' };
+        } else {
+            // 4. NUEVO: Validación estricta para asegurar que siempre haya una actividad
+            if (!form.tipoGestion || form.tipoGestion.trim() === '') {
+                return { msg: 'Por favor, captura el Tipo de Gestión o Actividad realizada.', id: 'tipoGestion' };
+            }
+
+            if (isCarteraSegment) {
+                if (form.clienteEncontrado === null) return { msg: 'Indica si encontraste al cliente.', id: 'clienteEncontrado' };
+                if (!form.resultado) return { msg: 'Selecciona el estatus actualizado de la cartera.', id: 'resultadoCartera' };
+                if (needsAmountDate) {
+                    if (!form.pagoMonto) return { msg: 'Especifica el Monto del compromiso.', id: 'pagoMonto' };
+                    if (!form.pagoFecha) return { msg: 'Especifica la Fecha del compromiso.', id: 'pagoFecha' };
+                }
+            } else {
+                if (form.actividadRealizada === null) return { msg: 'Indica si se completó la actividad.', id: 'actividadRealizada' };
+                if (form.actividadRealizada === false && !form.motivoNoActividad) return { msg: 'Selecciona el motivo por el que no se realizó la actividad.', id: 'motivoNoActividad' };
+                if (form.actividadRealizada === true && !form.resultado) return { msg: 'Selecciona el resultado de la gestión.', id: 'resultadoGestion' };
+            }
+        }
+        return null; 
+    };
+
+    const validationError = validateForm();
+    const isReady = validationError === null;
+
     const submit = () => {
-        if (!canSave) return;
+        if (!isReady) {
+            setAlertConfig({ isOpen: true, message: validationError.msg, focusId: validationError.id });
+            return;
+        }
+
         const durationMin = Math.round((Date.now() - startMs) / 60000);
-        const resultadoFinal = visitaNoRealizada
-            ? 'No realizada'
-            : isCarteraSegment
-                ? form.resultado
-                : form.actividadRealizada ? 'Actividad realizada' : 'Actividad no realizada';
+        const resultadoBase = visitaNoRealizada ? 'No realizada' : form.resultado;
+        
+        // 5. Tu concatenación impecable se mantiene
+        let resultadoConcatenado = resultadoBase;
+
+        if (gps.status === 'ok') {
+            resultadoConcatenado += ` | GPS: ${gps.lat}, ${gps.lng}`;
+        }
+
+        if (needsAmountDate && form.pagoMonto && form.pagoFecha) {
+            resultadoConcatenado += ` | Promesa: $${form.pagoMonto} (${form.pagoFecha})`;
+        }
+
+        if (form.notes && form.notes.trim() !== '') {
+            resultadoConcatenado += ` | Notas: ${form.notes.trim()}`;
+        }
         
         onSubmit({
             ...form,
-            resultado: resultadoFinal,
-            tipoGestion: visit.typeVisitManagement || visit.typeManagement || '—',
+            resultado: resultadoConcatenado, 
+            tipoGestion: form.tipoGestion || '—', // Usamos el input capturado directamente
             checkInTime: nowTimeStr(),
             visitaOpenTime: openTime,
             visitaDuration: durationMin,
@@ -276,6 +335,8 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
         <div className="fixed inset-0 z-[200] flex items-end md:items-center justify-center animate-in fade-in duration-200">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
             <div className="relative z-10 w-full max-w-lg bg-white rounded-t-[32px] md:rounded-[28px] shadow-2xl max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom-4 duration-300">
+                
+                {/* ── HEADER ── */}
                 <div className="sticky top-0 bg-white px-6 pt-6 pb-4 border-b border-slate-100 flex items-start justify-between z-10">
                     <div>
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Registrar Gestión</p>
@@ -292,6 +353,7 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                     </button>
                 </div>
 
+                {/* ── CUERPO DEL FORMULARIO ── */}
                 <div className="px-6 py-5 space-y-5">
                     <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest ${gps.status === 'ok' ? 'bg-emerald-50 text-emerald-700' : gps.status === 'error' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
                         {gps.status === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
@@ -303,32 +365,43 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
 
                     <div>
                         <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-1">¿Se realizó la visita?</label>
-                        <YesNo value={form.visitaRealizada} onChange={v => setForm(p => ({ ...p, visitaRealizada: v, clienteEncontrado: null, actividadRealizada: null, motivoNoVisita: '' }))} />
+                        <YesNo id="visitaRealizada" value={form.visitaRealizada} onChange={v => setForm(p => ({ ...p, visitaRealizada: v, clienteEncontrado: null, actividadRealizada: null, motivoNoVisita: '' }))} />
                     </div>
 
                     {visitaNoRealizada && (
                         <div className="animate-in fade-in duration-200 bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-3">
                             <p className="text-[8px] font-black text-amber-700 uppercase tracking-widest">¿Por qué no se realizó?</p>
-                            <select value={form.motivoNoVisita}
+                            <select id="motivoNoVisita" value={form.motivoNoVisita}
                                 onChange={e => setForm(p => ({ ...p, motivoNoVisita: e.target.value }))}
-                                className="input-cell">
+                                className="input-cell focus:ring-rose-400">
                                 <option value="" disabled>Seleccionar motivo...</option>
                                 {motivosNoVisita.map(m => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
                             </select>
                         </div>
                     )}
 
+                    {/* 6. NUEVO: Input/Select de Tipo de Gestión dinámico */}
                     {!visitaNoRealizada && isCarteraSegment && form.visitaRealizada !== null && (
                         <div className="animate-in fade-in duration-200">
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-1">¿Se encontró al cliente?</label>
-                            <YesNo value={form.clienteEncontrado} onChange={v => setForm(p => ({ ...p, clienteEncontrado: v }))} />
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Tipo de Gestión *</label>
+                            <select id="tipoGestion" value={form.tipoGestion} onChange={e => setForm(p => ({ ...p, tipoGestion: e.target.value }))} className="input-cell focus:ring-rose-400">
+                                <option value="" disabled>Seleccionar tipo de gestión...</option>
+                                {tiposGestionFiltrados.map(t => <option key={t.id || t.nombre} value={t.nombre}>{t.nombre}</option>)}
+                            </select>
+                        </div>
+                    )}
+
+                    {!visitaNoRealizada && isCarteraSegment && form.visitaRealizada !== null && (
+                        <div className="animate-in fade-in duration-200">
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-1 mt-5">¿Se encontró al cliente?</label>
+                            <YesNo id="clienteEncontrado" value={form.clienteEncontrado} onChange={v => setForm(p => ({ ...p, clienteEncontrado: v }))} />
                         </div>
                     )}
 
                     {!visitaNoRealizada && isCarteraSegment && form.clienteEncontrado !== null && (
                         <div className="animate-in fade-in duration-200">
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Actualizar Estatus de Cartera *</label>
-                            <select value={form.resultado} onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))} className="input-cell">
+                            <select id="resultadoCartera" value={form.resultado} onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))} className="input-cell focus:ring-rose-400">
                                 <option value="" disabled>Seleccionar resultado...</option>
                                 {estatusCartera.map(e => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
                             </select>
@@ -337,19 +410,20 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
 
                     {!visitaNoRealizada && !isCarteraSegment && form.visitaRealizada !== null && (
                         <div className="animate-in fade-in duration-200 bg-violet-50 border border-violet-100 rounded-2xl p-4 space-y-3">
-                            <p className="text-[8px] font-black text-violet-500 uppercase tracking-widest mb-1">Actividad Planeada</p>
-                            <p className="text-[11px] font-black text-primary">{visit.activity || visit.typeVisitManagement || '—'}</p>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">¿Se realizó la actividad?</label>
-                            <YesNo value={form.actividadRealizada} onChange={v => setForm(p => ({ ...p, actividadRealizada: v, motivoNoActividad: '' }))} />
+                            <label className="text-[8px] font-black text-violet-500 uppercase tracking-widest mb-1 block">Actividad Planeada / Realizada *</label>
+                            <input id="tipoGestion" type="text" value={form.tipoGestion} onChange={e => setForm(p => ({ ...p, tipoGestion: e.target.value }))} className="input-cell bg-white focus:ring-violet-400 w-full" placeholder="Describe la actividad..." />
+
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mt-4">¿Se completó la actividad?</label>
+                            <YesNo id="actividadRealizada" value={form.actividadRealizada} onChange={v => setForm(p => ({ ...p, actividadRealizada: v, motivoNoActividad: '' }))} />
                         </div>
                     )}
 
                     {!visitaNoRealizada && !isCarteraSegment && form.actividadRealizada === false && (
                         <div className="animate-in fade-in duration-200 bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-3">
                             <p className="text-[8px] font-black text-amber-700 uppercase tracking-widest">¿Por qué no se realizó la actividad?</p>
-                            <select value={form.motivoNoActividad || ''}
+                            <select id="motivoNoActividad" value={form.motivoNoActividad || ''}
                                 onChange={e => setForm(p => ({ ...p, motivoNoActividad: e.target.value }))}
-                                className="input-cell">
+                                className="input-cell focus:ring-rose-400">
                                 <option value="" disabled>Seleccionar motivo...</option>
                                 {motivosNoActividad.map(m => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
                             </select>
@@ -359,9 +433,9 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                     {!visitaNoRealizada && !isCarteraSegment && form.actividadRealizada === true && (
                         <div className="animate-in fade-in duration-200">
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Resultado de la Gestión</label>
-                            <select value={form.resultado}
+                            <select id="resultadoGestion" value={form.resultado}
                                 onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))}
-                                className="input-cell">
+                                className="input-cell focus:ring-rose-400">
                                 <option value="" disabled>Seleccionar resultado...</option>
                                 {resultadosGestion.map(r => <option key={r.id} value={r.nombre}>{r.nombre}</option>)}
                             </select>
@@ -385,26 +459,23 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                                     <p className={`text-[9px] font-black uppercase tracking-widest ${isCompromiso ? 'text-blue-700' : 'text-indigo-700'}`}>
                                         {isCompromiso ? 'Datos del Compromiso de Pago *' : 'Datos de la Promesa de Pago *'}
                                     </p>
-                                    {isCompromiso && (
-                                        <p className="text-[9px] text-blue-600 mt-0.5">
-                                            ★ Se agendará automáticamente una visita de seguimiento para esa fecha.
-                                        </p>
-                                    )}
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">¿Cuánto? *</label>
-                                    <input type="text" inputMode="numeric" placeholder="$ 0.00"
+                               <div id="pagoMonto" tabIndex="-1" className="outline-none focus:ring-2 focus:ring-rose-400 rounded-xl">
+                                    <FormattedNumberInput
+                                        label="¿Cuánto? *"
+                                        type="currency"
                                         value={form.pagoMonto}
-                                        onChange={e => setForm(p => ({ ...p, pagoMonto: e.target.value.replace(/\D/g, '') }))}
-                                        className="input-cell font-bold" />
+                                        onChange={val => setForm(p => ({ ...p, pagoMonto: val }))}
+                                        placeholder="$ 0.00"
+                                    />
                                 </div>
                                 <div>
                                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">¿Para cuándo? *</label>
-                                    <input type="date" value={form.pagoFecha}
+                                    <input id="pagoFecha" type="date" value={form.pagoFecha}
                                         onChange={e => setForm(p => ({ ...p, pagoFecha: e.target.value }))}
-                                        className="input-cell" />
+                                        className="input-cell focus:ring-rose-400" />
                                 </div>
                             </div>
                         </div>
@@ -420,7 +491,7 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
 
                     {decisionTomada && (
                         <div className="animate-in fade-in duration-200">
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Evidencia Fotográfica</label>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Evidencia Fotográfica (Opcional)</label>
                             <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhoto} />
                             {photoPreview ? (
                                 <div className="relative">
@@ -436,120 +507,250 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                             )}
                         </div>
                     )}
-                    
-                    {decisionTomada && (
-                        <div className="animate-in fade-in duration-200 bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
-                            <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Estatus de Cartera</p>
-                            <select
-                                value={form.estatusCartera}
-                                onChange={e => setForm(p => ({ ...p, estatusCartera: e.target.value }))}
-                                className="input-cell">
-                                <option value="" disabled>Seleccionar estatus...</option>
-                                {estatusCartera.map(e => (
-                                    <option key={e.id} value={e.nombre}>{e.nombre}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
                 </div>
 
+                {/* ── FOOTER Y BOTÓN ── */}
                 <div className="sticky bottom-0 bg-white px-6 pb-6 pt-4 border-t border-slate-50">
-                    <button onClick={submit} disabled={!canSave}
-                        className={`w-full py-5 rounded-[20px] text-[11px] font-black uppercase tracking-[0.3em] transition-all ${canSave ? 'bg-primary text-white shadow-xl hover:scale-105 active:scale-95' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}>
+                    <button onClick={submit}
+                        className={`w-full py-5 rounded-[20px] text-[11px] font-black uppercase tracking-[0.3em] transition-all shadow-xl
+                        ${isReady ? 'bg-primary text-white hover:bg-blue-700 hover:scale-[1.02] active:scale-95' : 'bg-slate-50 border-2 border-slate-200 text-slate-400 opacity-70'}`}>
                         Registrar Gestión
                     </button>
                 </div>
             </div>
+
+            {/* MODAL DE ERROR DE VALIDACIÓN */}
+            <UIModal
+                isOpen={alertConfig.isOpen}
+                onClose={handleCloseAlert}
+                type="warning"
+                title="Datos Incompletos"
+                message={alertConfig.message}
+                showConfirmButton={true}
+                confirmButtonText="Completar"
+                onConfirm={handleCloseAlert}
+            />
         </div>
     );
 };
 
-// ── Unplanned Visit Form ──────────────────────────────────────────────────────
-const UnplannedForm = ({ onAdd, onCancel }) => {
-    const { tiposGestionNoPlaneada = [], estatusCartera = [] } = useCatalogs() || {};
+// ── Unplanned Visit Form (Visita No Planeada) ────────────────────────────────
+const UnplannedForm = ({ onAdd, onCancel, isFrozen }) => {
+    const { selectedRole } = useRole();
+    const { tiposGestion = [], estatusCartera = [] } = useCatalogs() || {};
+    const { mockDatabase: directorio = [] } = useAgenda();
 
-    const [form, setForm] = useState({ name: '', tipoGestion: '', resultado: '', notes: '', pagoMonto: '', pagoFecha: '' });
+    const [form, setForm] = useState({ 
+        name: '', tipoGestion: '', resultado: '', 
+        notes: '', pagoMonto: '', pagoFecha: '', idContacto: null 
+    });
+
+    const [suggestions, setSuggestions] = useState([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    
+    // ESTADO PARA EL MODAL DE ERROR CON AUTO-FOCUS
+    const [alertConfig, setAlertConfig] = useState({ isOpen: false, message: '', focusId: null });
+
     const isCompromiso = form.resultado.toLowerCase().includes('compromiso');
     const isPromesa = form.resultado.toLowerCase().includes('promesa');
     const needsAmountDate = isCompromiso || isPromesa;
     
-    const ok = form.name
-        && form.tipoGestion && form.tipoGestion !== ''
-        && form.resultado && form.resultado !== ''
-        && (!needsAmountDate || (form.pagoMonto && form.pagoFecha));
+    const tiposGestionFiltrados = useMemo(() => {
+        if (!tiposGestion || tiposGestion.length === 0) return [];
+        const canal = selectedRole?.canal?.toUpperCase();
+        if (canal === 'COBRANZA') {
+            const excluidos = ['PROMOCIÓN', 'VENTA', 'COLOCACIÓN'];
+            return tiposGestion.filter(t => !excluidos.some(termino => t.nombre.toUpperCase().includes(termino)));
+        }
+        return tiposGestion;
+    }, [tiposGestion, selectedRole]);
+
+    const handleNameChange = (e) => {
+        const val = e.target.value.toUpperCase();
+        setForm(p => ({ ...p, name: val, idContacto: null })); 
+
+        if (val.trim().length >= 2) {
+            const matches = directorio.filter(c => 
+                (c.nombre || c.name || '').toUpperCase().includes(val)
+            ).slice(0, 5); 
+            
+            setSuggestions(matches);
+            setShowSuggestions(true);
+        } else {
+            setShowSuggestions(false);
+        }
+    };
+
+    const selectContact = (contact) => {
+        setForm(p => ({
+            ...p,
+            name: contact.nombre || contact.name,
+            idContacto: contact.id_contacto || contact.idContacto || contact.id || null
+        }));
+        setShowSuggestions(false);
+    };
+
+    // Función auxiliar para cerrar la alerta y poner foco
+    const handleCloseAlert = () => {
+        setAlertConfig(prev => ({ ...prev, isOpen: false }));
+        if (alertConfig.focusId) {
+            setTimeout(() => document.getElementById(alertConfig.focusId)?.focus(), 100);
+        }
+    };
+
+    // NUEVO: Barrera de validación estricta
+    const validateForm = () => {
+        if (!form.name || form.name.trim() === '') return { msg: 'Por favor, ingresa el Nombre del Cliente.', id: 'unplanned-name' };
+        if (!form.tipoGestion || form.tipoGestion === '') return { msg: 'Por favor, selecciona un Tipo de Gestión.', id: 'unplanned-tipo' };
+        if (!form.resultado || form.resultado === '') return { msg: 'Por favor, selecciona el Resultado de la visita.', id: 'unplanned-resultado' };
+        
+        if (needsAmountDate) {
+            if (!form.pagoMonto) return { msg: 'Especifica el Monto de la promesa o compromiso.', id: 'unplanned-monto' };
+            if (!form.pagoFecha) return { msg: 'Especifica la Fecha de la promesa o compromiso.', id: 'unplanned-fecha' };
+        }
+        return null;
+    };
+
+    // Evaluamos en tiempo real si el formulario está listo
+    const validationError = validateForm();
+    const isReady = validationError === null;
     
     const submit = () => {
-        if (!ok) return;
+        if (isFrozen) return;
+
+        // Si la barrera detecta errores, abrimos el modal
+        if (!isReady) {
+            setAlertConfig({ isOpen: true, message: validationError.msg, focusId: validationError.id });
+            return;
+        }
+
         onAdd({
-            name: form.name.toUpperCase(), _segment: 'Imprevisto',
-            checkInTime: nowTimeStr(), tipoGestion: form.tipoGestion,
-            resultado: form.resultado, notes: form.notes,
-            pagoMonto: form.pagoMonto, pagoFecha: form.pagoFecha
+            name: form.name.toUpperCase(),
+            idContacto: form.idContacto, 
+            _segment: 'Imprevisto',
+            checkInTime: nowTimeStr(),
+            tipoGestion: form.tipoGestion,
+            resultado: form.resultado,
+            notes: form.notes,
+            pagoMonto: form.pagoMonto,
+            pagoFecha: form.pagoFecha
         });
     };
 
+    if (isFrozen) return null;
+
     return (
-        <div className="mt-6 border-2 border-dashed border-rose-200 rounded-3xl p-6 bg-rose-50/30 animate-in slide-in-from-bottom-4 duration-300 space-y-4">
+        <div className="mt-6 border-2 border-dashed border-rose-200 rounded-3xl p-6 bg-rose-50/30 animate-in slide-in-from-bottom-4 duration-300 space-y-4 relative">
             <div className="flex items-center justify-between">
                 <h4 className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Visita No Planeada</h4>
-                <button onClick={onCancel} className="text-slate-400 hover:text-slate-600"><X size={15} /></button>
+                <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 transition-colors bg-white rounded-full p-1 shadow-sm">
+                    <X size={15} />
+                </button>
             </div>
-            <div>
-                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Nombre *</label>
-                <input type="text" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Nombre del cliente…" className="input-cell uppercase font-bold" />
+
+            <div className="relative">
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Nombre del Cliente *</label>
+                <input 
+                    id="unplanned-name" // <-- ID AGREGADO
+                    type="text" 
+                    value={form.name} 
+                    onChange={handleNameChange}
+                    onFocus={() => form.name.length >= 2 && setShowSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} 
+                    placeholder="Escribe para buscar en tu cartera..." 
+                    className="input-cell uppercase font-bold w-full focus:ring-rose-400" 
+                />
+                
+                {showSuggestions && suggestions.length > 0 && (
+                    <ul className="absolute z-50 w-full bg-white border border-slate-200 shadow-xl rounded-xl mt-1 max-h-48 overflow-y-auto overflow-x-hidden animate-in fade-in zoom-in-95 duration-200">
+                        {suggestions.map((s, i) => (
+                            <li key={i}
+                                onMouseDown={(e) => { e.preventDefault(); selectContact(s); }}
+                                className="px-4 py-3 text-[11px] font-bold text-slate-600 hover:bg-blue-50 hover:text-blue-700 cursor-pointer border-b border-slate-50 last:border-0 transition-colors"
+                            >
+                                {s.nombre || s.name}
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </div>
+
             <div className="grid grid-cols-2 gap-3">
                 <div>
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo Gestión *</label>
-                    <select value={form.tipoGestion} onChange={e => setForm(p => ({ ...p, tipoGestion: e.target.value }))} className="input-cell text-[10px]">
+                    <select id="unplanned-tipo" value={form.tipoGestion} onChange={e => setForm(p => ({ ...p, tipoGestion: e.target.value }))} className="input-cell text-[10px] w-full focus:ring-rose-400">
                         <option value="" disabled>Seleccionar tipo...</option>
-                        {tiposGestionNoPlaneada.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
+                        {tiposGestionFiltrados.length > 0 
+                            ? tiposGestionFiltrados.map(t => <option key={t.id || t.nombre} value={t.nombre}>{t.nombre}</option>)
+                            : <option disabled>Cargando catálogo...</option>
+                        }
                     </select>
                 </div>
                 <div>
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Resultado *</label>
-                    <select value={form.resultado} onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))} className="input-cell text-[10px]">
+                    <select id="unplanned-resultado" value={form.resultado} onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))} className="input-cell text-[10px] w-full focus:ring-rose-400">
                         <option value="" disabled>Seleccionar resultado...</option>
-                        {estatusCartera.map(e => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
+                        {estatusCartera.length > 0
+                            ? estatusCartera.map(e => <option key={e.id || e.nombre} value={e.nombre}>{e.nombre}</option>)
+                            : <option disabled>Cargando catálogo...</option>
+                        }
                     </select>
                 </div>
             </div>
+
             {needsAmountDate && (
                 <div className={`p-3 rounded-2xl border space-y-3 animate-in fade-in duration-200 ${isCompromiso ? 'bg-blue-50 border-blue-100' : 'bg-indigo-50 border-indigo-100'}`}>
                     <p className={`text-[9px] font-black uppercase tracking-widest ${isCompromiso ? 'text-blue-700' : 'text-indigo-700'}`}>
                         {isCompromiso ? 'Datos del Compromiso de Pago *' : 'Datos de la Promesa de Pago *'}
                     </p>
                     <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Monto *</label>
-                            <input type="text" inputMode="numeric" placeholder="$ 0.00"
+                        <div id="unplanned-monto" tabIndex="-1" className="outline-none focus:ring-2 focus:ring-rose-400 rounded-xl">
+                            <FormattedNumberInput
+                                label="Monto *"
+                                type="currency"
                                 value={form.pagoMonto}
-                                onChange={e => setForm(p => ({ ...p, pagoMonto: e.target.value.replace(/\D/g, '') }))}
-                                className="input-cell font-bold" />
+                                onChange={val => setForm(p => ({ ...p, pagoMonto: val }))}
+                                placeholder="$ 0.00"
+                            />
                         </div>
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Fecha *</label>
-                            <input type="date" value={form.pagoFecha}
+                            <input id="unplanned-fecha" type="date" value={form.pagoFecha}
                                 onChange={e => setForm(p => ({ ...p, pagoFecha: e.target.value }))}
-                                className="input-cell" />
+                                className="input-cell w-full focus:ring-rose-400" />
                         </div>
                     </div>
                 </div>
             )}
             <div>
                 <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Notas</label>
-                <input type="text" value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Observaciones…" className="input-cell" />
+                <input type="text" value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Observaciones extras…" className="input-cell w-full" />
             </div>
-            <button onClick={submit} disabled={!ok}
-                className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${ok ? 'bg-rose-500 text-white hover:bg-rose-600' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}>
+
+            {/* BOTÓN CON ESTILO DINÁMICO */}
+            <button onClick={submit}
+                className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md 
+                ${isReady ? 'bg-rose-500 text-white hover:bg-rose-600 hover:shadow-lg active:scale-95' : 'bg-slate-200 text-slate-500 hover:bg-slate-300'}`}>
                 Registrar Imprevisto
             </button>
+
+            {/* MODAL DE ERROR */}
+            <UIModal
+                isOpen={alertConfig.isOpen}
+                onClose={handleCloseAlert}
+                type="warning"
+                title="Datos Incompletos"
+                message={alertConfig.message}
+                showConfirmButton={true}
+                confirmButtonText="Revisar"
+                onConfirm={handleCloseAlert}
+            />
         </div>
     );
 };
 
 // ── Visit Card ───────────────────────────────────────────────────────────────
-const VisitCard = ({ visit, checkIn, onCheckIn }) => {
+const VisitCard = ({ visit, checkIn, onCheckIn, isFrozen }) => {
     const { SEG_CFG, RESULTADO_BADGE } = useDynamicUIContext();
     const segCfg = SEG_CFG[visit._segment] || SEG_CFG['Imprevisto'] || { dot: 'bg-slate-400' };
     const isDone = !!checkIn;
@@ -615,6 +816,11 @@ const VisitCard = ({ visit, checkIn, onCheckIn }) => {
                     <CheckCircle2 size={16} />
                     <span className="text-[9px] font-black uppercase tracking-wide hidden md:inline">Registrado</span>
                 </div>
+            ) : isFrozen ? (
+                <div className="flex items-center gap-1.5 text-slate-400 flex-shrink-0">
+                    <Lock size={14} />
+                    <span className="text-[9px] font-black uppercase tracking-wide hidden md:inline">Bloqueado</span>
+                </div>
             ) : (
                 <button
                     onClick={() => onCheckIn(visit)}
@@ -627,7 +833,7 @@ const VisitCard = ({ visit, checkIn, onCheckIn }) => {
 };
 
 // ── Follow-Up Visit Card ─────────────────────────────────────────────────────
-const FollowUpCard = ({ followUp, checkIn, onSetTime, onCheckIn }) => {
+const FollowUpCard = ({ followUp, checkIn, onSetTime, onCheckIn, isFrozen }) => {
     const { RESULTADO_BADGE } = useDynamicUIContext();
     const isDone = !!checkIn;
     const fmtDate = (d) => { try { return new Date(d + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return d; } };
@@ -664,7 +870,7 @@ const FollowUpCard = ({ followUp, checkIn, onSetTime, onCheckIn }) => {
                 )}
             </div>
 
-            {!isDone && (
+            {!isDone && !isFrozen && (
                 <div className="hidden md:flex items-center gap-2 flex-shrink-0">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Hora:</label>
                     <input type="time" defaultValue={followUp.time || ''}
@@ -677,6 +883,11 @@ const FollowUpCard = ({ followUp, checkIn, onSetTime, onCheckIn }) => {
                 <div className="flex items-center gap-1.5 text-emerald-600 flex-shrink-0">
                     <CheckCircle2 size={16} />
                     <span className="text-[9px] font-black uppercase tracking-wide hidden md:inline">Registrado</span>
+                </div>
+            ) : isFrozen ? (
+                <div className="flex items-center gap-1.5 text-slate-400 flex-shrink-0">
+                    <Lock size={14} />
+                    <span className="text-[9px] font-black uppercase tracking-wide hidden md:inline">Bloqueado</span>
                 </div>
             ) : (
                 <button onClick={() => onCheckIn(followUp)}
@@ -700,17 +911,19 @@ const kpiBg = (pct) => pct >= 90 ? 'bg-emerald-500' : pct >= 70 ? 'bg-amber-400'
 const kpiDotCls = (pct, hasValue) => !hasValue ? 'bg-slate-200' : pct >= 90 ? 'bg-emerald-500' : pct >= 70 ? 'bg-amber-400' : 'bg-red-500';
 const fmtNum = (v, isCount) => { const n = Number(v); if (isNaN(n)) return '—'; return isCount ? String(n) : `$${n.toLocaleString()}`; };
 
-const MoneyInput = ({ value, onChange, isCount }) => (
-    <input
-        type="text" inputMode="numeric"
-        value={value || ''}
-        onChange={e => onChange(e.target.value.replace(/[$,]/g, '').replace(/\D/g, ''))}
-        placeholder={isCount ? '0' : '$0'}
-        className="w-[84px] text-center text-sm font-black border-2 border-blue-300 rounded-xl px-2 py-2 bg-white text-primary focus:border-blue-500 focus:outline-none transition-colors shadow-sm"
-    />
+const MoneyInput = ({ value, onChange, isCount, disabled }) => (
+    <div className="w-[84px] text-center">
+        <FormattedNumberInput
+            type={isCount ? "number" : "currency"}
+            value={value}
+            onChange={onChange}
+            placeholder={isCount ? '0' : '$ 0.00'}
+            disabled={disabled}
+        />
+    </div>
 );
 
-const KpiRealPanel = ({ kpiCompromisos, kpiReal, onUpdate }) => {
+const KpiRealPanel = ({ kpiCompromisos, kpiReal, onUpdate, isFrozen }) => {
     const { kpiConfig: groups } = useAgenda();
 
     if (!groups || groups.length === 0) return null;
@@ -782,7 +995,7 @@ const KpiRealPanel = ({ kpiCompromisos, kpiReal, onUpdate }) => {
                                                 {hasComp && <span className="text-slate-300 font-bold text-lg mb-1">→</span>}
                                                 <div className="text-center">
                                                     <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">Real</p>
-                                                    <MoneyInput value={real} onChange={v => onUpdate(key, v)} isCount={isCount} />
+                                                    <MoneyInput value={real} onChange={v => onUpdate(key, v)} isCount={isCount} disabled={isFrozen} />
                                                 </div>
                                                 <div className="text-center min-w-[52px] mb-0.5">
                                                     {hasReal && hasComp ? (
@@ -809,13 +1022,19 @@ const KpiRealPanel = ({ kpiCompromisos, kpiReal, onUpdate }) => {
     );
 };
 
-// ── COMPONENTE RAÍZ — EjecucionOperativo (El principal que exportamos) ───────
+// ── COMPONENTE RAÍZ — EjecucionOperativo ───────
 const EjecucionOperativoContent = () => {
     const { currentAgenda, registerCheckIn, addUnplannedVisit, getVisibleSegments,
-        scheduleFollowUp, scheduledFollowUps, updateKpiReal } = useAgenda();
+        scheduleFollowUp, scheduledFollowUps, updateKpiReal, updateAgendaStatus } = useAgenda();
     const [modalVisit, setModalVisit] = useState(null);
     const [showUnplanned, setShowUnplanned] = useState(false);
     const [followUpTimes, setFollowUpTimes] = useState({});
+    
+    // ── NUEVO: ESTADO PARA MODAL DE GUARDADO DEFINITIVO ──
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+    const [errorModal, setErrorModal] = useState({ isOpen: false, message: '' });
+    const [alertConfig, setAlertConfig] = useState({ isOpen: false, message: '' });
 
     const checkIns = currentAgenda.checkIns || {};
     const unplannedVisits = currentAgenda.unplannedVisits || [];
@@ -827,37 +1046,122 @@ const EjecucionOperativoContent = () => {
         .map(fu => ({ ...fu, time: followUpTimes[fu.id] ?? fu.time }));
     const setFollowUpTime = (id, time) => setFollowUpTimes(prev => ({ ...prev, [id]: time }));
 
-    const hasSegmentData = Object.values(currentAgenda.segments || {})
-        .some(seg => seg.some(v => v.name));
+    // ── LÓGICA DE CONGELAMIENTO (isFrozen) ──
+    const isFrozen = currentAgenda.status === 'ejecutada' || currentAgenda.status === 'completada';
 
-    if (currentAgenda.status !== 'aprobada' && !hasSegmentData) {
+    // Permitimos renderizar la vista solo si está aprobada o si ya está ejecutada
+    if (currentAgenda.status !== 'aprobada' && currentAgenda.status !== 'ejecutada' && currentAgenda.status !== 'completada') {
         return (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <h2 className="text-2xl font-black text-primary uppercase">Ejecución en Ruta</h2>
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-8">
                 <BlockedScreen status={currentAgenda.status} />
             </div>
         );
     }
 
     const getAllVisits = () => {
-        const segs = getVisibleSegments();
         const visits = [];
-        segs.forEach(seg => {
-            (currentAgenda.segments[seg] || []).filter(v => v.name).forEach(v => visits.push({ ...v, _segment: seg }));
+        
+        // 1. LECTURA DINÁMICA: Exploramos todas las llaves que mandó el JSON de la BD
+        const segmentosDB = currentAgenda.segments || {};
+        
+        Object.entries(segmentosDB).forEach(([nombreBloque, arregloVisitas]) => {
+            if (Array.isArray(arregloVisitas)) {
+                arregloVisitas.forEach(v => {
+                    // Omitimos registros vacíos o sin nombre por seguridad
+                    if (!v || !v.name) return;
+
+                    // 2. Evaluamos si la visita ya está gestionada en Base de Datos
+                    const isFinalizada = v.statusAction === 'FINALIZADA' || v.statusAction === 'NO REALIZADA' || v.estado === 'FINALIZADA';
+                    
+                    if (isFinalizada && !checkIns[v.id]) {
+                        checkIns[v.id] = {
+                            resultado: v.managementResult || v.resultado,
+                            visitaRealizada: v.managementRealized || v.realizada,
+                            checkInTime: v.time,
+                            isFromDB: true
+                        };
+                    }
+                    
+                    // 3. Añadimos la visita forzando el nombre del bloque exacto que viene del JSON
+                    visits.push({ 
+                        ...v, 
+                        _segment: nombreBloque, 
+                        isUnplanned: nombreBloque === 'Visita No Planeada' || nombreBloque === 'Imprevisto' 
+                    });
+                });
+            }
         });
-        visits.sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
-        return [...visits, ...unplannedVisits.map(v => ({ ...v, _segment: v._segment || 'Imprevisto' }))];
+        
+        // 4. Agregamos los imprevistos "locales" (los que el usuario acaba de agregar en la interfaz antes de recargar)
+        const localUnplanned = (unplannedVisits || []).map(v => ({ 
+            ...v, 
+            _segment: v._segment || 'Visita No Planeada', 
+            isUnplanned: true 
+        }));
+        
+        // 5. Unimos ambas listas y ordenamos cronológicamente
+        const listaFinal = [...visits, ...localUnplanned];
+        listaFinal.sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
+        
+        return listaFinal;
     };
 
     const allVisits = getAllVisits();
-    const done = allVisits.filter(v => checkIns[v.id]).length + unplannedVisits.length;
+    
+    const done = allVisits.filter(v => checkIns[v.id] || v._dbCheckIn || v.isUnplanned).length;
     const total = allVisits.length;
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
     const todayStr = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
 
+    // ── FUNCIÓN DE GUARDADO DEFINITIVO ──
+    const handleFinalizarEjecucion = async () => {
+        try {
+            await api.put(`/agenda/plan/${currentAgenda.id}/estatus`, { 
+                estatus: 'ejecutada', 
+                nota: 'Ejecución finalizada por el operativo' 
+            });
+            updateAgendaStatus(currentAgenda.id, 'ejecutada');
+            setShowConfirmModal(false);
+            LoggerService.info('Ejecución finalizada correctamente', { idPlan: currentAgenda.id });
+        } catch (error) {
+            LoggerService.error('Error al finalizar la ejecución', error);
+            setShowConfirmModal(false);
+            // 2. Reemplazamos el alert() por el estado del modal
+            setErrorModal({
+                isOpen: true,
+                message: "No se pudo conectar con el servidor para finalizar la ejecución."
+            });
+        }
+    };
+
+    const handleIntentarFinalizar = () => {
+        if (pct < 100) {
+            setAlertConfig({ 
+                isOpen: true, 
+                message: `Tu avance actual es del ${pct}%. Debes registrar todas tus gestiones y seguimientos para poder hacer el guardado definitivo.` 
+            });
+            return;
+        }
+        // Si el avance es del 100%, mostramos el modal de confirmación original
+        setShowConfirmModal(true);
+    };
+
     return (
         <div className="max-w-[1400px] mx-auto pb-32 px-4 md:px-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Si está congelada, mostramos un banner informativo */}
+            {isFrozen && (
+                <div className="mt-8 mb-6 bg-blue-50 border border-blue-200 p-5 rounded-2xl flex items-center gap-4 animate-in fade-in">
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <Lock className="text-blue-600" size={20} />
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-black text-blue-900 uppercase tracking-widest">Ejecución Finalizada</h3>
+                        <p className="text-blue-700 text-sm font-medium mt-1">Has realizado el Guardado Definitivo. Los registros han sido bloqueados para este plan puedes ver el resumen en la pestaña de "Cierre".</p>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <header className="pt-8 pb-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
@@ -880,9 +1184,20 @@ const EjecucionOperativoContent = () => {
 
             {/* Completion Summary Banner */}
             {pct === 100 && total > 0 && (() => {
-                const compromisos = Object.values(checkIns).filter(c => c.resultado?.toLowerCase().includes('compromiso') || c.resultado?.toLowerCase().includes('promesa'));
-                const totalMonto = compromisos.reduce((s, c) => s + (Number(c.pagoMonto) || 0), 0);
-                const noRealizadas = Object.values(checkIns).filter(c => c.resultado?.toLowerCase().includes('no realizada')).length;
+                const allFinished = allVisits.filter(v => checkIns[v.id] || v._dbCheckIn || v.isUnplanned);
+                const compromisos = allFinished.filter(c => {
+                    const res = checkIns[c.id]?.resultado || c._dbCheckIn?.resultado || c.resultado || '';
+                    return res.toLowerCase().includes('compromiso') || res.toLowerCase().includes('promesa');
+                });
+                const totalMonto = compromisos.reduce((s, c) => {
+                    const monto = checkIns[c.id]?.pagoMonto || c.pagoMonto || 0;
+                    return s + Number(monto);
+                }, 0);
+                const noRealizadas = allFinished.filter(c => {
+                    const res = checkIns[c.id]?.resultado || c._dbCheckIn?.resultado || c.resultado || '';
+                    return res.toLowerCase().includes('no realizada');
+                }).length;
+
                 return (
                     <div className="mb-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-3xl p-6 text-white shadow-xl animate-in fade-in slide-in-from-top-4 duration-500">
                         <div className="flex items-start justify-between">
@@ -934,7 +1249,7 @@ const EjecucionOperativoContent = () => {
                     });
                     
                     return Object.entries(grouped).map(([seg, visits]) => {
-                        const doneCount = visits.filter(v => checkIns[v.id]).length;
+                        const doneCount = visits.filter(v => checkIns[v.id] || v._dbCheckIn || v.isUnplanned).length;
                         return (
                             <div key={seg} className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-200">
                                 <div className="gradient-header !rounded-t-3xl shadow-lg">
@@ -946,8 +1261,14 @@ const EjecucionOperativoContent = () => {
                                     <span className="text-[9px] font-bold text-white/60">{doneCount}/{visits.length} completadas</span>
                                 </div>
                                 <div className="divide-y divide-slate-50">
-                                    {visits.map((v, idx) => (
-                                        <VisitCard key={v.id} visit={v} checkIn={checkIns[v.id]} onCheckIn={setModalVisit} />
+                                    {visits.map((v) => (
+                                        <VisitCard 
+                                            key={v.id} 
+                                            visit={v} 
+                                            checkIn={checkIns[v.id] || v._dbCheckIn || (v.isUnplanned ? v : null)} 
+                                            onCheckIn={setModalVisit} 
+                                            isFrozen={isFrozen}
+                                        />
                                     ))}
                                 </div>
                             </div>
@@ -970,28 +1291,26 @@ const EjecucionOperativoContent = () => {
                     </div>
                     <div className="divide-y divide-slate-50">
                         {todayFollowUps.map(fu => (
-                            <FollowUpCard key={fu.id} followUp={fu} checkIn={checkIns[fu.id]} onSetTime={setFollowUpTime} onCheckIn={setModalVisit} />
+                            <FollowUpCard key={fu.id} followUp={fu} checkIn={checkIns[fu.id]} onSetTime={setFollowUpTime} onCheckIn={setModalVisit} isFrozen={isFrozen} />
                         ))}
                     </div>
                 </div>
             )}
 
-            <KpiRealPanel
-                kpiCompromisos={currentAgenda.kpiCompromisos || {}}
-                kpiReal={currentAgenda.kpiReal || {}}
-                onUpdate={updateKpiReal || (() => { })}
-            />
+            <KpiRealPanel kpiCompromisos={currentAgenda.kpiCompromisos || {}} kpiReal={currentAgenda.kpiReal || {}} onUpdate={updateKpiReal || (() => { })} isFrozen={isFrozen} />
 
-            {showUnplanned ? (
-                <UnplannedForm onAdd={data => { addUnplannedVisit(data); setShowUnplanned(false); }} onCancel={() => setShowUnplanned(false)} />
-            ) : (
-                <button onClick={() => setShowUnplanned(true)}
-                    className="w-full mt-4 flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 hover:border-rose-300 text-slate-400 hover:text-rose-500 py-5 rounded-2xl transition-all text-[10px] font-black uppercase tracking-widest">
-                    <Plus size={16} /> Agregar Visita No Planeada
-                </button>
+            {!isFrozen && (
+                showUnplanned ? (
+                    <UnplannedForm onAdd={data => { addUnplannedVisit(data); setShowUnplanned(false); }} onCancel={() => setShowUnplanned(false)} isFrozen={isFrozen} />
+                ) : (
+                    <button onClick={() => setShowUnplanned(true)}
+                        className="w-full mt-4 flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 hover:border-rose-300 text-slate-400 hover:text-rose-500 py-5 rounded-2xl transition-all text-[10px] font-black uppercase tracking-widest">
+                        <Plus size={16} /> Agregar Visita No Planeada
+                    </button>
+                )
             )}
 
-            {modalVisit && (
+            {modalVisit && !isFrozen && (
                 <CheckInModal visit={modalVisit} onClose={() => setModalVisit(null)} onSubmit={data => {
                     registerCheckIn(modalVisit.id, data);
                     if (data.resultado?.toLowerCase().includes('compromiso') && data.pagoFecha) {
@@ -1000,6 +1319,52 @@ const EjecucionOperativoContent = () => {
                     setModalVisit(null);
                 }} />
             )}
+
+            {/* ── BOTÓN FLOTANTE: GUARDADO DEFINITIVO ── */}
+            {currentAgenda.status === 'aprobada' && (
+                <footer className="fixed bottom-0 left-0 right-0 md:relative md:mt-12 z-40 bg-white/90 backdrop-blur-md border-t border-slate-200 p-4 md:p-6 flex justify-end md:rounded-[32px] md:border-none md:bg-slate-900 md:shadow-2xl">
+                    <div className="flex flex-col md:items-end w-full md:w-auto">
+                        <p className="hidden md:block text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mb-2 text-right">Asegúrate de registrar todas tus visitas antes de continuar.</p>
+                        <button 
+                            onClick={handleIntentarFinalizar}
+                            className="w-full md:w-auto bg-indigo-950 md:bg-white text-white md:text-indigo-950 px-12 py-5 rounded-[20px] font-black uppercase tracking-[0.2em] text-[11px] shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3"
+                        >
+                            <Lock size={16} /> Guardado Definitivo
+                        </button>
+                    </div>
+                </footer>
+            )}
+
+            {/* Modal de Confirmación */}
+            <UIModal
+                isOpen={showConfirmModal}
+                onClose={() => setShowConfirmModal(false)}
+                type="info"
+                title="¿Finalizar Ejecución?"
+                message="Al hacer el guardado definitivo, se bloquearán los inputs y ya no podrás registrar nuevas gestiones ni imprevistos. Asegúrate de haber completado todo."
+                showCancel={true}
+                cancelText="Revisar de nuevo"
+                confirmText="Sí, finalizar ejecución"
+                onConfirm={handleFinalizarEjecucion}
+            />
+
+            <UIModal
+                isOpen={errorModal.isOpen}
+                onClose={() => setErrorModal({ ...errorModal, isOpen: false })}
+                title="Error de Conexión"
+                message={errorModal.message}
+                type="danger"
+            />
+
+            <UIModal
+                isOpen={alertConfig.isOpen}
+                onClose={() => setAlertConfig({ isOpen: false, message: '' })}
+                type="warning"
+                title="Ejecución Incompleta"
+                message={alertConfig.message}
+                showConfirmButton={true}
+                confirmButtonText="Entendido"
+            />
         </div>
     );
 };

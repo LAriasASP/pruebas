@@ -1,10 +1,28 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useRole } from '../../context/RoleContext';
 import { useAgenda } from '../../context/AgendaContext';
 import { Target, Lock, TrendingUp, DollarSign, Users, Activity, Loader2 } from 'lucide-react';
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 1. Diccionario de Iconos (Mapea el string del Backend al componente de React)
+// 1. Funciones Auxiliares para Formato de Moneda
+// ──────────────────────────────────────────────────────────────────────────────
+const formatCurrency = (val) => {
+    if (!val) return '$0.00';
+    const num = parseFloat(val);
+    if (isNaN(num)) return '$0.00';
+    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(num);
+};
+
+const handleNumericChange = (value, callback) => {
+    // Permite números y un solo punto decimal
+    let clean = value.replace(/[^\d.]/g, '');
+    const parts = clean.split('.');
+    if (parts.length > 2) clean = parts[0] + '.' + parts.slice(1).join('');
+    callback(clean);
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 2. Diccionario de Iconos y Colores
 // ──────────────────────────────────────────────────────────────────────────────
 const ICON_MAP = {
     DollarSign: DollarSign,
@@ -13,9 +31,6 @@ const ICON_MAP = {
     Users: Users
 };
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 2. Mapa de Colores para Cabeceras
-// ──────────────────────────────────────────────────────────────────────────────
 const colorMap = {
     blue: { bar: 'bg-blue-500', badge: 'bg-blue-50 text-blue-600', icon: 'text-blue-500' },
     emerald: { bar: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700', icon: 'text-emerald-500' },
@@ -25,52 +40,52 @@ const colorMap = {
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Sub-componentes
+// 3. Sub-componentes
 // ──────────────────────────────────────────────────────────────────────────────
 
-const KpiField = ({ label, fieldKey, value, onChange, disabled }) => (
-    <div className="flex flex-col">
-        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 pl-1">
-            {label}
-        </label>
-        <div className="relative">
-            <input
-                type="text"
-                inputMode="numeric"
-                value={value || ''}
-                onChange={e => {
-                    const clean = e.target.value.replace(/\D/g, '');
-                    onChange(fieldKey, clean);
-                }}
-                disabled={disabled}
-                placeholder="0"
-                className={`
-                    input-cell font-bold text-center text-primary tracking-wider
-                    transition-all duration-200
-                    ${disabled ? 'opacity-50 cursor-not-allowed bg-slate-50 text-slate-400' : 'hover:border-blue-300 focus:border-blue-500'}
-                `}
-            />
-            {disabled && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300">
-                    <Lock size={10} />
-                </div>
-            )}
+const KpiField = ({ label, fieldKey, value, onChange, disabled }) => {
+    const [isFocused, setIsFocused] = useState(false);
+    const displayValue = isFocused ? (value || '') : formatCurrency(value);
+
+    return (
+        <div className="flex flex-col">
+            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 pl-1">
+                {label}
+            </label>
+            <div className="relative">
+                <input
+                    id={`kpi-${fieldKey}`} // NUEVO: Identificador único para el auto-focus
+                    type="text"
+                    value={displayValue}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                    onChange={(e) => handleNumericChange(e.target.value, (val) => onChange(fieldKey, val))}
+                    disabled={disabled}
+                    placeholder="$ 0.00"
+                    className={`input-cell font-bold text-center text-primary tracking-wider transition-all w-full !py-3
+                        ${disabled ? 'opacity-50 cursor-not-allowed bg-slate-50 text-slate-400' : 'hover:border-blue-300 focus:border-blue-500'}`
+                    }
+                />
+                {disabled && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300">
+                        <Lock size={12} />
+                    </div>
+                )}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 const KpiGroup = ({ group, color, iconName, fields, kpi, onUpdate, disabled }) => {
     const c = colorMap[color] || colorMap.blue;
-    const IconComponent = ICON_MAP[iconName] || Target; // Target es el icono por defecto si no encuentra match
+    const IconComponent = ICON_MAP[iconName] || Target;
 
     return (
         <div className="space-y-3">
-            {/* Group header */}
             <div className={`flex items-center gap-2.5 px-3 py-2 rounded-xl ${c.badge} w-fit`}>
                 <IconComponent size={12} className={c.icon} />
                 <span className="text-[9px] font-black uppercase tracking-[0.2em]">{group}</span>
             </div>
-            {/* Fields grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {fields.map(f => (
                     <KpiField
@@ -88,12 +103,11 @@ const KpiGroup = ({ group, color, iconName, fields, kpi, onUpdate, disabled }) =
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Componente Principal
+// 4. Componente Principal
 // ──────────────────────────────────────────────────────────────────────────────
 
 const KpiCompromisos = () => {
     const { selectedRole } = useRole();
-    // Consumimos kpiConfig y loadingKpiConfig directo de tu AgendaContext real
     const { currentAgenda, updateKpi, kpiConfig, loadingKpiConfig } = useAgenda();
 
     const isLocked = currentAgenda.status === 'pendiente' || currentAgenda.status === 'aprobada';
@@ -114,7 +128,6 @@ const KpiCompromisos = () => {
 
     return (
         <div className="mb-16 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Section header */}
             <div className="gradient-header shadow-lg relative z-10 !rounded-t-3xl">
                 <div className="flex items-center gap-3">
                     <div className="w-1.5 h-5 bg-yellow-400 rounded-full" />
@@ -135,7 +148,6 @@ const KpiCompromisos = () => {
                 )}
             </div>
 
-            {/* Body */}
             <div className="bg-white rounded-b-3xl border-x border-b border-slate-100 shadow-xl shadow-slate-200/50 p-6 md:p-8 space-y-8">
                 {isLocked && (
                     <div className="flex items-center gap-3 bg-amber-50 border border-amber-100 text-amber-700 px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest">

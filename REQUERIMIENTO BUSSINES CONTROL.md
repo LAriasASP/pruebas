@@ -51,25 +51,17 @@ Sincronización: En caso de haber trabajado en modo offline, el sistema asegura 
 
 
 ## Requerimientos Funcionales
-"El proyecto es un prototipo funcional (Frontend-only). No cuenta con un backend real ni bases de datos externas; toda la lógica y los datos están simulados directamente en el código cliente. El stack tecnológico se compone de:"
+El proyecto es una aplicación lista para producción conectada a un servidor real. El stack tecnológico se compone de:
 
 1. Frontend (La Interfaz):
-
 Core: React.js usando JavaScript (ES6+) y JSX.
-
 Enrutamiento: React Router Dom.
+Estilos: Tailwind CSS.
 
-Estilos: Tailwind CSS (implementando diseño responsivo nativo).
-
-2. Backend & Gestión de Datos (Simulado / Mocked):
-
-Arquitectura de Datos: Mocked Backend. No hay llamadas a APIs externas.
-
-Base de Datos Simulada: Uso de datos estáticos (estructuras de arrays/objetos en archivos .json o .js) gestionados en memoria a través de los estados globales de React (Context API o useState).
-
-Persistencia (Opcional): Simulación de base de datos utilizando el localStorage o sessionStorage del navegador para mantener la interactividad si se recarga la página.
-
-Lógica de Red: Funciones dummy (simuladas) usando Promesas con setTimeout para emular tiempos de carga y latencia de red.
+2. Backend & Gestión de Datos (Integración Real):
+Arquitectura de Datos: Consumo de APIs RESTful conectadas a un backend en Java (Spring Boot) y base de datos PostgreSQL.
+Peticiones de red: Uso de Axios para el manejo de endpoints.
+Lógica de Estado: Los estados globales en React se alimentan estrictamente de las respuestas del servidor. No se deben utilizar datos "mockeados" ni simulaciones estáticas en esta fase del desarrollo.
 
 3. Infraestructura y DevOps:
 

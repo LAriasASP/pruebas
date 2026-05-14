@@ -70,10 +70,6 @@ const LoginPage = () => {
                             <h1 className="max-w-lg text-4xl font-black uppercase tracking-tight text-slate-950 sm:text-5xl">
                                 Inicia sesión y entra al tablero de operación.
                             </h1>
-                            <p className="mt-5 max-w-lg text-sm leading-7 text-slate-600 sm:text-base">
-                                Mantuvimos la misma línea visual del sistema: paneles limpios, acentos azul profundo y un enfoque
-                                ejecutivo para que la transición entre login y operación se sienta natural.
-                            </p>
 
                             <div className="mt-8 grid gap-4 sm:grid-cols-2">
                                 <article className="glass-panel rounded-[24px] border border-white/70 bg-white/80 p-5 backdrop-blur">
@@ -104,10 +100,7 @@ const LoginPage = () => {
                             <div className="mb-8 flex items-start justify-between gap-4">
                                 <div>
                                     <p className="text-[11px] font-black uppercase tracking-[0.3em] text-blue-600">Inicio de sesión</p>
-                                    <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Bienvenido</h2>
-                                    <p className="mt-3 text-sm leading-6 text-slate-500">
-                                        Puedes entrar con Google o seguir usando el acceso demo por correo.
-                                    </p>
+                                    <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Bienvenido</h2>                                    
                                 </div>
                                 <div className="rounded-2xl bg-slate-950 px-3 py-2 text-right text-white">
                                     <p className="text-[9px] font-black uppercase tracking-[0.24em] text-slate-400">Sistema</p>
@@ -139,7 +132,7 @@ const LoginPage = () => {
 
                                 <div className="flex items-center gap-3 py-2">
                                     <div className="h-px flex-1 bg-slate-200" />
-                                    <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">o continuar con correo</span>
+                                    <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">continuar con correo</span>
                                     <div className="h-px flex-1 bg-slate-200" />
                                 </div>
                             </div>
@@ -150,6 +143,7 @@ const LoginPage = () => {
                                     <div className="relative">
                                         <Mail size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                                         <input
+                                            disabled
                                             type="email"
                                             value={email}
                                             onChange={(event) => setEmail(event.target.value)}
@@ -164,6 +158,7 @@ const LoginPage = () => {
                                     <div className="relative">
                                         <LockKeyhole size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                                         <input
+                                            disabled
                                             type={showPassword ? 'text' : 'password'}
                                             value={password}
                                             onChange={(event) => setPassword(event.target.value)}
@@ -182,7 +177,7 @@ const LoginPage = () => {
 
                                 <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Sesión demo</p>
+                                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Sesión</p>
                                         <p className="mt-1 text-xs font-medium text-slate-600">El login se guarda localmente en este navegador.</p>
                                     </div>
                                     <div className="h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_16px_rgba(74,222,128,0.7)]" />

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useRole } from '../context/RoleContext';
-import { useAgenda } from '../context/AgendaContext';
 import {
     ClipboardList,
     MapPin,
@@ -10,6 +9,9 @@ import PlaneacionOperativo from './Agenda/PlaneacionOperativo';
 import PlaneacionJefe from './Agenda/PlaneacionJefe';
 import EjecucionOperativo from './Agenda/EjecucionOperativo';
 import EjecucionJefe from './Agenda/EjecucionJefe';
+// Importaciones de Cierre
+import CierreOperativo from './Agenda/CierreJornadaOperativo';
+import CierreJefe from './Agenda/CierreJornadaJefe';
 
 /**
  * MÓDULO PRINCIPAL DE AGENDAS
@@ -20,7 +22,7 @@ const AgendaModule = () => {
     const { selectedRole } = useRole();
     const [activeTab, setActiveTab] = useState('planeacion');
 
-    // Estas opciones de navegación son estáticas del frontend, no requieren base de datos.
+    // Opciones de navegación estáticas del frontend
     const tabs = [
         { id: 'planeacion', label: 'Planeación', icon: ClipboardList },
         { id: 'ejecucion', label: 'Ejecución', icon: MapPin },
@@ -30,34 +32,18 @@ const AgendaModule = () => {
     const renderContent = () => {
         switch (activeTab) {
             case 'planeacion':
-                /**
-                 * TODO Lógica de Negocio:
-                 * Si la categoría en BD (seguridad.usuarios o catalogos.puestos) es 'Operativo',
-                 * carga la vista para capturar la agenda (PlaneacionOperativo).
-                 * Si es 'Jefe' (Gerente, Subdirector, Director, Ejecutivo Cob, Coord Cob, Subdir Cob),
-                 * carga el Dashboard de revisión de agendas (PlaneacionJefe).
-                 */
                 return selectedRole.category === 'Operativo'
                     ? <PlaneacionOperativo />
                     : <PlaneacionJefe />;
             case 'ejecucion':
-                /**
-                 * TODO Lógica de Negocio:
-                 * Mismo comportamiento que Planeación pero para la Fase B (En Ruta).
-                 */
                 return selectedRole.category === 'Operativo'
                     ? <EjecucionOperativo />
                     : <EjecucionJefe />;
             case 'cierre':
-                return (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <h2 className="text-2xl font-black text-primary uppercase">Fase C: Cierre de Jornada</h2>
-                        <div className="mt-12 p-20 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-300">
-                            <CheckCircle2 size={48} className="mb-4 opacity-20" />
-                            <p className="font-bold uppercase tracking-widest text-xs">Módulo en Desarrollo</p>
-                        </div>
-                    </div>
-                );
+                // Lógica inyectada para el cierre de jornada
+                return selectedRole.category === 'Operativo'
+                    ? <CierreOperativo />
+                    : <CierreJefe />;
             default:
                 return null;
         }
@@ -65,7 +51,7 @@ const AgendaModule = () => {
 
     return (
         <div className="space-y-4">
-            {/* Header Info (Contextual) - Simplified */}
+            {/* Header Info */}
             <div className="flex justify-between items-end mb-1">
                 <div className="flex flex-col">
                     <h1 className="text-sm font-black text-slate-400 uppercase tracking-[0.2em]">Módulo de Operación</h1>
@@ -75,7 +61,7 @@ const AgendaModule = () => {
                 </span>
             </div>
 
-            {/* Tab Navigation - Right Aligned */}
+            {/* Tab Navigation */}
             <div className="flex justify-end">
                 <div className="glass-panel p-1 flex gap-1 rounded-xl bg-white/50 backdrop-blur-sm border-slate-100">
                     {tabs.map((tab) => (
