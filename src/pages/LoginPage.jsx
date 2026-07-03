@@ -2,14 +2,11 @@ import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
     ArrowRight,
-    BriefcaseBusiness,
     Chrome,
     Eye,
     EyeOff,
     LockKeyhole,
-    Mail,
-    ShieldCheck,
-    Sparkles
+    Mail
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -50,57 +47,23 @@ const LoginPage = () => {
     return (
         <div className="min-h-screen overflow-hidden bg-slate-100 text-slate-900">
             <div className="relative isolate min-h-screen">
+                {/* Background Gradients */}
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.18),_transparent_28%),radial-gradient(circle_at_85%_15%,_rgba(15,23,42,0.16),_transparent_24%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_45%,_#f8fafc_100%)]" />
                 <div className="absolute -left-16 top-20 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl" />
                 <div className="absolute bottom-10 right-0 h-72 w-72 rounded-full bg-slate-950/10 blur-3xl" />
 
-                <div className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col justify-center px-4 py-8 sm:px-6 lg:flex-row lg:items-center lg:gap-10 lg:px-10">
-                    <section className="mb-8 flex-1 lg:mb-0">
-                        <div className="max-w-xl">
-                            <div className="mb-6 inline-flex items-center gap-3 rounded-full border border-slate-200 bg-white/80 px-4 py-2 shadow-sm backdrop-blur">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-blue-900/20">
-                                    <BriefcaseBusiness size={18} />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-500">Business Control</span>
-                                    <span className="text-xs font-semibold text-slate-900">Acceso operativo</span>
-                                </div>
-                            </div>
-
-                            <h1 className="max-w-lg text-4xl font-black uppercase tracking-tight text-slate-950 sm:text-5xl">
-                                Inicia sesión y entra al tablero de operación.
-                            </h1>
-
-                            <div className="mt-8 grid gap-4 sm:grid-cols-2">
-                                <article className="glass-panel rounded-[24px] border border-white/70 bg-white/80 p-5 backdrop-blur">
-                                    <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white">
-                                        <ShieldCheck size={18} />
-                                    </div>
-                                    <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-500">Acceso protegido</p>
-                                    <p className="mt-2 text-sm font-medium leading-6 text-slate-700">
-                                        Entrada controlada para supervisores, coordinadores y personal operativo.
-                                    </p>
-                                </article>
-
-                                <article className="glass-panel rounded-[24px] border border-white/70 bg-white/80 p-5 backdrop-blur">
-                                    <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/30">
-                                        <Sparkles size={18} />
-                                    </div>
-                                    <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-500">Misma experiencia</p>
-                                    <p className="mt-2 text-sm font-medium leading-6 text-slate-700">
-                                        El diseño conserva el carácter del dashboard para que todo se sienta parte del mismo producto.
-                                    </p>
-                                </article>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section className="w-full max-w-md">
+                {/* Contenedor centralizado para la tarjeta única */}
+                <div className="relative mx-auto flex min-h-screen w-full items-center justify-center px-4 py-8 sm:px-6 lg:px-10">
+                    
+                    <section className="w-full max-w-md animate-in fade-in zoom-in-95 duration-500">
                         <div className="glass-panel rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-2xl shadow-slate-300/40 backdrop-blur sm:p-8">
                             <div className="mb-8 flex items-start justify-between gap-4">
                                 <div>
                                     <p className="text-[11px] font-black uppercase tracking-[0.3em] text-blue-600">Inicio de sesión</p>
-                                    <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Bienvenido</h2>                                    
+                                    <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Bienvenido</h2>
+                                    <p className="mt-3 text-sm leading-6 text-slate-500">
+                                        Puedes entrar con Google o seguir usando el acceso demo por correo.
+                                    </p>
                                 </div>
                                 <div className="rounded-2xl bg-slate-950 px-3 py-2 text-right text-white">
                                     <p className="text-[9px] font-black uppercase tracking-[0.24em] text-slate-400">Sistema</p>
@@ -132,7 +95,7 @@ const LoginPage = () => {
 
                                 <div className="flex items-center gap-3 py-2">
                                     <div className="h-px flex-1 bg-slate-200" />
-                                    <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">continuar con correo</span>
+                                    <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">o continuar con correo</span>
                                     <div className="h-px flex-1 bg-slate-200" />
                                 </div>
                             </div>
@@ -143,7 +106,6 @@ const LoginPage = () => {
                                     <div className="relative">
                                         <Mail size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                                         <input
-                                            disabled
                                             type="email"
                                             value={email}
                                             onChange={(event) => setEmail(event.target.value)}
@@ -158,7 +120,6 @@ const LoginPage = () => {
                                     <div className="relative">
                                         <LockKeyhole size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                                         <input
-                                            disabled
                                             type={showPassword ? 'text' : 'password'}
                                             value={password}
                                             onChange={(event) => setPassword(event.target.value)}
@@ -177,7 +138,7 @@ const LoginPage = () => {
 
                                 <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Sesión</p>
+                                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Sesión demo</p>
                                         <p className="mt-1 text-xs font-medium text-slate-600">El login se guarda localmente en este navegador.</p>
                                     </div>
                                     <div className="h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_16px_rgba(74,222,128,0.7)]" />
