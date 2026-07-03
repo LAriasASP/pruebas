@@ -18,7 +18,13 @@ const CierreJornadaJefe = () => {
     const [evaluacion, setEvaluacion] = useState('');
     const [notaCierre, setNotaCierre] = useState('');
     const [enviado, setEnviado] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const [errorModal, setErrorModal] = useState({ isOpen: false, message: '' });
+
+    // Sprint 5 / RF-12 — Adaptación de terminología por canal
+    const isCobranza = canal === 'cobranza';
+    const labelOperativo = isCobranza ? 'Gestor Interno' : 'Operativo';
+    const labelOperativoPlural = isCobranza ? 'Gestores Internos' : 'Operativos';
 
     // Opciones del RF-12 del requerimiento
     const opcionesDictamen = [
@@ -48,46 +54,53 @@ const CierreJornadaJefe = () => {
     }, [canal]);
 
     const handleSubmit = async () => {
-        if (!evaluacion || !selectedAgenda?.id) return;
-        
-        try {
-            let idCalificacion = 0;
-            let etiquetaTexto = ""; // Variable para guardar el texto exacto
+        if (!evaluacion || !selectedAgenda?.id || submitting) return;
 
-            // 1. Buscamos el texto directamente de tu diccionario existente
+        // RF-12: Bloqueo de re-evaluaciones — si la agenda ya tiene dictamen, no se reenvía.
+        if (selectedAgenda.notaDictamen) {
+            setErrorModal({
+                isOpen: true,
+                message: `Este ${labelOperativo.toLowerCase()} ya cuenta con un dictamen registrado (${selectedAgenda.notaDictamen}). No es posible volver a evaluarlo en el mismo día.`
+            });
+            return;
+        }
+
+        setSubmitting(true);
+        try {
             const opcionSeleccionada = opcionesDictamen.find(opt => opt.id === evaluacion);
-            
-            if (opcionSeleccionada) {
-                // Lo pasamos a mayúsculas para estandarizar en la base de datos (Ej: "EXCELENTE")
-                etiquetaTexto = opcionSeleccionada.label.toUpperCase(); 
-                
-                switch(evaluacion) {
-                    case 'excelente': idCalificacion = 1; break;
-                    case 'satisfactorio': idCalificacion = 2; break;
-                    case 'mejora': idCalificacion = 3; break;
-                    case 'improductivo': idCalificacion = 4; break;
-                    default: idCalificacion = 1;
-                }
+            if (!opcionSeleccionada) {
+                setSubmitting(false);
+                return;
             }
 
-            // 2. Agregamos la etiqueta al payload
+            // Texto exacto que pide RF-12 (Excelente, Satisfactorio, Con Oportunidad de Mejora, Improductivo)
+            const etiquetaTexto = opcionSeleccionada.label.toUpperCase();
+            const idCalificacionMap = { excelente: 1, satisfactorio: 2, mejora: 3, improductivo: 4 };
+            const idCalificacion = idCalificacionMap[evaluacion] ?? 1;
+
             const payload = {
-                idCalificacion: idCalificacion,
-                etiqueta: etiquetaTexto, // Enviamos el texto directamente
-                notaCierre: notaCierre
+                idCalificacion,
+                etiqueta: etiquetaTexto,
+                notaCierre
             };
 
             const response = await api.put(`/agenda/plan/${selectedAgenda.id}/dictamen`, payload);
-            
-            LoggerService.info('Dictamen de cierre guardado en base de datos', response.data);
-            setEnviado(true);
 
+            LoggerService.info('Dictamen de cierre guardado en base de datos', response.data);
+
+            // Sincronizamos la lista local para que la tarjeta quede bloqueada al volver.
+            setAgendas(prev => prev.map(ag => ag.id === selectedAgenda.id
+                ? { ...ag, notaDictamen: etiquetaTexto }
+                : ag));
+            setEnviado(true);
         } catch (error) {
             LoggerService.error('Error al guardar el dictamen del jefe', error);
             setErrorModal({
                 isOpen: true,
                 message: "Hubo un error al guardar el dictamen. Revisa la consola o intenta de nuevo."
             });
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -115,14 +128,14 @@ const CierreJornadaJefe = () => {
                 <header className="mb-8">
                     <h2 className="text-3xl font-black text-indigo-950 uppercase tracking-tighter">Cierre de Jornada</h2>
                     <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.3em] mt-2">
-                        Selecciona un operativo para evaluar su desempeño
+                        {`Selecciona un ${labelOperativo.toLowerCase()} para evaluar su desempeño`}
                     </p>
                 </header>
 
                 {agendas.length === 0 ? (
                     <div className="bg-white rounded-3xl border border-slate-100 p-16 text-center shadow-sm">
                         <FileText size={48} className="text-slate-200 mx-auto mb-4" />
-                        <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No hay operativos en ruta hoy</p>
+                        <p className="text-sm font-black text-slate-400 uppercase tracking-widest">{`No hay ${labelOperativoPlural.toLowerCase()} en ruta hoy`}</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -226,13 +239,13 @@ const CierreJornadaJefe = () => {
                     </p>
                 </header>
 
-                {/* Cabecera del Operativo */}
+                {/* Cabecera del Operativo / Gestor Interno */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6 flex flex-col md:flex-row items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-slate-900 flex items-center justify-center text-white flex-shrink-0">
                         <User size={20} />
                     </div>
                     <div className="flex-1 text-center md:text-left">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Operativo Evaluado</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{`${labelOperativo} Evaluado`}</p>
                         <p className="text-xl font-black text-indigo-950 uppercase leading-none">
                             {selectedAgenda.operativo?.nombre || 'Desconocido'}
                         </p>
@@ -244,7 +257,7 @@ const CierreJornadaJefe = () => {
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
                     <div className="bg-slate-50 border-b border-slate-200 p-6 md:p-8">
                         <h3 className="text-sm font-black text-indigo-950 uppercase tracking-widest">Resultado Global del Día</h3>
-                        <p className="text-xs text-slate-500 mt-1">Selecciona el dictamen según el cumplimiento de metas y KPIs de este operativo.</p>
+                        <p className="text-xs text-slate-500 mt-1">{`Selecciona el dictamen según el cumplimiento de metas y KPIs de este ${labelOperativo.toLowerCase()}.`}</p>
                     </div>
                     
                     <div className="p-6 md:p-8 space-y-8">
@@ -286,14 +299,15 @@ const CierreJornadaJefe = () => {
                     <div className="bg-slate-50 p-6 border-t border-slate-200 flex justify-end">
                         <button
                             onClick={handleSubmit}
-                            disabled={!evaluacion}
+                            disabled={!evaluacion || submitting || !!selectedAgenda?.notaDictamen}
                             className={`flex items-center gap-2 px-8 py-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
-                                evaluacion 
-                                ? 'bg-indigo-950 text-white hover:bg-indigo-900 shadow-lg hover:shadow-indigo-900/20' 
+                                evaluacion && !submitting && !selectedAgenda?.notaDictamen
+                                ? 'bg-indigo-950 text-white hover:bg-indigo-900 shadow-lg hover:shadow-indigo-900/20'
                                 : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                             }`}
                         >
-                            <Send size={16} /> Guardar Dictamen
+                            {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                            {submitting ? 'Guardando…' : 'Guardar Dictamen'}
                         </button>
                     </div>
                 </div>

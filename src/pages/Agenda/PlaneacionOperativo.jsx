@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, RotateCcw, Plus, MapPin, Search, Navigation, Calendar, Clock, Trash2, Phone, MoreHorizontal, User, Tag, CheckCircle2 } from 'lucide-react';
+import { Send, RotateCcw, Plus, MapPin, Search, Navigation, Calendar, Clock, Trash2, Phone, MoreHorizontal, User, Tag, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useAgenda } from '../../context/AgendaContext';
 import { useCatalogs } from '../../context/CatalogContext';
+import { useRole } from '../../context/RoleContext';
 import KpiCompromisos from './KpiCompromisos';
 import UIModal from '../../components/UIModal';
 
@@ -227,12 +228,13 @@ const PhoneFields = ({ v, idx, segmentName, updateVisit }) => {
     );
 };
 
-const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAvailable, mockDatabase }) => {
+const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAvailable, mockDatabase, isCobranza }) => {
     const isClientOnlySegment = segmentName === 'Seguimiento de Cartera' || segmentName === 'Gestión de Empresarias';
-    
-    const { 
-        productos = [], subproductos = [], programas = [], tiposIntegracion = [], 
-        actividades = [], clasificaciones = [], herramientas = [], tiposGestion = []
+
+    const {
+        productos = [], subproductos = [], programas = [], tiposIntegracion = [],
+        actividades = [], clasificaciones = [], herramientas = [], tiposGestion = [],
+        estatusCartera = [], subEstatus = []
     } = useCatalogs() || {};
 
     const renderSegmentDetails = () => {
@@ -334,7 +336,19 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                         </div>
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Estatus Cartera</label>
-                            <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-black uppercase text-primary h-[42px] flex items-center px-4">{v.ultimoEstatus || 'S/N'}</div>
+                            {isCobranza ? (
+                                <select
+                                    id={`estatus-${segmentName}-${idx}`}
+                                    value={v.ultimoEstatus || ''}
+                                    onChange={e => updateVisit(segmentName, idx, 'ultimoEstatus', e.target.value)}
+                                    className="input-cell w-full uppercase text-[10px] h-[42px]"
+                                >
+                                    <option value="" disabled>Seleccionar estatus...</option>
+                                    {estatusCartera.map(es => <option key={es.id || es.id_etiqueta} value={es.nombre}>{es.nombre}</option>)}
+                                </select>
+                            ) : (
+                                <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-black uppercase text-primary h-[42px] flex items-center px-4">{v.ultimoEstatus || 'S/N'}</div>
+                            )}
                         </div>
                         <div className="col-span-1 sm:col-span-2">
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Mora (Inicio / Actual)</label>
@@ -358,8 +372,20 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                             </div>
                         </div>
                         <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Categoría</label>
-                            <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-black uppercase text-accent h-[42px] flex items-center px-4">{v.categoriaGestion || 'PREVENTIVO'}</div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Bucket de Mora</label>
+                            {isCobranza ? (
+                                <select
+                                    id={`bucket-${segmentName}-${idx}`}
+                                    value={v.categoriaGestion || ''}
+                                    onChange={e => updateVisit(segmentName, idx, 'categoriaGestion', e.target.value)}
+                                    className="input-cell w-full uppercase text-[10px] h-[42px]"
+                                >
+                                    <option value="" disabled>Seleccionar bucket...</option>
+                                    {subEstatus.map(b => <option key={b.id || b.id_sub_estatus} value={b.nombre}>{b.nombre}</option>)}
+                                </select>
+                            ) : (
+                                <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-black uppercase text-accent h-[42px] flex items-center px-4">{v.categoriaGestion || 'PREVENTIVO'}</div>
+                            )}
                         </div>
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Monto Amort.</label>
@@ -371,7 +397,19 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                         </div>
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta Aplicada</label>
-                            <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4">{v.herramientaAplicada || 'NINGUNA'}</div>
+                            {isCobranza ? (
+                                <select
+                                    id={`herr-aplicada-${segmentName}-${idx}`}
+                                    value={v.herramientaAplicada || ''}
+                                    onChange={e => updateVisit(segmentName, idx, 'herramientaAplicada', e.target.value)}
+                                    className="input-cell w-full uppercase text-[10px] h-[42px]"
+                                >
+                                    <option value="" disabled>Seleccionar...</option>
+                                    {herramientas.map(h => <option key={h.id || h.id_herramienta} value={h.nombre}>{h.nombre}</option>)}
+                                </select>
+                            ) : (
+                                <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4">{v.herramientaAplicada || 'NINGUNA'}</div>
+                            )}
                         </div>
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo de Gestión (Personal)</label>
@@ -520,7 +558,7 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
     );
 };
 
-const SegmentSection = ({ title, visits, segmentName }) => {
+const SegmentSection = ({ title, visits, segmentName, isCobranza }) => {
     const { currentAgenda, updateVisit, addRow, removeRow, getVisibleSegments, mockDatabase } = useAgenda();
     const isClientOnlySegment = segmentName === 'Seguimiento de Cartera' || segmentName === 'Gestión de Empresarias';
 
@@ -583,6 +621,7 @@ const SegmentSection = ({ title, visits, segmentName }) => {
                                 removeRow={removeRow}
                                 isTimeAvailable={isTimeAvailable}
                                 mockDatabase={mockDatabase}
+                                isCobranza={isCobranza}
                             />
                         ))}
                     </div>
@@ -596,11 +635,14 @@ const SegmentSection = ({ title, visits, segmentName }) => {
 const PlaneacionOperativo = () => {
     // IMPORTANTE: Extraemos kpiConfig para poder validar los KPIs
     const { currentAgenda, sendForAuthorization, resetAgenda, getVisibleSegments, kpiConfig } = useAgenda();
+    const { selectedRole } = useRole();
+    const isCobranza = selectedRole?.canal?.toUpperCase() === 'COBRANZA';
     const visibleSegments = getVisibleSegments();
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [showClearModal, setShowClearModal] = useState(false);
     const [isDirty, setIsDirty] = useState(false);
-    const [validationModal, setValidationModal] = useState({ isOpen: false, message: '', focusId: null });
+    const [validationModal, setValidationModal] = useState({ isOpen: false, message: '', focusId: null, type: 'warning', title: 'Datos Incompletos' });
     
     const initialDataRef = useRef(null);
     const prevIdRef = useRef(currentAgenda.id);
@@ -626,50 +668,80 @@ const PlaneacionOperativo = () => {
     };
 
     const handleCertificar = () => {
+        // 0. Evitar doble clic
+        if (isSubmitting) return;
+
         // 1. Validación de Bloques de Planeación
         for (const segmentName of visibleSegments) {
             const visits = currentAgenda.segments[segmentName] || [];
             for (let i = 0; i < visits.length; i++) {
                 const v = visits[i];
                 if (!v.time) {
-                    setValidationModal({ isOpen: true, message: `Por favor selecciona la Hora en el bloque ${segmentName}, fila ${i + 1}.`, focusId: `time-${segmentName}-${i}` });
-                    return; // Detiene el proceso
+                    setValidationModal({ isOpen: true, title: 'Datos Incompletos', type: 'warning', message: `Por favor selecciona la Hora en el bloque ${segmentName}, fila ${i + 1}.`, focusId: `time-${segmentName}-${i}` });
+                    return; // Retorna normal, el botón nunca se bloqueó
                 }
                 if (!v.name || v.name.trim() === '') {
-                    setValidationModal({ isOpen: true, message: `El Nombre del Cliente no puede ir vacío en el bloque ${segmentName}, fila ${i + 1}.`, focusId: `name-${segmentName}-${i}` });
+                    setValidationModal({ isOpen: true, title: 'Datos Incompletos', type: 'warning', message: `El Nombre del Cliente no puede ir vacío en el bloque ${segmentName}, fila ${i + 1}.`, focusId: `name-${segmentName}-${i}` });
                     return;
                 }
-                
+
                 const isClientOnly = segmentName === 'Seguimiento de Cartera' || segmentName === 'Gestión de Empresarias';
                 if (!isClientOnly) {
                     if (!v.classification) {
-                        setValidationModal({ isOpen: true, message: `Por favor selecciona una Clasificación en el bloque ${segmentName}, fila ${i + 1}.`, focusId: `class-${segmentName}-${i}` });
+                        setValidationModal({ isOpen: true, title: 'Datos Incompletos', type: 'warning', message: `Por favor selecciona una Clasificación en el bloque ${segmentName}, fila ${i + 1}.`, focusId: `class-${segmentName}-${i}` });
                         return;
                     }
                     if (!v.activity || v.activity.trim() === '') {
-                        setValidationModal({ isOpen: true, message: `La Actividad/Objetivo no puede ir vacía en el bloque ${segmentName}, fila ${i + 1}.`, focusId: `act-${segmentName}-${i}` });
+                        setValidationModal({ isOpen: true, title: 'Datos Incompletos', type: 'warning', message: `La Actividad/Objetivo no puede ir vacía en el bloque ${segmentName}, fila ${i + 1}.`, focusId: `act-${segmentName}-${i}` });
                         return;
                     }
                 }
             }
         }
 
-        // 2. Validación de KPIs (Todos son obligatorios)
+        // 2. Validación Anti-Empalmes (RF-03): bloquea dos o más visitas en el mismo horario
+        const slotsOcupados = new Map(); // time -> { segmentName, idx }
+        for (const segmentName of visibleSegments) {
+            const visits = currentAgenda.segments[segmentName] || [];
+            for (let i = 0; i < visits.length; i++) {
+                const v = visits[i];
+                if (!v.time) continue;
+                if (slotsOcupados.has(v.time)) {
+                    const ya = slotsOcupados.get(v.time);
+                    setValidationModal({
+                        isOpen: true,
+                        type: 'danger',
+                        title: 'Empalme de horarios detectado',
+                        message: `No puedes registrar dos visitas en el mismo horario (${v.time}). Revisa "${ya.segmentName}" fila ${ya.idx + 1} y "${segmentName}" fila ${i + 1}.`,
+                        focusId: `time-${segmentName}-${i}`
+                    });
+                    return; // Retorna normal, el botón nunca se bloqueó
+                }
+                slotsOcupados.set(v.time, { segmentName, idx: i });
+            }
+        }
+
+        // 3. Validación de KPIs (Todos son obligatorios)
         const kpis = currentAgenda.kpiCompromisos || {};
         if (kpiConfig) {
             for (const group of kpiConfig) {
                 for (const field of group.fields) {
                     const val = kpis[field.key];
                     if (!val || val.toString().trim() === '') {
-                        setValidationModal({ isOpen: true, message: `El campo "${field.label}" en la sección de KPIs es obligatorio.`, focusId: `kpi-${field.key}` });
-                        return; // Detiene el proceso
+                        setValidationModal({ isOpen: true, title: 'Datos Incompletos', type: 'warning', message: `El campo "${field.label}" en la sección de KPIs es obligatorio.`, focusId: `kpi-${field.key}` });
+                        return; // Retorna normal, el botón nunca se bloqueó
                     }
                 }
             }
         }
 
-        // Si pasa todas las validaciones, ejecutamos la autorización
-        sendForAuthorization();
+        // 4. AHORA SÍ: Pasaron todas las validaciones. Bloqueamos el botón y enviamos.
+        setIsSubmitting(true);
+        
+        sendForAuthorization()
+        .finally(() => {
+            setIsSubmitting(false); // Desbloqueamos el botón al terminar la petición
+        });
     };
 
     // 1. Normalizamos el estatus para evitar errores por espacios, mayúsculas o variaciones ("ejecutado" vs "ejecutada")
@@ -725,7 +797,7 @@ const PlaneacionOperativo = () => {
             </header>
 
             {visibleSegments.map(name => (
-                <SegmentSection key={name} title={name.toUpperCase()} visits={currentAgenda.segments[name]} segmentName={name} />
+                <SegmentSection key={name} title={name.toUpperCase()} visits={currentAgenda.segments[name]} segmentName={name} isCobranza={isCobranza} />
             ))}
 
             <KpiCompromisos />
@@ -735,7 +807,9 @@ const PlaneacionOperativo = () => {
                     
                     <button 
                         onClick={() => setShowClearModal(true)} 
-                        className="flex items-center gap-3 text-slate-400 hover:text-rose-500 font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 md:hover:bg-rose-500/10 px-6 py-4 rounded-2xl transition-all w-full md:w-auto justify-center"
+                        disabled={isSubmitting} // <-- Deshabilitar si está cargando
+                        className={`flex items-center gap-3 text-slate-400 font-black text-[10px] uppercase tracking-widest px-6 py-4 rounded-2xl transition-all w-full md:w-auto justify-center
+                            ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:text-rose-500 hover:bg-rose-50 md:hover:bg-rose-500/10'}`}
                     >
                         <RotateCcw size={16} /> Limpiar Formulario
                     </button>
@@ -745,17 +819,17 @@ const PlaneacionOperativo = () => {
                             {isDirty ? 'Certifica tu agenda para avisar al supervisor' : 'Realiza cambios para habilitar el envío'}
                         </p>
                         
-                        {/* BOTÓN ACTUALIZADO CON VALIDACIÓN */}
+                        {/* BOTÓN ACTUALIZADO CON BLOQUEO Y SPINNER */}
                         <button 
                             onClick={handleCertificar} 
-                            disabled={!isDirty}
-                            className={`w-full md:w-auto px-20 py-6 rounded-[24px] text-xs font-black uppercase tracking-[0.3em] transition-all
-                                ${isDirty 
-                                    ? 'bg-primary md:bg-white md:text-primary text-white shadow-2xl hover:scale-105 active:scale-95' 
-                                    : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                            disabled={!isDirty || isSubmitting} // Deshabilita si no hay cambios o si ya está enviando
+                            className={`w-full md:w-auto px-10 py-6 rounded-[24px] text-xs font-black uppercase tracking-[0.3em] transition-all 
+                                ${(!isDirty || isSubmitting)
+                                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' 
+                                    : 'bg-primary md:bg-white md:text-primary text-white shadow-2xl hover:scale-105 active:scale-95'
                                 }`}
                         >
-                            {isDirty ? 'Certificar Jornada' : 'Sin Cambios'}
+                            {isSubmitting ? 'Procesando...' : (isDirty ? 'Certificar Jornada' : 'Sin Cambios')}
                         </button>
                     </div>
                 </div>
@@ -774,19 +848,25 @@ const PlaneacionOperativo = () => {
                 cancelButtonText="Cancelar"
             />
 
-            {/* NUEVO: Modal de Validación */}
+            {/* NUEVO: Modal de Validación (soporta warning + danger anti-empalmes) */}
             <UIModal
                 isOpen={validationModal.isOpen}
                 onClose={() => {
                     setValidationModal(prev => ({ ...prev, isOpen: false }));
-                    // Hacemos focus dinámico después de que el modal se cierra
                     if (validationModal.focusId) {
                         setTimeout(() => document.getElementById(validationModal.focusId)?.focus(), 100);
                     }
                 }}
-                type="warning"
-                title="Datos Incompletos"
-                message={validationModal.message}
+                type={validationModal.type || 'warning'}
+                title={validationModal.title || 'Datos Incompletos'}
+                message={
+                    validationModal.type === 'danger' ? (
+                        <div className="flex items-start gap-3">
+                            <AlertTriangle size={22} className="text-rose-500 mt-0.5 shrink-0" />
+                            <span>{validationModal.message}</span>
+                        </div>
+                    ) : validationModal.message
+                }
                 showConfirmButton={true}
                 confirmButtonText="Entendido"
                 onConfirm={() => {

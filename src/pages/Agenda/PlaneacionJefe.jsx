@@ -39,6 +39,60 @@ const agruparPorZona = (agendas) => {
 const agendasDeEjecutivo = (allAgendas, ejecutivoId) =>
     allAgendas.filter(ag => ag.ejecutivoId === ejecutivoId);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER COBRANZA — Drill-Down jerárquico
+//
+// Reconstruye, a partir del DTO `AgendaJefeDTO`, las dos colecciones que
+// consumen las vistas existentes (VistaSubdirCobranza / VistaCoordCobranza /
+// VistaEjecutivoCobranza):
+//   - ejecutivos:    { id, nombre, sucursalesRef, coordinadorId }
+//   - coordinadores: { id, nombre }
+//
+// `agenda.ejecutivoId` viene del SQL como `u.id_jefe` → corresponde al jefe
+// directo del operativo (gestor N1). Para un Coordinador este es el Ejecutivo
+// de Cobranza; para un Subdirector lo agrupamos bajo un coordinador inferido
+// (`agenda.coordinadorId` si el DTO lo expone, o un fallback estable).
+// ─────────────────────────────────────────────────────────────────────────────
+const agruparParaCobranza = (agendas) => {
+    const ejecutivosMap = new Map();
+    const coordinadoresMap = new Map();
+
+    agendas.forEach(ag => {
+        // Sprint 5: el DTO ahora inyecta ejecutivo/coordinador dentro de
+        // `operativo`. Mantenemos fallback a la raíz por compatibilidad.
+        const op = ag.operativo || {};
+        const ejId = op.ejecutivoId ?? ag.ejecutivoId;
+        if (ejId == null) return;
+
+        const coordId = op.coordinadorId ?? ag.coordinadorId ?? -1;
+        const coordNombre = op.coordinadorNombre
+            ?? ag.coordinadorNombre
+            ?? (coordId === -1 ? 'Mi Coordinación' : `Coord. #${coordId}`);
+        if (!coordinadoresMap.has(coordId)) {
+            coordinadoresMap.set(coordId, { id: coordId, nombre: coordNombre });
+        }
+
+        if (!ejecutivosMap.has(ejId)) {
+            ejecutivosMap.set(ejId, {
+                id: ejId,
+                nombre: op.ejecutivoNombre ?? ag.ejecutivoNombre ?? `Ejecutivo #${ejId}`,
+                sucursalesRef: new Set(),
+                coordinadorId: coordId
+            });
+        }
+        const ej = ejecutivosMap.get(ejId);
+        if (ag.sucursal) ej.sucursalesRef.add(ag.sucursal);
+    });
+
+    const ejecutivos = Array.from(ejecutivosMap.values()).map(e => ({
+        ...e,
+        sucursalesRef: Array.from(e.sucursalesRef)
+    }));
+    const coordinadores = Array.from(coordinadoresMap.values());
+
+    return { coordinadores, ejecutivos, allAgendas: agendas };
+};
+
 const contarEstados = (agendasList) => ({
     total: agendasList.length,
     pendiente: agendasList.filter(a => a.status?.toLowerCase() === 'pendiente').length,
@@ -327,7 +381,7 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
 
             {/* Acciones */}
             {localStatus === 'pendiente' && (
-                <div className="flex gap-3 mt-8 pt-6 border-t border-slate-100">
+                <div className="flex gap-3 mt-8 pt-6 border-t border-slate-100 mb-10">
                     <button
                         onClick={() => setModModal(true)}
                         disabled={isProcessing}
@@ -363,9 +417,15 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
                         {Object.entries(agenda.kpiCompromisos).map(([key, value]) => {
                             const valNum = Number(value);
                             
+                            // 1. Definimos cuáles son cantidad y no dinero
+                            const QUANTITY_KPIS = ['servicioPremiumPendiente', 'visitasRealizadas', 'promesasDia'];
+                            const isQuantity = QUANTITY_KPIS.includes(key);
+                            
+                            // 2. Formateo dinámico
                             const formattedValue = new Intl.NumberFormat('es-MX', { 
-                                style: 'currency', 
-                                currency: 'MXN' 
+                                style: isQuantity ? 'decimal' : 'currency', 
+                                currency: isQuantity ? undefined : 'MXN',
+                                maximumFractionDigits: isQuantity ? 0 : 2
                             }).format(valNum);
                             
                             return (
@@ -1148,24 +1208,82 @@ const PlaneacionJefe = () => {
     if (loading) return <div className="flex flex-col items-center justify-center py-32"><Loader2 className="animate-spin text-blue-500" /></div>;
 
     const renderVistaJerarquica = () => {
-        // 1. Agrupamos las agendas usando tu helper
+        // 1. Inferimos el nivel. Si tu Context tiene selectedRole.nivel úsalo,
+        // si no, lo detectamos por el nombre del rol.
+        const nivel = selectedRole?.nivel ||
+                     (roleName?.toUpperCase().includes('N3') ? 3 :
+                      roleName?.toUpperCase().includes('N2') || roleName?.toLowerCase().includes('zona') || roleName?.toLowerCase().includes('subdirector') || roleName?.toLowerCase().includes('coordinador') ? 2 : 1);
+
+        // ─────────────────────────────────────────────────────────────────
+        // BIFURCACIÓN POR CANAL — Cobranza usa jerarquía basada en puestos:
+        //   N3 Subdirector → VistaSubdirCobranza
+        //   N2 Coordinador → VistaCoordCobranza
+        //   N1 Ejecutivo   → VistaEjecutivoCobranza
+        // ─────────────────────────────────────────────────────────────────
+        if (canal === 'cobranza') {
+            const { coordinadores, ejecutivos, allAgendas } = agruparParaCobranza(agendas);
+
+            if (nivel === 3) {
+                return (
+                    <VistaSubdirCobranza
+                        coordinadores={coordinadores}
+                        ejecutivos={ejecutivos}
+                        allAgendas={allAgendas}
+                        rolName={roleName}
+                        onApproveAgenda={handleApproveAgenda}
+                        onModAgenda={handleModAgenda}
+                    />
+                );
+            }
+
+            if (nivel === 2) {
+                // Como Coordinador, "miCoordinador" representa el contexto del usuario
+                // y "ejecutivos" son los Ejecutivos de Cobranza que le reportan.
+                const miCoordinador = coordinadores[0] || { id: selectedRole?.id, nombre: roleName };
+                return (
+                    <VistaCoordCobranza
+                        coordinador={miCoordinador}
+                        ejecutivos={ejecutivos}
+                        allAgendas={allAgendas}
+                        rolName={roleName}
+                        onApproveAgenda={handleApproveAgenda}
+                        onModAgenda={handleModAgenda}
+                    />
+                );
+            }
+
+            // NIVEL 1 (Ejecutivo de Cobranza)
+            const miEjecutivo = ejecutivos[0] || {
+                id: selectedRole?.id,
+                nombre: roleName || 'Ejecutivo',
+                sucursalesRef: []
+            };
+            return (
+                <VistaEjecutivoCobranza
+                    ejecutivo={miEjecutivo}
+                    agendas={allAgendas}
+                    rolName={roleName}
+                    onApproveAgenda={handleApproveAgenda}
+                    onModAgenda={handleModAgenda}
+                />
+            );
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // CANAL COMERCIAL — jerarquía por Zona/Sucursal (vista original).
+        // ─────────────────────────────────────────────────────────────────
         const zonasData = agruparPorZona(agendas);
         const zonasNombres = Object.keys(zonasData);
-        
-        // 2. Inferimos el nivel. Si tu Context tiene selectedRole.nivel úsalo, 
-        // si no, lo detectamos por el nombre del rol.
-        const nivel = selectedRole?.nivel || 
-                     (roleName?.toUpperCase().includes('N2') || roleName?.toLowerCase().includes('zona') || roleName?.toLowerCase().includes('subdirector') ? 2 : 1);
 
         // NIVEL 3: Director (Vista Nacional)
         if (nivel === 3 || roleName?.toUpperCase().includes('N3')) {
             return (
-                <VistaDirector 
-                    zonasData={zonasData} 
-                    rolName={roleName} 
-                    canal={canal} 
-                    onApproveAgenda={handleApproveAgenda} 
-                    onModAgenda={handleModAgenda} 
+                <VistaDirector
+                    zonasData={zonasData}
+                    rolName={roleName}
+                    canal={canal}
+                    onApproveAgenda={handleApproveAgenda}
+                    onModAgenda={handleModAgenda}
                 />
             );
         }
@@ -1175,13 +1293,13 @@ const PlaneacionJefe = () => {
             const miZona = zonasNombres[0] || 'Mi Zona';
             const sucursalesDeMiZona = zonasData[miZona] || {};
             return (
-                <VistaSubdirector 
-                    zona={miZona} 
-                    sucursalesData={sucursalesDeMiZona} 
-                    rolName={roleName} 
-                    canal={canal} 
-                    onApproveAgenda={handleApproveAgenda} 
-                    onModAgenda={handleModAgenda} 
+                <VistaSubdirector
+                    zona={miZona}
+                    sucursalesData={sucursalesDeMiZona}
+                    rolName={roleName}
+                    canal={canal}
+                    onApproveAgenda={handleApproveAgenda}
+                    onModAgenda={handleModAgenda}
                 />
             );
         }
@@ -1189,16 +1307,16 @@ const PlaneacionJefe = () => {
         // NIVEL 1: Gerente de Sucursal (Por defecto)
         const miZona = zonasNombres[0] || 'Mi Zona';
         const miSucursal = zonasData[miZona] ? Object.keys(zonasData[miZona])[0] : 'Mi Sucursal';
-        
+
         return (
-            <VistaGerente 
-                agendas={agendas} 
-                sucursal={miSucursal} 
-                zona={miZona} 
-                rolName={roleName} 
-                canal={canal} 
-                onApproveAgenda={handleApproveAgenda} 
-                onModAgenda={handleModAgenda} 
+            <VistaGerente
+                agendas={agendas}
+                sucursal={miSucursal}
+                zona={miZona}
+                rolName={roleName}
+                canal={canal}
+                onApproveAgenda={handleApproveAgenda}
+                onModAgenda={handleModAgenda}
             />
         );
     };

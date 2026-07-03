@@ -4,6 +4,16 @@ import { useCatalogs } from './CatalogContext';
 import api from '../api/axiosConfig';
 import UIModal from '../components/UIModal'; 
 
+const MATRIZ_SEGMENTOS = {
+    'ASESOR FINANCIERO': ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera'],
+    'ASESOR COMERCIAL': ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera','Gestión de Empresarias'],
+    'COORDINADOR DE LÍNEA REVOLVENTE': ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera','Gestión de Empresarias'],
+    'ASESOR EN FORMACIÓN (SIN AGENDA)': [],
+    'GESTOR INTERNO': ['Seguimiento de Cartera', 'Evaluación e Integración']
+};
+
+const SEGMENTOS_DEFAULT = ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera', 'Gestión de Empresarias'];
+
 const AgendaContext = createContext();
 
 export const AgendaProvider = ({ children }) => {
@@ -221,20 +231,8 @@ export const AgendaProvider = ({ children }) => {
 
     // ── RENDERIZADO CONDICIONAL POR ROLES (RBAC) ──
     const getVisibleSegments = () => {
-        const isCobranza = selectedRole?.canal?.toUpperCase() === 'COBRANZA';
-        const roleId = selectedRole?.id;
-
-        let segments = ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera', 'Gestión de Empresarias'];
-
-        if (isCobranza) {
-            return ['Seguimiento de Cartera']; 
-        }
-
-        if (roleId === 'asesor-f') return ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera'];
-        if (roleId === 'gestor-i') return ['Evaluación e Integración', 'Seguimiento de Cartera'];
-        if (roleId === 'gestor-e') return ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera'];
-        
-        return segments;
+        const roleName = selectedRole?.name?.toUpperCase();
+        return MATRIZ_SEGMENTOS[roleName] ?? SEGMENTOS_DEFAULT;
     };
 
     const updateVisit = (segmentName, index, field, value) => {
@@ -374,6 +372,35 @@ export const AgendaProvider = ({ children }) => {
             segment.splice(index, 1);
             return { ...prev, segments: { ...prev.segments, [segmentName]: segment } };
         });
+    };
+
+    // ── Sprint 5 / RF-11: Lector de gestiones REALMENTE ejecutadas ──────────
+    // Si no se pasa una agenda, usa la del propio Context (`currentAgenda`).
+    // Devuelve un mapa { [idVisita]: { checkInTime, resultado, gpsStatus } }
+    // sólo cuando la agenda está en un estatus que admite gestiones cerradas.
+    const getRealCheckIns = (agenda = currentAgenda) => {
+        if (!agenda) return {};
+        const validStatuses = ['aprobada', 'ejecutada', 'completada'];
+        if (!validStatuses.includes(agenda.status?.toLowerCase())) return {};
+
+        const result = {};
+        const allVisits = Object.values(agenda.segments || {}).flat().filter(v => v && v.name);
+
+        allVisits.forEach(v => {
+            const isDone = v.statusAction === 'FINALIZADA'
+                || v.statusAction === 'NO REALIZADA'
+                || v.estado === 'FINALIZADA';
+            if (isDone) {
+                const resultText = v.managementResult || v.resultado || 'Gestionada';
+                result[v.id] = {
+                    checkInTime: v.time || '--:--',
+                    resultado: String(resultText).split(' | ')[0],
+                    resultadoCompleto: resultText,
+                    gpsStatus: String(resultText).includes('GPS') ? 'ok' : 'idle'
+                };
+            }
+        });
+        return result;
     };
 
     const validateAgenda = () => {
@@ -559,7 +586,7 @@ export const AgendaProvider = ({ children }) => {
             currentAgenda, updateVisit, updateKpi, updateKpiReal, registerCheckIn, addUnplannedVisit,
             scheduleFollowUp, scheduledFollowUps, addRow, removeRow, sendForAuthorization, resetAgenda,
             getVisibleSegments, updateAgendaStatus, mockDatabase: directorio, loadingDirectorio,
-            loadingAgenda, kpiConfig, loadingKpiConfig
+            loadingAgenda, kpiConfig, loadingKpiConfig, getRealCheckIns
         }}>
             {children}
             

@@ -4,21 +4,34 @@ import { useAgenda } from '../../context/AgendaContext';
 import { Target, Lock, TrendingUp, DollarSign, Users, Activity, Loader2 } from 'lucide-react';
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 1. Funciones Auxiliares para Formato de Moneda
+// 1. Funciones Auxiliares para Formato
 // ──────────────────────────────────────────────────────────────────────────────
 const formatCurrency = (val) => {
-    if (!val) return '$0.00';
+    if (!val && val !== 0) return '$0.00';
     const num = parseFloat(val);
     if (isNaN(num)) return '$0.00';
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(num);
 };
 
-const handleNumericChange = (value, callback) => {
-    // Permite números y un solo punto decimal
-    let clean = value.replace(/[^\d.]/g, '');
-    const parts = clean.split('.');
-    if (parts.length > 2) clean = parts[0] + '.' + parts.slice(1).join('');
-    callback(clean);
+const formatQuantity = (val) => {
+    if (!val && val !== 0) return '0';
+    const num = parseInt(val, 10);
+    if (isNaN(num)) return '0';
+    return new Intl.NumberFormat('es-MX').format(num);
+};
+
+const handleNumericChange = (value, tipo, callback) => {
+    if (tipo === 'CANTIDAD') {
+        // Solo permite números enteros (remueve todo lo que no sea dígito)
+        const clean = value.replace(/\D/g, '');
+        callback(clean);
+    } else {
+        // Permite números y un solo punto decimal para MONEDA
+        let clean = value.replace(/[^\d.]/g, '');
+        const parts = clean.split('.');
+        if (parts.length > 2) clean = parts[0] + '.' + parts.slice(1).join('');
+        callback(clean);
+    }
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -43,9 +56,16 @@ const colorMap = {
 // 3. Sub-componentes
 // ──────────────────────────────────────────────────────────────────────────────
 
-const KpiField = ({ label, fieldKey, value, onChange, disabled }) => {
+const KpiField = ({ label, fieldKey, value, tipoValor, onChange, disabled }) => {
     const [isFocused, setIsFocused] = useState(false);
-    const displayValue = isFocused ? (value || '') : formatCurrency(value);
+
+    // Formateamos visualmente dependiendo de lo que dictó la BD
+    const displayValue = isFocused 
+        ? (value || '') 
+        : (tipoValor === 'CANTIDAD' ? formatQuantity(value) : formatCurrency(value));
+
+    // El placeholder también cambia para dar mejor retroalimentación al usuario
+    const placeholderText = tipoValor === 'CANTIDAD' ? '0' : '$ 0.00';
 
     return (
         <div className="flex flex-col">
@@ -54,14 +74,15 @@ const KpiField = ({ label, fieldKey, value, onChange, disabled }) => {
             </label>
             <div className="relative">
                 <input
-                    id={`kpi-${fieldKey}`} // NUEVO: Identificador único para el auto-focus
+                    id={`kpi-${fieldKey}`}
                     type="text"
                     value={displayValue}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
-                    onChange={(e) => handleNumericChange(e.target.value, (val) => onChange(fieldKey, val))}
+                    // Pasamos el tipo a la función de validación
+                    onChange={(e) => handleNumericChange(e.target.value, tipoValor, (val) => onChange(fieldKey, val))}
                     disabled={disabled}
-                    placeholder="$ 0.00"
+                    placeholder={placeholderText}
                     className={`input-cell font-bold text-center text-primary tracking-wider transition-all w-full !py-3
                         ${disabled ? 'opacity-50 cursor-not-allowed bg-slate-50 text-slate-400' : 'hover:border-blue-300 focus:border-blue-500'}`
                     }
@@ -92,6 +113,8 @@ const KpiGroup = ({ group, color, iconName, fields, kpi, onUpdate, disabled }) =
                         key={f.key}
                         label={f.label}
                         fieldKey={f.key}
+                        // MAGIA AQUÍ: Traducimos el booleano 'count' del backend a nuestro Tipo
+                        tipoValor={f.count ? 'CANTIDAD' : 'MONEDA'} 
                         value={kpi[f.key]}
                         onChange={onUpdate}
                         disabled={disabled}

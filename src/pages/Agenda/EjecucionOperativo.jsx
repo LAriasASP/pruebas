@@ -144,19 +144,36 @@ const nowTimeStr = () => {
 };
 
 // ── GPS Hook ─────────────────────────────────────────────────────────────────
+// RF-06 / CA-02: La geolocalización es obligatoria. Exponemos errorCode para
+// poder distinguir "permiso denegado" (1) de "no disponible / timeout" (2/3).
 const useGPS = (active) => {
-    const [state, setState] = useState({ status: 'idle', lat: null, lng: null });
-    useEffect(() => {
-        if (!active) { setState({ status: 'idle', lat: null, lng: null }); return; }
-        setState({ status: 'loading', lat: null, lng: null });
-        if (!navigator.geolocation) { setState({ status: 'error', lat: null, lng: null }); return; }
+    const [state, setState] = useState({ status: 'idle', lat: null, lng: null, errorCode: null, capturedAt: null });
+
+    const requestPosition = () => {
+        setState(prev => ({ ...prev, status: 'loading', errorCode: null }));
+        if (!navigator.geolocation) {
+            setState({ status: 'error', lat: null, lng: null, errorCode: 2, capturedAt: null });
+            return;
+        }
         navigator.geolocation.getCurrentPosition(
-            p => setState({ status: 'ok', lat: p.coords.latitude.toFixed(5), lng: p.coords.longitude.toFixed(5) }),
-            () => setState({ status: 'error', lat: null, lng: null }),
+            p => setState({
+                status: 'ok',
+                lat: p.coords.latitude.toFixed(5),
+                lng: p.coords.longitude.toFixed(5),
+                errorCode: null,
+                capturedAt: new Date().toISOString()
+            }),
+            err => setState({ status: 'error', lat: null, lng: null, errorCode: err?.code ?? 2, capturedAt: null }),
             { timeout: 10000, enableHighAccuracy: true }
         );
+    };
+
+    useEffect(() => {
+        if (!active) { setState({ status: 'idle', lat: null, lng: null, errorCode: null, capturedAt: null }); return; }
+        requestPosition();
     }, [active]);
-    return state;
+
+    return { ...state, retry: requestPosition };
 };
 
 // ── Blocked Screen ────────────────────────────────────────────────────────────
@@ -230,12 +247,14 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
     });
     
     const [alertConfig, setAlertConfig] = useState({ isOpen: false, message: '', focusId: null });
+    // RF-06 / CA-02: Modal específico para errores de GPS (obligatorio)
+    const [gpsErrorModal, setGpsErrorModal] = useState({ isOpen: false, message: '' });
     const [photoPreview, setPhotoPreview] = useState(null);
     const [startMs] = useState(() => Date.now());
     const [openTime] = useState(nowTimeStr);
     const gps = useGPS(true);
     const fileRef = useRef(null);
-    
+
     const isCompromiso = form.resultado?.toLowerCase().includes('compromiso');
     const isPromesa = form.resultado?.toLowerCase().includes('promesa');
     const needsAmountDate = isCompromiso || isPromesa;
@@ -280,17 +299,20 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
             if (isCarteraSegment) {
                 if (form.clienteEncontrado === null) return { msg: 'Indica si encontraste al cliente.', id: 'clienteEncontrado' };
                 if (!form.resultado) return { msg: 'Selecciona el estatus actualizado de la cartera.', id: 'resultadoCartera' };
-                if (needsAmountDate) {
-                    if (!form.pagoMonto) return { msg: 'Especifica el Monto del compromiso.', id: 'pagoMonto' };
-                    if (!form.pagoFecha) return { msg: 'Especifica la Fecha del compromiso.', id: 'pagoFecha' };
-                }
             } else {
                 if (form.actividadRealizada === null) return { msg: 'Indica si se completó la actividad.', id: 'actividadRealizada' };
                 if (form.actividadRealizada === false && !form.motivoNoActividad) return { msg: 'Selecciona el motivo por el que no se realizó la actividad.', id: 'motivoNoActividad' };
                 if (form.actividadRealizada === true && !form.resultado) return { msg: 'Selecciona el resultado de la gestión.', id: 'resultadoGestion' };
             }
+
+            // RF-08 / CA-03: Promesa o Compromiso de Pago → Monto y Fecha son
+            // estrictamente obligatorios en CUALQUIER segmento.
+            if (needsAmountDate) {
+                if (!form.pagoMonto) return { msg: 'Especifica el Monto de la Promesa/Compromiso de Pago.', id: 'pagoMonto' };
+                if (!form.pagoFecha) return { msg: 'Especifica la Fecha de la Promesa/Compromiso de Pago.', id: 'pagoFecha' };
+            }
         }
-        return null; 
+        return null;
     };
 
     const validationError = validateForm();
@@ -302,15 +324,27 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
             return;
         }
 
+        // RF-06 / CA-02: Georreferenciación obligatoria
+        if (gps.status === 'loading') {
+            setGpsErrorModal({
+                isOpen: true,
+                message: 'Aún estamos obteniendo tu ubicación GPS. Por favor espera unos segundos y vuelve a intentarlo.'
+            });
+            return;
+        }
+        if (gps.status !== 'ok' || !gps.lat || !gps.lng) {
+            const msg = gps.errorCode === 1
+                ? 'La geolocalización es obligatoria para registrar la visita. Habilita el permiso de ubicación en tu navegador o dispositivo y vuelve a intentarlo.'
+                : 'No fue posible obtener tu ubicación GPS. La geolocalización es obligatoria para registrar la visita. Verifica tu señal y vuelve a intentarlo.';
+            setGpsErrorModal({ isOpen: true, message: msg });
+            return;
+        }
+
         const durationMin = Math.round((Date.now() - startMs) / 60000);
         const resultadoBase = visitaNoRealizada ? 'No realizada' : form.resultado;
-        
-        // 5. Tu concatenación impecable se mantiene
-        let resultadoConcatenado = resultadoBase;
 
-        if (gps.status === 'ok') {
-            resultadoConcatenado += ` | GPS: ${gps.lat}, ${gps.lng}`;
-        }
+        let resultadoConcatenado = resultadoBase;
+        resultadoConcatenado += ` | GPS: ${gps.lat}, ${gps.lng}`;
 
         if (needsAmountDate && form.pagoMonto && form.pagoFecha) {
             resultadoConcatenado += ` | Promesa: $${form.pagoMonto} (${form.pagoFecha})`;
@@ -319,14 +353,18 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
         if (form.notes && form.notes.trim() !== '') {
             resultadoConcatenado += ` | Notas: ${form.notes.trim()}`;
         }
-        
+
         onSubmit({
             ...form,
-            resultado: resultadoConcatenado, 
-            tipoGestion: form.tipoGestion || '—', // Usamos el input capturado directamente
+            resultado: resultadoConcatenado,
+            tipoGestion: form.tipoGestion || '—',
             checkInTime: nowTimeStr(),
             visitaOpenTime: openTime,
             visitaDuration: durationMin,
+            latitud: gps.lat,
+            longitud: gps.lng,
+            timestampLocal: gps.capturedAt || new Date().toISOString(),
+            // Compatibilidad hacia atrás con el payload previo
             lat: gps.lat, lng: gps.lng, gpsStatus: gps.status
         });
     };
@@ -359,8 +397,17 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                         {gps.status === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
                         {gps.status === 'loading' && 'Capturando coordenadas GPS...'}
                         {gps.status === 'ok' && `GPS: ${gps.lat}, ${gps.lng}`}
-                        {gps.status === 'error' && 'Ubicación no disponible'}
+                        {gps.status === 'error' && 'Ubicación no disponible — GPS obligatorio'}
                         {gps.status === 'idle' && 'Inicializando...'}
+                        {gps.status === 'error' && (
+                            <button
+                                type="button"
+                                onClick={gps.retry}
+                                className="ml-auto bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded-lg text-[9px] tracking-widest"
+                            >
+                                Reintentar
+                            </button>
+                        )}
                     </div>
 
                     <div>
@@ -530,6 +577,21 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                 confirmButtonText="Completar"
                 onConfirm={handleCloseAlert}
             />
+
+            {/* RF-06 / CA-02: Modal cuando el GPS es obligatorio y falla */}
+            <UIModal
+                isOpen={gpsErrorModal.isOpen}
+                onClose={() => setGpsErrorModal({ isOpen: false, message: '' })}
+                type="danger"
+                title="Geolocalización Obligatoria"
+                message={gpsErrorModal.message}
+                showConfirmButton={true}
+                confirmButtonText="Reintentar GPS"
+                onConfirm={() => {
+                    setGpsErrorModal({ isOpen: false, message: '' });
+                    if (gps.status !== 'loading') gps.retry();
+                }}
+            />
         </div>
     );
 };
@@ -547,9 +609,12 @@ const UnplannedForm = ({ onAdd, onCancel, isFrozen }) => {
 
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
-    
+
     // ESTADO PARA EL MODAL DE ERROR CON AUTO-FOCUS
     const [alertConfig, setAlertConfig] = useState({ isOpen: false, message: '', focusId: null });
+    // RF-06 / CA-02: GPS obligatorio para imprevistos
+    const gps = useGPS(true);
+    const [gpsErrorModal, setGpsErrorModal] = useState({ isOpen: false, message: '' });
 
     const isCompromiso = form.resultado.toLowerCase().includes('compromiso');
     const isPromesa = form.resultado.toLowerCase().includes('promesa');
@@ -624,16 +689,37 @@ const UnplannedForm = ({ onAdd, onCancel, isFrozen }) => {
             return;
         }
 
+        // RF-06 / CA-02: Georreferenciación obligatoria también en imprevistos
+        if (gps.status === 'loading') {
+            setGpsErrorModal({
+                isOpen: true,
+                message: 'Aún estamos obteniendo tu ubicación GPS. Por favor espera unos segundos y vuelve a intentarlo.'
+            });
+            return;
+        }
+        if (gps.status !== 'ok' || !gps.lat || !gps.lng) {
+            const msg = gps.errorCode === 1
+                ? 'La geolocalización es obligatoria para registrar la visita. Habilita el permiso de ubicación en tu navegador o dispositivo y vuelve a intentarlo.'
+                : 'No fue posible obtener tu ubicación GPS. La geolocalización es obligatoria para registrar la visita. Verifica tu señal y vuelve a intentarlo.';
+            setGpsErrorModal({ isOpen: true, message: msg });
+            return;
+        }
+
         onAdd({
             name: form.name.toUpperCase(),
-            idContacto: form.idContacto, 
+            idContacto: form.idContacto,
             _segment: 'Imprevisto',
             checkInTime: nowTimeStr(),
             tipoGestion: form.tipoGestion,
             resultado: form.resultado,
             notes: form.notes,
             pagoMonto: form.pagoMonto,
-            pagoFecha: form.pagoFecha
+            pagoFecha: form.pagoFecha,
+            latitud: gps.lat,
+            longitud: gps.lng,
+            timestampLocal: gps.capturedAt || new Date().toISOString(),
+            // Compatibilidad con payload previo
+            lat: gps.lat, lng: gps.lng, gpsStatus: gps.status
         });
     };
 
@@ -646,6 +732,23 @@ const UnplannedForm = ({ onAdd, onCancel, isFrozen }) => {
                 <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 transition-colors bg-white rounded-full p-1 shadow-sm">
                     <X size={15} />
                 </button>
+            </div>
+
+            {/* RF-06 / CA-02: Banner GPS también en imprevistos */}
+            <div className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest ${gps.status === 'ok' ? 'bg-emerald-50 text-emerald-700' : gps.status === 'error' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                {gps.status === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
+                {gps.status === 'loading' && 'Capturando coordenadas GPS...'}
+                {gps.status === 'ok' && `GPS: ${gps.lat}, ${gps.lng}`}
+                {gps.status === 'error' && 'Ubicación no disponible — GPS obligatorio'}
+                {gps.status === 'error' && (
+                    <button
+                        type="button"
+                        onClick={gps.retry}
+                        className="ml-auto bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded-lg text-[9px] tracking-widest"
+                    >
+                        Reintentar
+                    </button>
+                )}
             </div>
 
             <div className="relative">
@@ -745,6 +848,21 @@ const UnplannedForm = ({ onAdd, onCancel, isFrozen }) => {
                 confirmButtonText="Revisar"
                 onConfirm={handleCloseAlert}
             />
+
+            {/* RF-06 / CA-02: GPS obligatorio */}
+            <UIModal
+                isOpen={gpsErrorModal.isOpen}
+                onClose={() => setGpsErrorModal({ isOpen: false, message: '' })}
+                type="danger"
+                title="Geolocalización Obligatoria"
+                message={gpsErrorModal.message}
+                showConfirmButton={true}
+                confirmButtonText="Reintentar GPS"
+                onConfirm={() => {
+                    setGpsErrorModal({ isOpen: false, message: '' });
+                    if (gps.status !== 'loading') gps.retry();
+                }}
+            />
         </div>
     );
 };
@@ -753,7 +871,12 @@ const UnplannedForm = ({ onAdd, onCancel, isFrozen }) => {
 const VisitCard = ({ visit, checkIn, onCheckIn, isFrozen }) => {
     const { SEG_CFG, RESULTADO_BADGE } = useDynamicUIContext();
     const segCfg = SEG_CFG[visit._segment] || SEG_CFG['Imprevisto'] || { dot: 'bg-slate-400' };
-    const isDone = !!checkIn;
+    // RF-15 / CA-05: Una gestión es inmutable si ya fue check-in, viene
+    // FINALIZADA de BD, o es un imprevisto ya registrado.
+    const isFinalizada = visit.statusAction === 'FINALIZADA'
+        || visit.statusAction === 'NO REALIZADA'
+        || visit.estado === 'FINALIZADA';
+    const isDone = !!checkIn || isFinalizada;
 
     return (
         <div className={`flex items-center gap-4 px-5 py-4 transition-all duration-200 ${isDone ? 'bg-emerald-50/60' : 'bg-white hover:bg-slate-50/80'}`}>
@@ -1029,6 +1152,20 @@ const EjecucionOperativoContent = () => {
     const [modalVisit, setModalVisit] = useState(null);
     const [showUnplanned, setShowUnplanned] = useState(false);
     const [followUpTimes, setFollowUpTimes] = useState({});
+    const [isSavingDefinitivo, setIsSavingDefinitivo] = useState(false);
+
+    // RF-15 / CA-05: Cualquier intento de abrir el modal de check-in se filtra
+    // contra inmutabilidad (visita ya finalizada o agenda congelada).
+    const handleOpenCheckIn = (visit) => {
+        const checkIns = currentAgenda.checkIns || {};
+        const yaTieneCheckIn = !!checkIns[visit.id];
+        const finalizadaEnBD = visit.statusAction === 'FINALIZADA'
+            || visit.statusAction === 'NO REALIZADA'
+            || visit.estado === 'FINALIZADA';
+        const agendaCongelada = currentAgenda.status === 'ejecutada' || currentAgenda.status === 'completada';
+        if (yaTieneCheckIn || finalizadaEnBD || agendaCongelada) return;
+        setModalVisit(visit);
+    };
     
     // ── NUEVO: ESTADO PARA MODAL DE GUARDADO DEFINITIVO ──
     const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -1067,10 +1204,20 @@ const EjecucionOperativoContent = () => {
         Object.entries(segmentosDB).forEach(([nombreBloque, arregloVisitas]) => {
             if (Array.isArray(arregloVisitas)) {
                 arregloVisitas.forEach(v => {
-                    // Omitimos registros vacíos o sin nombre por seguridad
-                    if (!v || !v.name) return;
+                    // 2. IDENTIFICAMOS SI ES IMPREVISTO
+                    const isImprevisto = nombreBloque === 'Visita No Planeada' || nombreBloque === 'Imprevisto' || v.managementResult?.includes('IMPREVISTO');
+                    
+                    // 3. Omitimos registros vacíos o sin nombre, EXCEPTO si son imprevistos
+                    if (!v || (!v.name && !isImprevisto)) return;
 
-                    // 2. Evaluamos si la visita ya está gestionada en Base de Datos
+                    // 4. SI ES IMPREVISTO, EXTRAEMOS EL NOMBRE ESCONDIDO
+                    let displayName = v.name;
+                    if (!displayName && isImprevisto && v.managementResult?.includes('IMPREVISTO:')) {
+                        const nameMatch = v.managementResult.match(/IMPREVISTO:\s*(.*?)(?:\s*\||$)/);
+                        displayName = nameMatch ? nameMatch[1].trim() : 'CLIENTE NO PLANEADO';
+                    }
+
+                    // 5. Evaluamos si la visita ya está gestionada en Base de Datos
                     const isFinalizada = v.statusAction === 'FINALIZADA' || v.statusAction === 'NO REALIZADA' || v.estado === 'FINALIZADA';
                     
                     if (isFinalizada && !checkIns[v.id]) {
@@ -1082,24 +1229,25 @@ const EjecucionOperativoContent = () => {
                         };
                     }
                     
-                    // 3. Añadimos la visita forzando el nombre del bloque exacto que viene del JSON
+                    // 6. Añadimos la visita forzando el nombre correcto
                     visits.push({ 
                         ...v, 
+                        name: displayName, // Inyectamos el nombre para que las tarjetas lo pinten bien
                         _segment: nombreBloque, 
-                        isUnplanned: nombreBloque === 'Visita No Planeada' || nombreBloque === 'Imprevisto' 
+                        isUnplanned: isImprevisto 
                     });
                 });
             }
         });
         
-        // 4. Agregamos los imprevistos "locales" (los que el usuario acaba de agregar en la interfaz antes de recargar)
+        // 7. Agregamos los imprevistos "locales" (los que el usuario acaba de agregar en la interfaz antes de recargar)
         const localUnplanned = (unplannedVisits || []).map(v => ({ 
             ...v, 
             _segment: v._segment || 'Visita No Planeada', 
             isUnplanned: true 
         }));
         
-        // 5. Unimos ambas listas y ordenamos cronológicamente
+        // 8. Unimos ambas listas y ordenamos cronológicamente
         const listaFinal = [...visits, ...localUnplanned];
         listaFinal.sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
         
@@ -1116,7 +1264,13 @@ const EjecucionOperativoContent = () => {
 
     // ── FUNCIÓN DE GUARDADO DEFINITIVO ──
     const handleFinalizarEjecucion = async () => {
+        // 1. Candado anti-doble clic
+        if (isSavingDefinitivo) return; 
+        
         try {
+            // 2. Activamos el bloqueo
+            setIsSavingDefinitivo(true); 
+            
             await api.put(`/agenda/plan/${currentAgenda.id}/estatus`, { 
                 estatus: 'ejecutada', 
                 nota: 'Ejecución finalizada por el operativo' 
@@ -1127,11 +1281,13 @@ const EjecucionOperativoContent = () => {
         } catch (error) {
             LoggerService.error('Error al finalizar la ejecución', error);
             setShowConfirmModal(false);
-            // 2. Reemplazamos el alert() por el estado del modal
             setErrorModal({
                 isOpen: true,
                 message: "No se pudo conectar con el servidor para finalizar la ejecución."
             });
+        } finally {
+            // 3. Quitamos el bloqueo al terminar (éxito o error)
+            setIsSavingDefinitivo(false); 
         }
     };
 
@@ -1266,7 +1422,7 @@ const EjecucionOperativoContent = () => {
                                             key={v.id} 
                                             visit={v} 
                                             checkIn={checkIns[v.id] || v._dbCheckIn || (v.isUnplanned ? v : null)} 
-                                            onCheckIn={setModalVisit} 
+                                            onCheckIn={handleOpenCheckIn} 
                                             isFrozen={isFrozen}
                                         />
                                     ))}
@@ -1291,7 +1447,7 @@ const EjecucionOperativoContent = () => {
                     </div>
                     <div className="divide-y divide-slate-50">
                         {todayFollowUps.map(fu => (
-                            <FollowUpCard key={fu.id} followUp={fu} checkIn={checkIns[fu.id]} onSetTime={setFollowUpTime} onCheckIn={setModalVisit} isFrozen={isFrozen} />
+                            <FollowUpCard key={fu.id} followUp={fu} checkIn={checkIns[fu.id]} onSetTime={setFollowUpTime} onCheckIn={handleOpenCheckIn} isFrozen={isFrozen} />
                         ))}
                     </div>
                 </div>
@@ -1325,11 +1481,17 @@ const EjecucionOperativoContent = () => {
                 <footer className="fixed bottom-0 left-0 right-0 md:relative md:mt-12 z-40 bg-white/90 backdrop-blur-md border-t border-slate-200 p-4 md:p-6 flex justify-end md:rounded-[32px] md:border-none md:bg-slate-900 md:shadow-2xl">
                     <div className="flex flex-col md:items-end w-full md:w-auto">
                         <p className="hidden md:block text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mb-2 text-right">Asegúrate de registrar todas tus visitas antes de continuar.</p>
-                        <button 
+                       <button 
                             onClick={handleIntentarFinalizar}
-                            className="w-full md:w-auto bg-indigo-950 md:bg-white text-white md:text-indigo-950 px-12 py-5 rounded-[20px] font-black uppercase tracking-[0.2em] text-[11px] shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3"
+                            disabled={isSavingDefinitivo}
+                            className={`w-full md:w-auto px-12 py-5 rounded-[20px] font-black uppercase tracking-[0.2em] text-[11px] shadow-xl transition-all flex items-center justify-center gap-3
+                                ${isSavingDefinitivo 
+                                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
+                                    : 'bg-indigo-950 md:bg-white text-white md:text-indigo-950 hover:scale-105 active:scale-95'
+                                }`}
                         >
-                            <Lock size={16} /> Guardado Definitivo
+                            {isSavingDefinitivo ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />}
+                            {isSavingDefinitivo ? 'Procesando...' : 'Guardado Definitivo'}
                         </button>
                     </div>
                 </footer>

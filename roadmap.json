@@ -1,75 +1,46 @@
-/**
- * Servicio centralizado para el registro de errores y eventos.
- * Guarda los logs en localStorage para auditoría y soporte técnico.
- */
-class LoggerService {
-    constructor() {
-        this.storageKey = 'app_logs';
-        this.maxLogs = 100; // Límite máximo para no saturar la memoria del navegador
+{
+  "project": "ASP Business Control - Frontend QA & Integración Completa",
+  "global_rules": {
+    "role_and_tone": "Actúa como un desarrollador Frontend experto. Tu propósito es escribir código React completo y documentado. Mantén un tono paciente y usa lenguaje claro. Si se menciona algo fuera del código, redirige la conversación a la programación.",
+    "ui_ux_standards": "Respeta estrictamente los estándares del proyecto: Fondos en Slate-50, tarjetas blancas con bordes sutiles Slate-200, botones primarios en Slate-900 o Indigo-950, tipografía antialiased. Usa lucide-react para iconos y Tailwind CSS puro.",
+    "network_and_endpoints": "Si una tarea requiere consumir datos del backend y el endpoint real aún no existe, utiliza rutas provisionales declaradas explícitamente (ej. '/api/v1/provisional/ruta'). NO uses mocks de datos estáticos locales.",
+    "error_handling": "Todos los errores de red o excepciones críticas deben ser capturados y enviados a un servicio de Logs centralizado para que el equipo de soporte pueda auditarlos posteriormente.",
+    "architecture_and_imports": "Gestiona la arquitectura del proyecto de forma autónoma. Crea las carpetas necesarias (ej. /components, /utils, /services), exporta los módulos correctamente y asegúrate de actualizar o crear las importaciones (imports) en los archivos que los consumen.",
+    "execution_flow": "Analiza la solicitud, proporciona un resumen claro de tu solución, explica los pasos y luego genera el código de implementación estructurado."
+  },
+  "current_phase": 1,
+  "phases": [
+    {
+      "id": 1,
+      "name": "Mejoras de UX/UI y Componentes Base",
+      "tasks": [
+        "Desarrollar un componente 'UIModal' reutilizable en React para reemplazar las alertas nativas (window.alert y window.confirm).",
+        "Refactorizar los inputs numéricos (montos y porcentajes) para aplicar máscaras de formato automáticamente al perder el foco (blur).",
+        "Eliminar o rediseñar el botón 'Borrar prototipo' en la vista de captura del Gestor."
+      ],
+      "status": "pending"
+    },
+    {
+      "id": 2,
+      "name": "Lógica de Jerarquía, Renderizado y WebSockets",
+      "tasks": [
+        "Implementar renderizado condicional en las vistas de agenda para ocultar segmentos según el rol de Cobranza.",
+        "Condicionar el catálogo de 'Tipo de Gestión' en la 'Visita No Planeada' según el rol.",
+        "Desarrollar la lógica de validación 'isDirty' en el formulario de la agenda para bloquear el reenvío sin modificaciones.",
+        "Implementar un hook de WebSocket en el Dashboard del Jefe para actualizar la gráfica de progreso en tiempo real."
+      ],
+      "status": "pending"
+    },
+    {
+      "id": 3,
+      "name": "Vistas de Cierre de Jornada y Monitoreo de Errores",
+      "tasks": [
+        "Crear un 'LoggerService.js' para capturar errores de la aplicación y guardarlos en localStorage, e implementar un interceptor de Axios para atrapar fallos de red globalmente.",
+        "Crear el componente y la vista para 'Cierre de Jornada', renderizando una tabla de Resumen Programado vs Ejecutado.",
+        "Integrar en la vista de Cierre un formulario de 'Dictamen del Jefe'.",
+        "Desarrollar el botón 'Guardado Definitivo' en la pestaña Ejecución, que congele los inputs y habilite el cierre de jornada."
+      ],
+      "status": "pending"
     }
-
-    _saveLog(level, message, data = null) {
-        try {
-            // Obtenemos los logs actuales o iniciamos un array vacío
-            const currentLogs = JSON.parse(localStorage.getItem(this.storageKey)) || [];
-            
-            // Creamos el nuevo registro con estampa de tiempo
-            const newLog = {
-                timestamp: new Date().toISOString(),
-                level,
-                message,
-                data: data ? data : null,
-            };
-            
-            // Añadimos el log al inicio del array (el más reciente primero)
-            currentLogs.unshift(newLog);
-            
-            // Si superamos el límite, eliminamos el más antiguo (el último)
-            if (currentLogs.length > this.maxLogs) {
-                currentLogs.pop(); 
-            }
-            
-            // Guardamos de vuelta en localStorage
-            localStorage.setItem(this.storageKey, JSON.stringify(currentLogs));
-        } catch (e) {
-            console.error("Error al intentar guardar el log en localStorage", e);
-        }
-    }
-
-    // Métodos públicos para usar en la aplicación
-    info(message, data) { 
-        this._saveLog('INFO', message, data); 
-        console.info(message, data); 
-    }
-    
-    warn(message, data) { 
-        this._saveLog('WARN', message, data); 
-        console.warn(message, data); 
-    }
-    
-    error(message, errorObj) { 
-        // Extraemos solo lo necesario del objeto de error para que sea "stringifyable"
-        const errorData = errorObj ? { 
-            message: errorObj.message, 
-            stack: errorObj.stack,
-            url: errorObj.config?.url,
-            status: errorObj.response?.status
-        } : null;
-        
-        this._saveLog('ERROR', message, errorData); 
-        console.error(`[LoggerService] ${message}`, errorObj); 
-    }
-    
-    // Método para uso futuro de soporte (ej. descargar logs)
-    getLogs() {
-        return JSON.parse(localStorage.getItem(this.storageKey)) || [];
-    }
-    
-    clearLogs() {
-        localStorage.removeItem(this.storageKey);
-    }
+  ]
 }
-
-// Exportamos una única instancia (Singleton)
-const loggerServiceInstance = new LoggerService();
-export default loggerServiceInstance;

@@ -31,18 +31,27 @@ function getRealCheckIns(agenda) {
     const validStatuses = ['aprobada', 'ejecutada', 'completada'];
     if (!validStatuses.includes(agenda.status?.toLowerCase())) return {};
     
-    // Extraemos todas las visitas de todos los segmentos
-    const allVisits = Object.values(agenda.segments || {}).flat().filter(v => v.name);
+    // 1. ACEPTAMOS VISITAS CON NOMBRE O QUE SEAN "NO PLANEADAS" / "IMPREVISTO"
+    const allVisits = Object.values(agenda.segments || {}).flat().filter(v => 
+        v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO')
+    );
     
     allVisits.forEach(v => {
-        // Validamos si la BD dice que ya se gestionó
         const isDone = v.statusAction === 'FINALIZADA' || v.statusAction === 'NO REALIZADA' || v.estado === 'FINALIZADA';
         
         if (isDone) {
             const resultText = v.managementResult || v.resultado || 'Gestionada';
+            let mainResult = resultText.split(' | ')[0]; // Por defecto
+            
+            // 2. EXTRAEMOS EL RESULTADO REAL SI ES UN IMPREVISTO
+            if (resultText.includes('IMPREVISTO:')) {
+                const resMatch = resultText.match(/Res:\s*(.*?)(?:\s*\||$)/);
+                if (resMatch) mainResult = resMatch[1].trim();
+            }
+
             result[v.id] = {
                 checkInTime: v.time || '--:--', 
-                resultado: resultText.split(' | ')[0], // Extraemos solo la acción principal (ej. "Compromiso de pago")
+                resultado: mainResult, 
                 resultadoCompleto: resultText,
                 gpsStatus: resultText.includes('GPS') ? 'ok' : 'idle'
             };
@@ -79,7 +88,7 @@ const ProgressBar = ({ done, total, color = 'blue' }) => {
 const OperativeCard = ({ agenda, onClick }) => {
     // Usamos nuestra nueva función real
     const realCIs = useMemo(() => getRealCheckIns(agenda), [agenda.id, agenda.status, agenda.segments]);
-    const allVisits = Object.values(agenda.segments || {}).flat().filter(v => v.name);
+    const allVisits = Object.values(agenda.segments || {}).flat().filter(v => v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO'));
     
     const done = Object.keys(realCIs).length;
     const total = allVisits.length;
@@ -135,7 +144,11 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
     
     // Lectura dinámica incluyendo imprevistos
     const allVisits = Object.entries(agenda.segments || {})
-        .flatMap(([seg, visits]) => (visits || []).filter(v => v.name).map(v => ({ ...v, _seg: seg })))
+        .flatMap(([seg, visits]) => (visits || [])
+            // Aceptamos las visitas sin nombre si son No Planeadas
+            .filter(v => v.name || seg === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO'))
+            .map(v => ({ ...v, _seg: seg }))
+        )
         .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
 
     const RESULTADO_BADGE = {
@@ -175,7 +188,7 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
     const kpiClr = (pct) => pct >= 90 ? 'text-emerald-600 bg-emerald-50' : pct >= 70 ? 'text-amber-600 bg-amber-50' : 'text-red-500 bg-red-50';
     const fmtN = (v) => { const n = Number(v); return isNaN(n) ? '—' : n >= 1000 ? `$${n.toLocaleString()}` : String(n); };
 
-    return (
+   return (
         <div className="animate-in slide-in-from-right-4 duration-300">
             <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-accent hover:text-primary uppercase tracking-widest mb-6 transition-colors">
                 <ArrowLeft size={14} /> Volver
@@ -199,21 +212,41 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
                 {allVisits.map(v => {
                     const ci = realCIs[v.id];
                     const isOverdue = !ci && v.time && v.time < nowStr;
+                    
+                    // 1. LÓGICA AGREGADA: Extraer nombre si es un Imprevisto
+                    let displayName = v.name;
+                    if (!displayName && v.managementResult?.includes('IMPREVISTO:')) {
+                        const nameMatch = v.managementResult.match(/IMPREVISTO:\s*(.*?)(?:\s*\||$)/);
+                        displayName = nameMatch ? nameMatch[1].trim() : 'CLIENTE NO PLANEADO';
+                    }
+
                     return (
                         <div key={v.id} className={`bg-white rounded-xl border p-4 flex items-center gap-4 transition-colors
                             ${ci ? 'border-emerald-100' : isOverdue ? 'border-amber-200 bg-amber-50/30' : 'border-slate-100'}`}>
+                            
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
                                 ${ci ? 'bg-emerald-100' : isOverdue ? 'bg-amber-100' : 'bg-slate-100'}`}>
                                 {ci ? <CheckCircle2 size={16} className="text-emerald-600" /> :
                                     isOverdue ? <AlertTriangle size={14} className="text-amber-600" /> :
                                         <Clock size={14} className="text-slate-400" />}
                             </div>
+                            
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                     <span className="text-[9px] font-mono-tech text-accent">{v.time || 'Imprevisto'}</span>
                                     {isOverdue && !ci && <span className="text-[8px] bg-amber-200 text-amber-700 font-black px-1.5 rounded uppercase">Retraso</span>}
+                                    
+                                    {/* 2. LÓGICA AGREGADA: Etiqueta especial morada para Visitas No Planeadas */}
+                                    {(!v.name || v._seg === 'Visita No Planeada') && (
+                                        <span className="text-[8px] bg-purple-100 text-purple-700 font-black px-1.5 rounded uppercase border border-purple-200">
+                                            No Planeada
+                                        </span>
+                                    )}
                                 </div>
-                                <p className="font-black text-[12px] text-primary uppercase truncate">{v.name}</p>
+                                
+                                {/* 3. Usamos displayName en lugar de v.name */}
+                                <p className="font-black text-[12px] text-primary uppercase truncate">{displayName}</p>
+                                
                                 {ci && (
                                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                                         <span className={`px-2 py-0.5 rounded text-[8px] font-black ${RESULTADO_BADGE[ci.resultado] || 'bg-slate-100 text-slate-600'}`}>
@@ -229,7 +262,7 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
                 })}
             </div>
 
-           {agenda.kpiCompromisos && Object.keys(agenda.kpiCompromisos).length > 0 && (
+            {agenda.kpiCompromisos && Object.keys(agenda.kpiCompromisos).length > 0 && (
                 <div className="mt-6">
                     <div className="flex items-center gap-2 mb-3">
                         <div className="w-1 h-5 bg-yellow-400 rounded-full" />
@@ -248,12 +281,17 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
                                 const kpiClr = pct >= 90 ? 'text-emerald-600 bg-emerald-50' : pct >= 70 ? 'text-amber-600 bg-amber-50' : 'text-red-500 bg-red-50';
                                 
                                 const KPI_LABELS = {
-                                    captNueva: 'Captación Nueva', captReinversion: 'Captación Reinv.', rec0: 'Recup. 0 días', rec1_7: 'Recup. 1-7 días', rec8_30: 'Recup. 8-30 días', rec31_60: 'Recup. 31-60 días', recMas61: 'Recup. +61 días', colocInicial: 'Colocación Inic.', colocRedisposicion: 'Coloc. Redisp.', dispersion: 'Dispersión', cobranzaTotalDia: 'Cobranza Total', visitasRealizadas: 'Visitas Reales', promesasDia: 'Promesas'
+                                    captNueva: 'Captación Nueva', captReinversion: 'Captación Reinv.', rec0: 'Recup. 0 días', rec1_7: 'Recup. 1-7 días', rec8_30: 'Recup. 8-30 días', rec31_60: 'Recup. 31-60 días', recMas61: 'Recup. +61 días', colocInicial: 'Colocación Inic.', colocRedisposicion: 'Coloc. Redisp.', dispersion: 'Dispersión', cobranzaTotalDia: 'Cobranza Total', visitasRealizadas: 'Visitas Reales', promesasDia: 'Promesas', servicioPremiumPendiente: 'Serv. Premium'
                                 };
-                                const formatCurrency = (v) => {
+                                
+                                const formatKpiValue = (v, kpiKey) => {
+                                    const QUANTITY_KPIS = ['servicioPremiumPendiente', 'visitasRealizadas', 'promesasDia'];
+                                    const isQuantity = QUANTITY_KPIS.includes(kpiKey);
+                                    
                                     return new Intl.NumberFormat('es-MX', { 
-                                        style: 'currency', 
-                                        currency: 'MXN' 
+                                        style: isQuantity ? 'decimal' : 'currency', 
+                                        currency: isQuantity ? undefined : 'MXN',
+                                        maximumFractionDigits: isQuantity ? 0 : 2
                                     }).format(Number(v));
                                 };
 
@@ -262,12 +300,12 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
                                         <span className="text-[12px] flex-shrink-0">{kpiBullet}</span>
                                         <div className="flex-1 min-w-0">
                                             <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider">{KPI_LABELS[key] || key}</p>
-                                            <p className="text-[8px] text-slate-400 mt-0.5">Meta: <span className="font-black text-slate-600">{formatCurrency(comp)}</span></p>
+                                            <p className="text-[8px] text-slate-400 mt-0.5">Meta: <span className="font-black text-slate-600">{formatKpiValue(comp, key)}</span></p>
                                         </div>
                                         <div className="flex items-center gap-2 flex-shrink-0">
                                             <div className="text-right">
                                                 <p className="text-[8px] text-slate-400 uppercase tracking-widest mb-0.5">Real</p>
-                                                <p className="text-[11px] font-black text-primary">{formatCurrency(realVal)}</p>
+                                                <p className="text-[11px] font-black text-primary">{formatKpiValue(realVal, key)}</p>
                                             </div>
                                             <div className={`text-[9px] font-black px-2 py-1 rounded-lg ${kpiClr}`}>{pct}%</div>
                                         </div>
@@ -284,20 +322,28 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
 
 // ── KPI Summary Bar ───────────────────────────────────────────────────────────
 const KpiBar = ({ agendas }) => {
-    const validStatuses = ['aprobada', 'ejecutada', 'completada'];
-    const conCheckIns = agendas.filter(ag => validStatuses.includes(ag.status?.toLowerCase())).length;
-    const allVisits = agendas.flatMap(ag => Object.values(ag.segments || {}).flat().filter(v => v.name));
+    // Operativos que realmente ya están en la calle gestionando
+    const statusEnRuta = ['aprobada', 'ejecutada', 'completada'];
+    const conCheckIns = agendas.filter(ag => statusEnRuta.includes(ag.status?.toLowerCase())).length;
     
-    // Calculamos las terminadas reales
-    const realDone = agendas.filter(ag => validStatuses.includes(ag.status?.toLowerCase()))
-        .reduce((acc, ag) => acc + Object.keys(getRealCheckIns(ag)).length, 0);
+    // Universo total de visitas de TODOS los gestores (incluyendo imprevistos)
+    const allVisits = agendas.flatMap(ag => 
+        Object.values(ag.segments || {}).flat()
+              .filter(v => v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO'))
+    );
+    
+    // Calculamos las terminadas reales de todas las agendas
+    const realDone = agendas.reduce((acc, ag) => acc + Object.keys(getRealCheckIns(ag)).length, 0);
+    
+    const pct = allVisits.length > 0 ? Math.round((realDone / allVisits.length) * 100) : 0;
 
     const stats = [
         { label: 'Operativos en Ruta', value: conCheckIns, Icon: Users, color: 'text-emerald-600' },
         { label: 'Gestiones Totales', value: allVisits.length, Icon: Activity, color: 'text-blue-600' },
         { label: 'Gestiones Realizadas', value: realDone, Icon: CheckCircle2, color: 'text-indigo-600' },
-        { label: '% Avance Global', value: `${allVisits.length > 0 ? Math.round((realDone / allVisits.length) * 100) : 0}%`, Icon: TrendingUp, color: 'text-violet-600' },
+        { label: '% Avance Global', value: `${pct}%`, Icon: TrendingUp, color: 'text-violet-600' },
     ];
+
     return (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
             {stats.map(s => (
@@ -445,7 +491,7 @@ const VistaZona = ({ zonaData, rolName }) => {
                     
                     // 2. Usamos el cálculo real de check-ins en lugar de la fórmula hardcodeada
                     const done = agendas.reduce((a, ag) => a + Object.keys(getRealCheckIns(ag) || {}).length, 0);
-                    const total = agendas.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name).length, 0);
+                    const total = agendas.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO')).length, 0);
                     
                     return (
                         <div 
@@ -486,13 +532,30 @@ const VistaZona = ({ zonaData, rolName }) => {
 const VistaEjecutivo = ({ ejecutivo, agendas }) => {
     const [detail, setDetail] = useState(null);
     const misAgendas = agendas.filter(ag => ag.ejecutivoId === ejecutivo.id);
+    
     if (detail) return <AgendaExecDetail agenda={detail} onBack={() => setDetail(null)} />;
+
+    // --- NUEVO: Calculamos los totales agregados de este Ejecutivo ---
+    const doneAgregado = misAgendas.reduce((acc, ag) => acc + Object.keys(getRealCheckIns(ag)).length, 0);
+    const totalAgregado = misAgendas.reduce((acc, ag) => {
+        return acc + Object.values(ag.segments || {}).flat()
+            .filter(v => v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO')).length;
+    }, 0);
+    // -----------------------------------------------------------------
+
     return (
         <div className="animate-in slide-in-from-right-4 duration-300">
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-6">
                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Ejecutivo de Cobranza</p>
                 <p className="font-black text-lg text-primary uppercase">{ejecutivo.nombre}</p>
                 <p className="text-[10px] text-accent">{misAgendas.length} gestor{misAgendas.length !== 1 ? 'es' : ''} asignado{misAgendas.length !== 1 ? 's' : ''}</p>
+                
+                {/* --- NUEVO: BARRA DE PROGRESO GLOBAL DEL EJECUTIVO --- */}
+                <div className="mt-4 pt-4 border-t border-slate-50">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">Avance Consolidado del Equipo</p>
+                    <ProgressBar done={doneAgregado} total={totalAgregado} />
+                </div>
+                {/* ----------------------------------------------------- */}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {misAgendas.map(ag => <OperativeCard key={ag.id} agenda={ag} onClick={() => setDetail(ag)} />)}
@@ -520,7 +583,15 @@ const EjecucionJefe = () => {
             try {
                 const hoy = new Date().toISOString().split('T')[0];
                 const resAgendas = await api.get(`/agenda/equipo?fecha=${hoy}`);
-                const dataAgendas = resAgendas.data?.contenido || resAgendas.data || [];
+                const dataAgendasRaw = resAgendas.data?.contenido || resAgendas.data || [];
+
+                // --- SOLUCIÓN: FILTRAMOS POR EL CANAL DEL USUARIO LOGUEADO ---
+                // Comparamos que el equipo de la agenda ("COMERCIAL" o "COBRANZA") coincida con el tuyo
+                const dataAgendas = dataAgendasRaw.filter(ag => {
+                    const equipoAgenda = ag.operativo?.equipo?.toLowerCase() || '';
+                    return equipoAgenda === canal.toLowerCase();
+                });
+                // -------------------------------------------------------------
 
                 const parsedAgendas = dataAgendas.map(ag => {
                     let parsedSegments = ag.segments || {};
@@ -529,7 +600,7 @@ const EjecucionJefe = () => {
                     }
                     return { ...ag, segments: parsedSegments };
                 });
-                
+
                 setAgendas(parsedAgendas);
 
                 if (canal === 'cobranza') {
@@ -654,7 +725,7 @@ const EjecucionJefe = () => {
                     {Object.keys(zonas).map(zonaName => {
                         const zAgendas = agendas.filter(ag => ag.zona === zonaName);
                         const done = zAgendas.reduce((a, ag) => a + Object.keys(getRealCheckIns(ag) || {}).length, 0);
-                        const total = zAgendas.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name).length, 0);
+                        const total = zAgendas.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO')).length, 0);
                         
                         return (
                             <div 
@@ -725,7 +796,7 @@ const EjecucionJefe = () => {
                     {jerarquia.ejecutivos.map(ej => {
                         const ejAg = agendas.filter(ag => ag.ejecutivoId === ej.id);
                         const done = ejAg.reduce((a, ag) => a + Object.keys(getRealCheckIns(ag)).length, 0);
-                        const total = ejAg.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name).length, 0);
+                        const total = ejAg.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO')).length, 0);
                         return (
                             <div key={ej.id} onClick={() => setSelectedEj(ej)}
                                 className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:border-blue-200 cursor-pointer transition-all group">
