@@ -27,6 +27,13 @@ const formatCurrency = (v) => {
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(v));
 };
 
+const formatTime = (timeStr) => {
+    if (!timeStr || typeof timeStr !== 'string') return timeStr || 'S/N';
+    const clean = timeStr.replace(/\D/g, '');
+    if (clean.length === 4) return `${clean.slice(0, 2)}:${clean.slice(2)}`;
+    return timeStr;
+};
+
 const agruparPorZona = (agendas) => {
     return agendas.reduce((acc, ag) => {
         if (!acc[ag.zona]) acc[ag.zona] = {};
@@ -342,25 +349,37 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
                     <StatusBadge status={localStatus} />
                     <div className="text-right">
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Enviada</p>
-                        <p className="text-[11px] font-black text-primary">{agenda.horaEnvio} hrs</p>
+                        <p className="text-[11px] font-black text-primary">{formatTime(agenda.horaEnvio)} hrs</p>
                     </div>
                 </div>
             </div>
 
             {/* Stats rápidos */}
-            <div className="grid grid-cols-4 gap-3 mb-6">
-                {[
-                    { label: 'Promociones', val: agenda.segments['Promoción']?.length || 0, color: 'text-blue-600', bg: 'bg-blue-50' },
+            {(() => {
+                // 1. Detectamos si el operativo es de cobranza
+                const esEquipoCobranza = agenda.operativo?.equipo?.toLowerCase() === 'cobranza';
+
+                // 2. Construimos las tarjetas condicionalmente
+                const cards = [
+                    // Solo agregamos Promociones si NO es de cobranza
+                    ...(!esEquipoCobranza ? [{ label: 'Promociones', val: agenda.segments['Promoción']?.length || 0, color: 'text-blue-600', bg: 'bg-blue-50' }] : []),
                     { label: 'Evaluaciones', val: agenda.segments['Evaluación e Integración']?.length || 0, color: 'text-violet-600', bg: 'bg-violet-50' },
                     { label: 'Seguimiento', val: agenda.segments['Seguimiento de Cartera']?.length || 0, color: 'text-amber-600', bg: 'bg-amber-50' },
                     { label: 'Imprevistos', val: agenda.segments['Visita No Planeada']?.length || 0, color: 'text-rose-600', bg: 'bg-rose-50' },
-                ].map(s => (
-                    <div key={s.label} className={`${s.bg} rounded-2xl p-4 text-center`}>
-                        <p className={`text-3xl font-black ${s.color}`}>{s.val}</p>
-                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-1">{s.label}</p>
+                ];
+
+                return (
+                    // 3. Ajustamos las columnas del Grid dinámicamente (3 o 4)
+                    <div className={`grid ${esEquipoCobranza ? 'grid-cols-3' : 'grid-cols-4'} gap-3 mb-6`}>
+                        {cards.map(s => (
+                            <div key={s.label} className={`${s.bg} rounded-2xl p-4 text-center`}>
+                                <p className={`text-3xl font-black ${s.color}`}>{s.val}</p>
+                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-1">{s.label}</p>
+                            </div>
+                        ))}
                     </div>
-                ))}
-            </div>
+                );
+            })()}
 
            
             {/* Nota de modificación anterior */}
@@ -408,10 +427,10 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
 
              {/* Panel de Compromisos KPI con formato */}
             {agenda.kpiCompromisos && Object.keys(agenda.kpiCompromisos).length > 0 && (
-                <div className="mb-6 bg-slate-900 rounded-3xl p-6 text-white shadow-lg mgt-8">
+                <div className="mb-6 bg-white rounded-3xl p-6 border border-slate-100 shadow-xl shadow-slate-200/50 mt-8">
                     <div className="flex items-center gap-2 mb-4">
-                        <div className="w-1.5 h-4 bg-yellow-400 rounded-full" />
-                        <h4 className="text-[12px] font-black uppercase tracking-[0.2em]">Compromisos KPI Solicitados</h4>
+                        <div className="w-1.5 h-4 bg-blue-500 rounded-full" />
+                        <h4 className="text-[12px] font-black text-primary uppercase tracking-[0.2em]">Compromisos KPI Solicitados</h4>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {Object.entries(agenda.kpiCompromisos).map(([key, value]) => {
@@ -429,9 +448,9 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
                             }).format(valNum);
                             
                             return (
-                                <div key={key} className="bg-white/10 border border-white/5 rounded-2xl p-4 hover:bg-white/20 transition-colors">                                    
-                                    <p className="text-md font-black text-white">{formattedValue}</p>
-                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                                <div key={key} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 hover:border-blue-200 transition-colors">                                    
+                                    <p className="text-md font-black text-primary">{formattedValue}</p>
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
                                         {KPI_LABELS[key] || key}
                                     </p>
                                 </div>
@@ -667,22 +686,22 @@ const Breadcrumb = ({ items }) => (
 // KPI HEADER BAR
 // ─────────────────────────────────────────────────────────────────────────────
 const KpiBar = ({ counts, title, subtitle, icon: Icon }) => (
-    <div className="bg-slate-900 rounded-3xl p-6 mb-6 text-white">
+    <div className="bg-white rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/50 p-6 mb-6">
         <div className="flex items-start justify-between mb-4">
             <div>
-                <h2 className="text-2xl font-black uppercase tracking-tight">{title}</h2>
+                <h2 className="text-2xl font-black text-primary uppercase tracking-tight">{title}</h2>
                 {subtitle && <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{subtitle}</p>}
             </div>
-            {Icon && <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center"><Icon size={22} className="text-slate-300" /></div>}
+            {Icon && <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center"><Icon size={22} className="text-blue-500" /></div>}
         </div>
         <div className="grid grid-cols-4 gap-3">
             {[
-                { label: 'Total Agendas', val: counts.total, color: 'text-white' },
-                { label: 'Pendientes', val: counts.pendiente, color: 'text-amber-400' },
-                { label: 'Autorizadas', val: counts.aprobada, color: 'text-emerald-400' },
-                { label: 'Con Req.', val: counts.requiere_modificacion, color: 'text-red-400' },
+                { label: 'Total Agendas', val: counts.total, color: 'text-primary' },
+                { label: 'Pendientes', val: counts.pendiente, color: 'text-amber-500' },
+                { label: 'Autorizadas', val: counts.aprobada, color: 'text-emerald-500' },
+                { label: 'Con Req.', val: counts.requiere_modificacion, color: 'text-red-500' },
             ].map(k => (
-                <div key={k.label} className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                <div key={k.label} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-center">
                     <p className={`text-3xl font-black ${k.color}`}>{k.val}</p>
                     <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">{k.label}</p>
                 </div>
@@ -1102,6 +1121,38 @@ const PlaneacionJefe = () => {
     });
 
     const counts = contarEstados(agendas);
+
+    useEffect(() => {
+        if (!canal) return;
+
+        const wsUrl = `ws://localhost:8090/business-control-cobranza/api/v1/ws/dashboard`;
+        let socket;
+
+        try {
+            socket = new WebSocket(wsUrl);
+            socket.onopen = () => console.log('🔌 [Jefe] Conectado al Dashboard');
+
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                // Validar que la notificación le pertenezca a mi canal (cobranza o comercial)
+                if (data.payload?.canal === canal) {
+
+                    if (data.type === 'AGENDA_UPDATE') {
+                        toast('El tablero se ha actualizado', { icon: '🔔' });
+                        // Lo ideal aquí es ejecutar fetchDashboardData() de nuevo para que traiga la BD fresca,
+                        // o actualizar el estado 'agendas' localmente.
+                    }
+
+                    if (data.type === 'NEW_CHECKIN') {
+                        toast.success(`${data.payload.operativoNombre} registró una gestión`, { position: 'bottom-right' });
+                    }
+                }
+            };
+        } catch (error) { console.error("Error WS", error); }
+
+        return () => { if (socket && socket.readyState === WebSocket.OPEN) socket.close(); };
+    }, [canal]);
 
     useEffect(() => {
         const fetchDashboardData = async () => {

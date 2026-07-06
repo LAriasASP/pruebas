@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRole } from '../../context/RoleContext';
-import api from '../../api/axiosConfig'; // <-- Importamos tu cliente real de Axios
+import api from '../../api/axiosConfig';
 import {
     CheckCircle2, Clock, AlertTriangle, ChevronRight, ArrowLeft,
     User, Building2, MapPin, Activity, Users, TrendingUp, Navigation, Target, Loader2
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
-// ── Helpers Rescatados del Mock ──────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────
 const STATUS_STYLES = {
     borrador: { label: 'Borrador', bg: 'bg-slate-100', text: 'text-slate-500', dot: 'bg-slate-400' },
     pendiente: { label: 'Pendiente', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-400' },
@@ -25,13 +26,12 @@ const agruparPorZona = (agendas) => {
     }, {});
 };
 
-// ── Lector de Check-Ins Reales de la Base de Datos ──────────────────────────
+// ── Lector de Check-Ins Reales ─────────────────────────────────────
 function getRealCheckIns(agenda) {
     const result = {};
     const validStatuses = ['aprobada', 'ejecutada', 'completada'];
     if (!validStatuses.includes(agenda.status?.toLowerCase())) return {};
     
-    // 1. ACEPTAMOS VISITAS CON NOMBRE O QUE SEAN "NO PLANEADAS" / "IMPREVISTO"
     const allVisits = Object.values(agenda.segments || {}).flat().filter(v => 
         v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO')
     );
@@ -41,9 +41,8 @@ function getRealCheckIns(agenda) {
         
         if (isDone) {
             const resultText = v.managementResult || v.resultado || 'Gestionada';
-            let mainResult = resultText.split(' | ')[0]; // Por defecto
+            let mainResult = resultText.split(' | ')[0]; 
             
-            // 2. EXTRAEMOS EL RESULTADO REAL SI ES UN IMPREVISTO
             if (resultText.includes('IMPREVISTO:')) {
                 const resMatch = resultText.match(/Res:\s*(.*?)(?:\s*\||$)/);
                 if (resMatch) mainResult = resMatch[1].trim();
@@ -60,7 +59,22 @@ function getRealCheckIns(agenda) {
     return result;
 }
 
-// ── Componentes UI ───────────────────────────────────────────────────────────
+// ── FUNCIÓN EXTRAE-COORDENADAS GPS ──────────────────────────────────
+const extraerCoordenadasGPS = (managementResult) => {
+    if (!managementResult || !managementResult.includes('GPS:')) return null;
+    try {
+        const partes = managementResult.split('|');
+        const fragmentoGps = partes.find(p => p.includes('GPS:'));
+        if (fragmentoGps) {
+            return fragmentoGps.replace('GPS:', '').trim(); // Debería escupir "16.71412, -92.63203"
+        }
+    } catch (e) {
+        console.error("Error parseando GPS en el Front", e);
+    }
+    return null;
+};
+
+// ── Componentes UI ──────────────────────────────────────────────────
 const StatusBadge = ({ status }) => {
     const s = STATUS_STYLES[status] || STATUS_STYLES['borrador'];
     return (
@@ -71,38 +85,84 @@ const StatusBadge = ({ status }) => {
     );
 };
 
-const ProgressBar = ({ done, total, color = 'blue' }) => {
+const ProgressBar = ({ done, total, color = 'blue', label }) => {
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-    const barColor = { blue: 'bg-blue-500', emerald: 'bg-emerald-500', amber: 'bg-amber-400', violet: 'bg-violet-500' };
+    const fillPct = Math.min(pct, 100); 
+    const barColor = { 
+        blue: 'bg-blue-500', emerald: 'bg-emerald-500', 
+        amber: 'bg-amber-400', violet: 'bg-violet-500', purple: 'bg-purple-500'
+    };
+    
     return (
-        <div className="flex items-center gap-2">
-            <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className={`h-full ${barColor[color] || barColor.blue} rounded-full transition-all duration-700`} style={{ width: `${pct}%` }} />
+        <div className="mb-2 last:mb-0">
+            {label && (
+                <div className="flex justify-between text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                    <span>{label}</span>
+                </div>
+            )}
+            <div className="flex items-center gap-2">
+                <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden flex-shrink-0">
+                    <div className={`h-full ${barColor[color] || barColor.blue} rounded-full transition-all duration-700`} style={{ width: `${fillPct}%` }} />
+                </div>
+                <span className={`text-[10px] font-black w-8 text-right ${pct >= 100 ? 'text-emerald-600' : 'text-slate-500'}`}>
+                    {pct}%
+                </span>
             </div>
-            <span className="text-[10px] font-black text-accent w-8 text-right">{pct}%</span>
         </div>
     );
 };
 
-// ── Operative Progress Card ──────────────────────────────────────────────────
+// --- MOTOR MATEMÁTICO ---
+const calculateProgressStats = (agendaList) => {
+    const allVisits = agendaList.flatMap(ag => 
+        Object.values(ag.segments || {}).flat()
+              .filter(v => v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO'))
+    );
+    const doneRutas = agendaList.reduce((acc, ag) => acc + Object.keys(getRealCheckIns(ag)).length, 0);
+    const totalRutas = allVisits.length;
+    const pctRutas = totalRutas > 0 ? (doneRutas / totalRutas) * 100 : 0;
+
+    let sumKpiPct = 0;
+    let countKpis = 0;
+
+    agendaList.forEach(ag => {
+        const comp = ag.kpiCompromisos || {};
+        const real = ag.kpiReal || {};
+        Object.keys(comp).forEach(k => {
+            const meta = Number(comp[k]) || 0;
+            const avance = Number(real[k]) || 0;
+            if (meta > 0) {
+                sumKpiPct += Math.min((avance / meta) * 100, 100);
+                countKpis++;
+            }
+        });
+    });
+
+    const pctKpi = countKpis > 0 ? (sumKpiPct / countKpis) : 0;
+    const divisores = (countKpis > 0 && totalRutas > 0) ? 2 : 1;
+    const pctGlobal = (countKpis > 0 || totalRutas > 0) ? ((pctRutas + pctKpi) / divisores) : 0;
+
+    return {
+        doneRutas, totalRutas,
+        pctRutas: Math.round(pctRutas),
+        pctKpi: Math.round(pctKpi),
+        pctGlobal: Math.round(pctGlobal)
+    };
+};
+
 const OperativeCard = ({ agenda, onClick }) => {
-    // Usamos nuestra nueva función real
     const realCIs = useMemo(() => getRealCheckIns(agenda), [agenda.id, agenda.status, agenda.segments]);
     const allVisits = Object.values(agenda.segments || {}).flat().filter(v => v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO'));
     
-    const done = Object.keys(realCIs).length;
-    const total = allVisits.length;
-    
-    // Obtenemos el último Check-In real registrado
-    const lastCI = Object.values(realCIs).sort((a, b) => b.checkInTime?.localeCompare(a.checkInTime))[0];
+    const stats = calculateProgressStats([agenda]);
 
+    const lastCI = Object.values(realCIs).sort((a, b) => b.checkInTime?.localeCompare(a.checkInTime))[0];
     const nowStr = (() => { const n = new Date(); return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`; })();
-    // Contamos retrasos solo en las que NO tienen Check-In real
     const overdue = allVisits.filter(v => v.time && v.time < nowStr && !realCIs[v.id]).length;
 
     return (
         <div onClick={onClick}
-            className={`bg-white rounded-2xl border shadow-sm p-5 hover:shadow-md hover:border-blue-200 transition-all cursor-pointer group
+            className={`bg-white rounded-2xl border shadow-sm p-5 hover:shadow-md hover:border-blue-200 transition-all cursor-pointer group flex flex-col justify-between
                 ${overdue > 0 ? 'border-amber-200' : 'border-slate-100'}`}>
             <div className="flex items-start justify-between gap-3 mb-4">
                 <div className="flex-1 min-w-0">
@@ -120,15 +180,24 @@ const OperativeCard = ({ agenda, onClick }) => {
                 <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-400 transition-colors mt-1 flex-shrink-0" />
             </div>
 
-            <ProgressBar done={done} total={total} color={done === total && total > 0 ? 'emerald' : 'blue'} />
+            <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100 mb-3 space-y-3">
+                <ProgressBar done={stats.doneRutas} total={stats.totalRutas} color="blue" label="1. Visitas Físicas" />
+                <ProgressBar done={stats.pctKpi} total={100} color="emerald" label="2. Metas KPI" />
+                <div className="pt-2 border-t border-slate-200/60">
+                    <ProgressBar done={stats.pctGlobal} total={100} color="purple" label="Avance Global Consolidado" />
+                </div>
+            </div>
 
-            <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
+            <div className="flex items-center justify-between mt-auto pt-2">
                 <div className="flex items-center gap-3 text-[9px] text-slate-400 font-bold">
-                    <span className="flex items-center gap-1"><CheckCircle2 size={10} className={done === total && total > 0 ? "text-emerald-500" : "text-slate-400"} /> {done}/{total} visitas</span>
+                    <span className="flex items-center gap-1">
+                        <CheckCircle2 size={10} className={stats.doneRutas === stats.totalRutas && stats.totalRutas > 0 ? "text-blue-500" : "text-slate-400"} /> 
+                        {stats.doneRutas}/{stats.totalRutas} check-ins
+                    </span>
                 </div>
                 {lastCI ? (
-                    <span className="flex items-center gap-1 text-[9px] text-slate-400">
-                        <Clock size={9} /> Últ: {lastCI.checkInTime} · {lastCI.resultado}
+                    <span className="flex items-center gap-1 text-[9px] text-slate-400 truncate max-w-[120px]" title={lastCI.resultado}>
+                        <Clock size={9} className="flex-shrink-0" /> Últ: {lastCI.checkInTime}
                     </span>
                 ) : (
                     <span className="text-[9px] text-slate-300 font-bold uppercase">Sin gestiones</span>
@@ -138,17 +207,21 @@ const OperativeCard = ({ agenda, onClick }) => {
     );
 };
 
+// ── VISTA DETALLE SUPERVISOR ─────────────────────────────────────────────────
 const AgendaExecDetail = ({ agenda, onBack }) => {
     const realCIs = useMemo(() => getRealCheckIns(agenda), [agenda.id, agenda.status, agenda.segments]);
     const nowStr = (() => { const n = new Date(); return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`; })();
     
-    // Lectura dinámica incluyendo imprevistos
+    const esEquipoCobranza = agenda.operativo?.equipo?.toLowerCase() === 'cobranza';
+
     const allVisits = Object.entries(agenda.segments || {})
-        .flatMap(([seg, visits]) => (visits || [])
-            // Aceptamos las visitas sin nombre si son No Planeadas
-            .filter(v => v.name || seg === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO'))
-            .map(v => ({ ...v, _seg: seg }))
-        )
+        .flatMap(([seg, visits]) => {
+            if (esEquipoCobranza && seg === 'Promoción') return []; 
+            
+            return (visits || [])
+                .filter(v => v.name || seg === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO'))
+                .map(v => ({ ...v, _seg: seg }));
+        })
         .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
 
     const RESULTADO_BADGE = {
@@ -182,171 +255,187 @@ const AgendaExecDetail = ({ agenda, onBack }) => {
     const compromisos = (agenda.kpiCompromisos && Object.keys(agenda.kpiCompromisos).length > 0)
         ? agenda.kpiCompromisos
         : (DEMO_KPI_COMPROMISOS[roleId] || {});
-    const kpiFields = roleId ? (FIELDS_JEFE[roleId] || []) : [];
-    const simReal = (comp, seed) => { const n = Number(comp) || 0; const pct = 0.78 + ((seed * 0.17) % 0.22); return Math.round(n * pct); };
+    
     const kpiBullet = (pct) => pct >= 90 ? '🟢' : pct >= 70 ? '🟡' : '🔴';
     const kpiClr = (pct) => pct >= 90 ? 'text-emerald-600 bg-emerald-50' : pct >= 70 ? 'text-amber-600 bg-amber-50' : 'text-red-500 bg-red-50';
-    const fmtN = (v) => { const n = Number(v); return isNaN(n) ? '—' : n >= 1000 ? `$${n.toLocaleString()}` : String(n); };
 
    return (
-        <div className="animate-in slide-in-from-right-4 duration-300">
-            <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-accent hover:text-primary uppercase tracking-widest mb-6 transition-colors">
-                <ArrowLeft size={14} /> Volver
-            </button>
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-6">
-                <div className="flex items-start justify-between gap-3">
-                    <div>
-                        <StatusBadge status={agenda.status} />
-                        <p className="font-black text-lg text-primary uppercase mt-2">{agenda.operativo?.nombre}</p>
-                        <p className="text-xs text-accent">{agenda.operativo?.puesto} · {agenda.sucursal}</p>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-[8px] text-slate-400 uppercase tracking-widest font-black">Completadas</p>
-                        <p className="text-2xl font-black text-primary">{Object.keys(realCIs).length}<span className="text-sm text-accent">/{allVisits.length}</span></p>
-                    </div>
-                </div>
-                <div className="mt-4"><ProgressBar done={Object.keys(realCIs).length} total={allVisits.length} /></div>
-            </div>
+       <div className="animate-in slide-in-from-right-4 duration-300">
+           <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-accent hover:text-primary uppercase tracking-widest mb-6 transition-colors">
+               <ArrowLeft size={14} /> Volver
+           </button>
+           
+           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-6">
+               <div className="flex items-start justify-between gap-3">
+                   <div>
+                       <StatusBadge status={agenda.status} />
+                       <p className="font-black text-lg text-primary uppercase mt-2">{agenda.operativo?.nombre}</p>
+                       <p className="text-xs text-accent">{agenda.operativo?.puesto} · {agenda.sucursal}</p>
+                   </div>
+                   <div className="text-right">
+                       <p className="text-[8px] text-slate-400 uppercase tracking-widest font-black">Completadas</p>
+                       <p className="text-2xl font-black text-primary">{Object.keys(realCIs).length}<span className="text-sm text-accent">/{allVisits.length}</span></p>
+                   </div>
+               </div>
+               <div className="mt-4"><ProgressBar done={Object.keys(realCIs).length} total={allVisits.length} /></div>
+           </div>
 
-            <div className="space-y-2">
-                {allVisits.map(v => {
-                    const ci = realCIs[v.id];
-                    const isOverdue = !ci && v.time && v.time < nowStr;
-                    
-                    // 1. LÓGICA AGREGADA: Extraer nombre si es un Imprevisto
-                    let displayName = v.name;
-                    if (!displayName && v.managementResult?.includes('IMPREVISTO:')) {
-                        const nameMatch = v.managementResult.match(/IMPREVISTO:\s*(.*?)(?:\s*\||$)/);
-                        displayName = nameMatch ? nameMatch[1].trim() : 'CLIENTE NO PLANEADO';
-                    }
+            {/* ✅ FASE: ARREGLO DE INDICADORES OCULTOS (TARJETAS) DINÁMICAS */}
+           {(() => {
+                const cards = [
+                    ...(!esEquipoCobranza ? [{ label: 'Promociones', val: agenda.segments['Promoción']?.length || 0, color: 'text-blue-600', bg: 'bg-blue-50' }] : []),
+                    { label: 'Evaluaciones', val: agenda.segments['Evaluación e Integración']?.length || 0, color: 'text-violet-600', bg: 'bg-violet-50' },
+                    { label: 'Seguimiento', val: agenda.segments['Seguimiento de Cartera']?.length || 0, color: 'text-amber-600', bg: 'bg-amber-50' },
+                    { label: 'Imprevistos', val: agenda.segments['Visita No Planeada']?.length || 0, color: 'text-rose-600', bg: 'bg-rose-50' },
+                ];
 
-                    return (
-                        <div key={v.id} className={`bg-white rounded-xl border p-4 flex items-center gap-4 transition-colors
-                            ${ci ? 'border-emerald-100' : isOverdue ? 'border-amber-200 bg-amber-50/30' : 'border-slate-100'}`}>
-                            
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
-                                ${ci ? 'bg-emerald-100' : isOverdue ? 'bg-amber-100' : 'bg-slate-100'}`}>
-                                {ci ? <CheckCircle2 size={16} className="text-emerald-600" /> :
-                                    isOverdue ? <AlertTriangle size={14} className="text-amber-600" /> :
-                                        <Clock size={14} className="text-slate-400" />}
+                return (
+                    <div className={`grid ${esEquipoCobranza ? 'grid-cols-3' : 'grid-cols-4'} gap-3 mb-6`}>
+                        {cards.map(s => (
+                            <div key={s.label} className={`${s.bg} rounded-2xl p-4 text-center`}>
+                                <p className={`text-3xl font-black ${s.color}`}>{s.val}</p>
+                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-1">{s.label}</p>
                             </div>
-                            
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[9px] font-mono-tech text-accent">{v.time || 'Imprevisto'}</span>
-                                    {isOverdue && !ci && <span className="text-[8px] bg-amber-200 text-amber-700 font-black px-1.5 rounded uppercase">Retraso</span>}
-                                    
-                                    {/* 2. LÓGICA AGREGADA: Etiqueta especial morada para Visitas No Planeadas */}
-                                    {(!v.name || v._seg === 'Visita No Planeada') && (
-                                        <span className="text-[8px] bg-purple-100 text-purple-700 font-black px-1.5 rounded uppercase border border-purple-200">
-                                            No Planeada
-                                        </span>
-                                    )}
-                                </div>
-                                
-                                {/* 3. Usamos displayName en lugar de v.name */}
-                                <p className="font-black text-[12px] text-primary uppercase truncate">{displayName}</p>
-                                
-                                {ci && (
-                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                        <span className={`px-2 py-0.5 rounded text-[8px] font-black ${RESULTADO_BADGE[ci.resultado] || 'bg-slate-100 text-slate-600'}`}>
-                                            {ci.resultado}
-                                        </span>
-                                        <span className="text-[9px] text-slate-400">{ci.checkInTime}</span>
-                                        {ci.gpsStatus === 'ok' && <span className="text-[9px] text-emerald-500 flex items-center gap-0.5"><Navigation size={8} /> GPS</span>}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-
-            {agenda.kpiCompromisos && Object.keys(agenda.kpiCompromisos).length > 0 && (
-                <div className="mt-6">
-                    <div className="flex items-center gap-2 mb-3">
-                        <div className="w-1 h-5 bg-yellow-400 rounded-full" />
-                        <Target size={12} className="text-yellow-600" />
-                        <span className="text-[10px] font-black uppercase tracking-[0.25em] text-primary">Compromisos KPI del Día</span>
-                        <span className="text-[8px] font-black text-slate-400 ml-auto uppercase tracking-widest">Vista supervisión</span>
+                        ))}
                     </div>
-                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                        <div className="divide-y divide-slate-50">
-                            {Object.entries(agenda.kpiCompromisos).map(([key, compValue]) => {
-                                const comp = Number(compValue);
-                                const realVal = Number(agenda.kpiReal?.[key] || 0);
-                                const pct = comp > 0 ? Math.round((realVal / comp) * 100) : 0;
-                                
-                                const kpiBullet = pct >= 90 ? '🟢' : pct >= 70 ? '🟡' : '🔴';
-                                const kpiClr = pct >= 90 ? 'text-emerald-600 bg-emerald-50' : pct >= 70 ? 'text-amber-600 bg-amber-50' : 'text-red-500 bg-red-50';
-                                
-                                const KPI_LABELS = {
-                                    captNueva: 'Captación Nueva', captReinversion: 'Captación Reinv.', rec0: 'Recup. 0 días', rec1_7: 'Recup. 1-7 días', rec8_30: 'Recup. 8-30 días', rec31_60: 'Recup. 31-60 días', recMas61: 'Recup. +61 días', colocInicial: 'Colocación Inic.', colocRedisposicion: 'Coloc. Redisp.', dispersion: 'Dispersión', cobranzaTotalDia: 'Cobranza Total', visitasRealizadas: 'Visitas Reales', promesasDia: 'Promesas', servicioPremiumPendiente: 'Serv. Premium'
-                                };
-                                
-                                const formatKpiValue = (v, kpiKey) => {
-                                    const QUANTITY_KPIS = ['servicioPremiumPendiente', 'visitasRealizadas', 'promesasDia'];
-                                    const isQuantity = QUANTITY_KPIS.includes(kpiKey);
-                                    
-                                    return new Intl.NumberFormat('es-MX', { 
-                                        style: isQuantity ? 'decimal' : 'currency', 
-                                        currency: isQuantity ? undefined : 'MXN',
-                                        maximumFractionDigits: isQuantity ? 0 : 2
-                                    }).format(Number(v));
-                                };
+                );
+            })()}
 
-                                return (
-                                    <div key={key} className="px-4 py-3 flex items-center gap-3">
-                                        <span className="text-[12px] flex-shrink-0">{kpiBullet}</span>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider">{KPI_LABELS[key] || key}</p>
-                                            <p className="text-[8px] text-slate-400 mt-0.5">Meta: <span className="font-black text-slate-600">{formatKpiValue(comp, key)}</span></p>
-                                        </div>
-                                        <div className="flex items-center gap-2 flex-shrink-0">
-                                            <div className="text-right">
-                                                <p className="text-[8px] text-slate-400 uppercase tracking-widest mb-0.5">Real</p>
-                                                <p className="text-[11px] font-black text-primary">{formatKpiValue(realVal, key)}</p>
-                                            </div>
-                                            <div className={`text-[9px] font-black px-2 py-1 rounded-lg ${kpiClr}`}>{pct}%</div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+           <div className="space-y-2">
+               {allVisits.map(v => {
+                   const ci = realCIs[v.id];
+                   const isOverdue = !ci && v.time && v.time < nowStr;
+                   
+                   let displayName = v.name;
+                   if (!displayName && v.managementResult?.includes('IMPREVISTO:')) {
+                       const nameMatch = v.managementResult.match(/IMPREVISTO:\s*(.*?)(?:\s*\||$)/);
+                       displayName = nameMatch ? nameMatch[1].trim() : 'CLIENTE NO PLANEADO';
+                   }
+
+                   // ✅ FASE: EXTRAEMOS GPS
+                   const gpsCoordenadas = extraerCoordenadasGPS(v.managementResult);
+                   const isDone = v.managementRealized || ci; // Blindaje visual
+
+                   return (
+                       <div key={v.id} className={`bg-white rounded-xl border p-4 flex items-center gap-4 transition-colors
+                           ${isDone ? 'border-emerald-100' : isOverdue ? 'border-amber-200 bg-amber-50/30' : 'border-slate-100'}`}>
+                           
+                           <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
+                               ${isDone ? 'bg-emerald-100' : isOverdue ? 'bg-amber-100' : 'bg-slate-100'}`}>
+                               {isDone ? <CheckCircle2 size={16} className="text-emerald-600" /> :
+                                   isOverdue ? <AlertTriangle size={14} className="text-amber-600" /> :
+                                       <Clock size={14} className="text-slate-400" />}
+                           </div>
+                           
+                           <div className="flex-1 min-w-0">
+                               <div className="flex items-center gap-2">
+                                   <span className="text-[9px] font-mono-tech text-accent">{v.time || 'Imprevisto'}</span>
+                                   {isOverdue && !isDone && <span className="text-[8px] bg-amber-200 text-amber-700 font-black px-1.5 rounded uppercase">Retraso</span>}
+                                   
+                                   {(!v.name || v._seg === 'Visita No Planeada') && (
+                                       <span className="text-[8px] bg-purple-100 text-purple-700 font-black px-1.5 rounded uppercase border border-purple-200">
+                                           No Planeada
+                                       </span>
+                                   )}
+                               </div>
+                               
+                               <p className="font-black text-[12px] text-primary uppercase truncate">{displayName}</p>
+                               
+                               {isDone && (
+                                   <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                       <span className={`px-2 py-0.5 rounded text-[8px] font-black ${RESULTADO_BADGE[v.managementResult?.split('|')[0]?.trim() || ci?.resultado] || 'bg-slate-100 text-slate-600'}`}>
+                                           {v.managementResult?.split('|')[0]?.trim() || ci?.resultado || 'GESTIONADO'}
+                                       </span>
+                                       <span className="text-[9px] text-slate-400">{ci?.checkInTime || v.time}</span>
+                                       
+                                       {/* PINTADO GPS EXPLICITO */}
+                                       {(gpsCoordenadas || ci?.gpsStatus === 'ok') && (
+                                           <span className="text-[9px] text-emerald-500 font-medium flex items-center gap-1 bg-emerald-50/50 px-1.5 py-0.5 rounded border border-emerald-100/50">
+                                               <Navigation size={8} className="fill-emerald-500 text-emerald-500" /> 
+                                               GPS: <span className="font-mono-tech font-bold text-[8.5px] text-emerald-600">{gpsCoordenadas || 'Capturado'}</span>
+                                           </span>
+                                       )}
+                                   </div>
+                               )}
+                           </div>
+                       </div>
+                   );
+               })}
+           </div>
+
+           {agenda.kpiCompromisos && Object.keys(agenda.kpiCompromisos).length > 0 && (
+               <div className="mt-6">
+                   <div className="flex items-center gap-2 mb-3">
+                       <div className="w-1 h-5 bg-yellow-400 rounded-full" />
+                       <Target size={12} className="text-yellow-600" />
+                       <span className="text-[10px] font-black uppercase tracking-[0.25em] text-primary">Compromisos KPI del Día</span>
+                   </div>
+                   <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                       <div className="divide-y divide-slate-50">
+                           {Object.entries(agenda.kpiCompromisos).map(([key, compValue]) => {
+                               const comp = Number(compValue);
+                               const realVal = Number(agenda.kpiReal?.[key] || 0);
+                               const pct = comp > 0 ? Math.round((realVal / comp) * 100) : 0;
+                               
+                               const kpiBullet = pct >= 90 ? '🟢' : pct >= 70 ? '🟡' : '🔴';
+                               const kpiClr = pct >= 90 ? 'text-emerald-600 bg-emerald-50' : pct >= 70 ? 'text-amber-600 bg-amber-50' : 'text-red-500 bg-red-50';
+                               
+                               const KPI_LABELS = {
+                                   captNueva: 'Captación Nueva', captReinversion: 'Captación Reinv.', rec0: 'Recup. 0 días', rec1_7: 'Recup. 1-7 días', rec8_30: 'Recup. 8-30 días', rec31_60: 'Recup. 31-60 días', recMas61: 'Recup. +61 días', colocInicial: 'Colocación Inic.', colocRedisposicion: 'Coloc. Redisp.', dispersion: 'Dispersión', cobranzaTotalDia: 'Cobranza Total', visitasRealizadas: 'Visitas Reales', promesasDia: 'Promesas', servicioPremiumPendiente: 'Serv. Premium'
+                               };
+                               
+                               const formatKpiValue = (v, kpiKey) => {
+                                   const QUANTITY_KPIS = ['servicioPremiumPendiente', 'visitasRealizadas', 'promesasDia'];
+                                   const isQuantity = QUANTITY_KPIS.includes(kpiKey);
+                                   
+                                   return new Intl.NumberFormat('es-MX', { 
+                                       style: isQuantity ? 'decimal' : 'currency', 
+                                       currency: isQuantity ? undefined : 'MXN',
+                                       maximumFractionDigits: isQuantity ? 0 : 2
+                                   }).format(Number(v));
+                               };
+
+                               return (
+                                   <div key={key} className="px-4 py-3 flex items-center gap-3">
+                                       <span className="text-[12px] flex-shrink-0">{kpiBullet}</span>
+                                       <div className="flex-1 min-w-0">
+                                           <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider">{KPI_LABELS[key] || key}</p>
+                                           <p className="text-[8px] text-slate-400 mt-0.5">Meta: <span className="font-black text-slate-600">{formatKpiValue(comp, key)}</span></p>
+                                       </div>
+                                       <div className="flex items-center gap-2 flex-shrink-0">
+                                           <div className="text-right">
+                                               <p className="text-[8px] text-slate-400 uppercase tracking-widest mb-0.5">Real</p>
+                                               <p className="text-[11px] font-black text-primary">{formatKpiValue(realVal, key)}</p>
+                                           </div>
+                                           <div className={`text-[9px] font-black px-2 py-1 rounded-lg ${kpiClr}`}>{pct}%</div>
+                                       </div>
+                                   </div>
+                               );
+                           })}
+                       </div>
+                   </div>
+               </div>
+           )}
+       </div>
+   );
 };
 
-// ── KPI Summary Bar ───────────────────────────────────────────────────────────
+// ── KPI Summary Bar ────────────────────────────────────────────────────────
 const KpiBar = ({ agendas }) => {
-    // Operativos que realmente ya están en la calle gestionando
     const statusEnRuta = ['aprobada', 'ejecutada', 'completada'];
     const conCheckIns = agendas.filter(ag => statusEnRuta.includes(ag.status?.toLowerCase())).length;
-    
-    // Universo total de visitas de TODOS los gestores (incluyendo imprevistos)
-    const allVisits = agendas.flatMap(ag => 
-        Object.values(ag.segments || {}).flat()
-              .filter(v => v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO'))
-    );
-    
-    // Calculamos las terminadas reales de todas las agendas
-    const realDone = agendas.reduce((acc, ag) => acc + Object.keys(getRealCheckIns(ag)).length, 0);
-    
-    const pct = allVisits.length > 0 ? Math.round((realDone / allVisits.length) * 100) : 0;
+    const stats = calculateProgressStats(agendas);
 
-    const stats = [
+    const cards = [
         { label: 'Operativos en Ruta', value: conCheckIns, Icon: Users, color: 'text-emerald-600' },
-        { label: 'Gestiones Totales', value: allVisits.length, Icon: Activity, color: 'text-blue-600' },
-        { label: 'Gestiones Realizadas', value: realDone, Icon: CheckCircle2, color: 'text-indigo-600' },
-        { label: '% Avance Global', value: `${pct}%`, Icon: TrendingUp, color: 'text-violet-600' },
+        { label: 'Gestiones Totales', value: stats.totalRutas, Icon: Activity, color: 'text-blue-600' },
+        { label: 'Rutas Completadas', value: stats.doneRutas, Icon: CheckCircle2, color: 'text-indigo-600' },
+        { label: '% Avance Global', value: `${stats.pctGlobal}%`, Icon: TrendingUp, color: 'text-violet-600' },
     ];
 
     return (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-            {stats.map(s => (
+            {cards.map(s => (
                 <div key={s.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
                     <s.Icon size={14} className={`${s.color} mb-2`} />
                     <p className="text-xl font-black text-primary">{s.value}</p>
@@ -357,95 +446,8 @@ const KpiBar = ({ agendas }) => {
     );
 };
 
-// ── Nuevo Componente: Resumen Global de KPIs ─────────────────────────────
-const KpiGlobalSummary = ({ agendas }) => {
-    const validStatuses = ['aprobada', 'ejecutada', 'completada'];
-    const validAgendas = agendas.filter(ag => validStatuses.includes(ag.status?.toLowerCase()));
 
-    // Agrupamos y sumamos todos los compromisos y reales de los operativos
-    const aggregated = {};
-    validAgendas.forEach(ag => {
-        const compromisos = ag.kpiCompromisos || {};
-        const reales = ag.kpiReal || {};
-
-        Object.keys(compromisos).forEach(key => {
-            if (!aggregated[key]) {
-                aggregated[key] = { comp: 0, real: 0 };
-            }
-            aggregated[key].comp += Number(compromisos[key]) || 0;
-            aggregated[key].real += Number(reales[key]) || 0;
-        });
-    });
-
-    const keys = Object.keys(aggregated);
-    if (keys.length === 0) return null; // Si no hay KPIs en ruta, no pintamos nada
-
-    const KPI_LABELS = {
-        captNueva: 'Captación Nueva',
-        captReinversion: 'Captación Reinv.',
-        rec0: 'Recup. 0 días',
-        rec1_7: 'Recup. 1-7 días',
-        rec8_30: 'Recup. 8-30 días',
-        rec31_60: 'Recup. 31-60 días',
-        recMas61: 'Recup. +61 días',
-        colocInicial: 'Colocación Inic.',
-        colocRedisposicion: 'Coloc. Redisp.',
-        dispersion: 'Dispersión',
-        cobranzaTotalDia: 'Cobranza Total',
-        visitasRealizadas: 'Visitas Reales',
-        promesasDia: 'Promesas'
-    };
-
-   const formatCurrency = (valNum) => {
-        return new Intl.NumberFormat('es-MX', { 
-            style: 'currency', 
-            currency: 'MXN' 
-        }).format(Number(valNum));
-    };
-
-    return (
-        <div className="bg-slate-900 rounded-3xl p-6 mb-8 shadow-xl mt-10">
-            <div className="flex items-center gap-2 mb-6">
-                <div className="w-1.5 h-5 bg-blue-500 rounded-full" />
-                <h3 className="text-[13px] font-black uppercase tracking-[0.2em] text-white">Avance Global de KPIs</h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {keys.map(key => {
-                    const { comp, real } = aggregated[key];
-                    const pct = comp > 0 ? Math.round((real / comp) * 100) : 0;
-                    
-                    // Lógica de colores estilo semáforo
-                    const pctColor = pct >= 90 ? 'text-emerald-400' : pct >= 70 ? 'text-amber-400' : 'text-rose-400';
-                    const barColor = pct >= 90 ? 'bg-emerald-500' : pct >= 70 ? 'bg-amber-500' : 'bg-rose-500';
-
-                    return (
-                        <div key={key} className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                            <div className="flex justify-between items-start mb-2">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{KPI_LABELS[key] || key}</p>
-                                <span className={`text-[11px] font-black ${pctColor}`}>{pct}%</span>
-                            </div>
-                            <div className="flex justify-between items-end">
-                                <div>
-                                    <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-0.5">Real</p>
-                                    <p className="text-lg font-black text-white">{formatCurrency(real)}</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-0.5">Meta</p>
-                                    <p className="text-sm font-bold text-slate-400">{formatCurrency(comp)}</p>
-                                </div>
-                            </div>
-                            <div className="w-full bg-white/10 h-1.5 rounded-full mt-3 overflow-hidden">
-                                <div className={`h-full rounded-full ${barColor} transition-all duration-1000`} style={{ width: `${Math.min(pct, 100)}%` }} />
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-};
-
-// ── Supervisor Views ──────────────────────────────────────────────────────────
+// ── Supervisor Views ───────────────────────────────────────────────────────
 const VistaGerente = ({ agendas }) => {
     const [detail, setDetail] = useState(null);
     if (detail) return <AgendaExecDetail agenda={detail} onBack={() => setDetail(null)} />;
@@ -478,47 +480,34 @@ const VistaSucursal = ({ sucursal, agendas, onBack }) => {
 
 const VistaZona = ({ zonaData, rolName }) => {
     const [selected, setSelected] = useState(null);
-    
     if (selected) return <VistaSucursal sucursal={selected.suc} agendas={selected.agendas} onBack={() => setSelected(null)} />;
     
     return (
         <div>
             <KpiBar agendas={Object.values(zonaData).flat()} />
-            
-            {/* 1. Agregamos w-full para asegurar la estructura de la cuadrícula */}
             <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
                 {Object.entries(zonaData).map(([suc, agendas]) => {
-                    
-                    // 2. Usamos el cálculo real de check-ins en lugar de la fórmula hardcodeada
-                    const done = agendas.reduce((a, ag) => a + Object.keys(getRealCheckIns(ag) || {}).length, 0);
-                    const total = agendas.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO')).length, 0);
-                    
+                    const stats = calculateProgressStats(agendas);
                     return (
-                        <div 
-                            key={suc} 
-                            onClick={() => setSelected({ suc, agendas })}
-                            // 3. Estructura de bloque clásica (block w-full flex flex-col) para evitar colapsos
+                        <div key={suc} onClick={() => setSelected({ suc, agendas })}
                             className="block w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:shadow-md hover:border-blue-300 cursor-pointer transition-all group flex flex-col"
                         >
                             <div className="flex items-start justify-between mb-5 w-full">
                                 <div className="flex-1 min-w-0 pr-3">
                                     <Building2 size={18} className="text-blue-500 mb-2" />
-                                    {/* 4. break-words asegura que baje de renglón si es muy largo */}
-                                    <h3 className="font-black text-[15px] text-primary uppercase leading-tight break-words">
-                                        {suc}
-                                    </h3>
-                                    <p className="text-xs font-bold text-slate-400 mt-1">
-                                        {agendas.length} operativo{agendas.length !== 1 ? 's' : ''}
-                                    </p>
+                                    <h3 className="font-black text-[15px] text-primary uppercase leading-tight break-words">{suc}</h3>
+                                    <p className="text-xs font-bold text-slate-400 mt-1">{agendas.length} operativo{agendas.length !== 1 ? 's' : ''}</p>
                                 </div>
                                 <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-50 transition-colors">
                                     <ChevronRight size={18} className="text-slate-400 group-hover:text-blue-600" />
                                 </div>
                             </div>
-                            
-                            {/* Pasamos los valores precisos a la barra de progreso */}
-                            <div className="w-full mt-auto">
-                                <ProgressBar done={done} total={total} />
+                            <div className="w-full mt-auto bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-3">
+                                <ProgressBar done={stats.doneRutas} total={stats.totalRutas} color="blue" label="Visitas Físicas" />
+                                <ProgressBar done={stats.pctKpi} total={100} color="emerald" label="Metas KPI" />
+                                <div className="pt-2 border-t border-slate-200">
+                                    <ProgressBar done={stats.pctGlobal} total={100} color="purple" label="Avance Global" />
+                                </div>
                             </div>
                         </div>
                     );
@@ -532,30 +521,24 @@ const VistaZona = ({ zonaData, rolName }) => {
 const VistaEjecutivo = ({ ejecutivo, agendas }) => {
     const [detail, setDetail] = useState(null);
     const misAgendas = agendas.filter(ag => ag.ejecutivoId === ejecutivo.id);
-    
     if (detail) return <AgendaExecDetail agenda={detail} onBack={() => setDetail(null)} />;
 
-    // --- NUEVO: Calculamos los totales agregados de este Ejecutivo ---
-    const doneAgregado = misAgendas.reduce((acc, ag) => acc + Object.keys(getRealCheckIns(ag)).length, 0);
-    const totalAgregado = misAgendas.reduce((acc, ag) => {
-        return acc + Object.values(ag.segments || {}).flat()
-            .filter(v => v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO')).length;
-    }, 0);
-    // -----------------------------------------------------------------
+    const stats = calculateProgressStats(misAgendas);
 
     return (
         <div className="animate-in slide-in-from-right-4 duration-300">
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-6">
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Ejecutivo de Cobranza</p>
-                <p className="font-black text-lg text-primary uppercase">{ejecutivo.nombre}</p>
-                <p className="text-[10px] text-accent">{misAgendas.length} gestor{misAgendas.length !== 1 ? 'es' : ''} asignado{misAgendas.length !== 1 ? 's' : ''}</p>
-                
-                {/* --- NUEVO: BARRA DE PROGRESO GLOBAL DEL EJECUTIVO --- */}
-                <div className="mt-4 pt-4 border-t border-slate-50">
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">Avance Consolidado del Equipo</p>
-                    <ProgressBar done={doneAgregado} total={totalAgregado} />
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-6 flex flex-col md:flex-row gap-6">
+                <div className="flex-1">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Ejecutivo de Cobranza</p>
+                    <p className="font-black text-lg text-primary uppercase">{ejecutivo.nombre}</p>
+                    <p className="text-[10px] text-accent">{misAgendas.length} gestor{misAgendas.length !== 1 ? 'es' : ''} asignado{misAgendas.length !== 1 ? 's' : ''}</p>
                 </div>
-                {/* ----------------------------------------------------- */}
+                <div className="flex-1 bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Avance Consolidado del Equipo</p>
+                    <ProgressBar done={stats.doneRutas} total={stats.totalRutas} color="blue" label="Visitas Físicas" />
+                    <ProgressBar done={stats.pctKpi} total={100} color="emerald" label="Metas KPI" />
+                    <ProgressBar done={stats.pctGlobal} total={100} color="purple" label="Avance Global Total" />
+                </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {misAgendas.map(ag => <OperativeCard key={ag.id} agenda={ag} onClick={() => setDetail(ag)} />)}
@@ -576,6 +559,64 @@ const EjecucionJefe = () => {
     const [selectedZona, setSelectedZona] = useState(null);
     const [selectedEj, setSelectedEj] = useState(null);
 
+    useEffect(() => {
+        // Te sugiero pasar el ID del usuario/canal en la URL para que el Backend sepa a quién notificar
+        const wsUrl = `ws://localhost:8090/business-control-cobranza/api/v1/ws/dashboard/${canal}`;
+        let socket;
+
+        try {
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = () => console.log('🔌 [Jefe] Conectado al Dashboard en Tiempo Real');
+
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    // EVENTO 1: Un operativo mandó una nueva agenda o una corrección (Alta/Actualización)
+                    if (data.type === 'NEW_AGENDA' || data.type === 'AGENDA_UPDATED') {
+                        toast('Agenda lista para revisión', { 
+                            icon: '🔔', 
+                            duration: 5000 
+                        });
+                        
+                        // Agregamos o actualizamos la agenda en el tablero del jefe
+                        setAgendas(prev => {
+                            const existe = prev.find(ag => ag.id === data.payload.id);
+                            if (existe) {
+                                return prev.map(ag => ag.id === data.payload.id ? data.payload : ag);
+                            }
+                            return [...prev, data.payload];
+                        });
+                    }
+
+                    // EVENTO 2: Un operativo hizo Check-in en la calle (Gestión)
+                    if (data.type === 'NEW_CHECKIN') {
+                        toast.success(`${data.payload.operativoNombre} registró una gestión`, { 
+                            duration: 4000, 
+                            position: 'bottom-right' 
+                        });
+                        
+                        // Actualizamos la agenda específica para que las barras de progreso se muevan solas
+                        setAgendas(prev => prev.map(ag => 
+                            ag.id === data.payload.idAgenda ? data.payload.agendaActualizada : ag
+                        ));
+                    }
+
+                } catch (error) {
+                    console.error('Error parseando el mensaje WebSocket:', error);
+                }
+            };
+
+        } catch (error) {
+            console.error("No se pudo establecer la conexión de WebSockets", error);
+        }
+
+        return () => {
+            if (socket && socket.readyState === WebSocket.OPEN) socket.close();
+        };
+    }, [canal]);
+
     // Carga de datos al inicio
     useEffect(() => {
         const fetchDashboardData = async () => {
@@ -585,13 +626,10 @@ const EjecucionJefe = () => {
                 const resAgendas = await api.get(`/agenda/equipo?fecha=${hoy}`);
                 const dataAgendasRaw = resAgendas.data?.contenido || resAgendas.data || [];
 
-                // --- SOLUCIÓN: FILTRAMOS POR EL CANAL DEL USUARIO LOGUEADO ---
-                // Comparamos que el equipo de la agenda ("COMERCIAL" o "COBRANZA") coincida con el tuyo
                 const dataAgendas = dataAgendasRaw.filter(ag => {
                     const equipoAgenda = ag.operativo?.equipo?.toLowerCase() || '';
                     return equipoAgenda === canal.toLowerCase();
                 });
-                // -------------------------------------------------------------
 
                 const parsedAgendas = dataAgendas.map(ag => {
                     let parsedSegments = ag.segments || {};
@@ -731,13 +769,11 @@ const EjecucionJefe = () => {
                             <div 
                                 key={zonaName} 
                                 onClick={() => setSelectedZona({ id: zonaName, nombre: zonaName })}
-                                // Estructura de bloque clásica que garantiza el ancho correcto en CSS Grid
                                 className="block w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:shadow-md hover:border-blue-300 cursor-pointer transition-all group"
                             >
                                 <div className="flex items-start justify-between mb-5">
                                     <div className="pr-4">
                                         <MapPin size={18} className="text-blue-500 mb-2" />
-                                        {/* break-words asegura que baje de renglón si es muy largo, sin colapsar la tarjeta */}
                                         <h3 className="font-black text-lg text-primary uppercase leading-tight break-words">
                                             {zonaName}
                                         </h3>

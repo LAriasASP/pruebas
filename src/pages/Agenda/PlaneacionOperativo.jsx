@@ -42,6 +42,28 @@ const handlePercentageChange = (value, callback) => {
     callback(finalValue);
 };
 
+const calcularBucketAuto = (diasMora) => {
+    if (diasMora === '' || diasMora === null || diasMora === undefined) return 'S/N';
+    const mora = parseInt(diasMora, 10);
+    
+    if (isNaN(mora) || mora <= 0) return 'A';
+    if (mora >= 1 && mora <= 7) return 'B1';
+    if (mora >= 8 && mora <= 23) return 'B2';
+    if (mora >= 24 && mora <= 30) return 'B3';
+    if (mora >= 31 && mora <= 53) return 'C1';
+    if (mora >= 54 && mora <= 60) return 'C2';
+    if (mora >= 61 && mora <= 82) return 'D1';
+    if (mora >= 83 && mora <= 89) return 'D2';
+    if (mora >= 90 && mora <= 113) return 'E1';
+    if (mora >= 114 && mora <= 120) return 'E2';
+    if (mora >= 121 && mora <= 143) return 'F1';
+    if (mora >= 144 && mora <= 150) return 'F2';
+    if (mora >= 151 && mora <= 173) return 'G1';
+    if (mora >= 174 && mora <= 180) return 'G2';
+    
+    return 'H'; // Más de 180 días
+};
+
 // --- COMPONENTES SECUNDARIOS ---
 
 // Input de Autocompletado con Filtros por Bloque y soporte de ID
@@ -98,18 +120,18 @@ const ClientNameInput = ({ id, value, idx, segmentName, updateVisit, mockDatabas
     const handleSelect = (item) => {
         setQuery(item.name);
         const isClientOnlySegment = segmentName === 'Seguimiento de Cartera' || segmentName === 'Gestión de Empresarias';
-        if (isClientOnlySegment) {
-            updateVisit(segmentName, idx, 'classification', 'Cliente');
-        }
-        updateVisit(segmentName, idx, 'name', item.name);
         
-        if (!isClientOnlySegment && item.classification) {
-            updateVisit(segmentName, idx, 'classification', item.classification);
+        if (isClientOnlySegment) {
+            updateVisit(segmentName, idx, 'classification', 'CLIENTE');
+        } else if (item.classification) {
+            updateVisit(segmentName, idx, 'classification', item.classification.toUpperCase());
         }
+        
+        updateVisit(segmentName, idx, 'name', item.name);
         setShowSuggestions(false);
     };
 
-    // NUEVO: 4. Función de validación cuando el usuario sale del campo (onBlur)
+    //Función de validación cuando el usuario sale del campo (onBlur)
     const handleBlur = () => {
         // Usamos setTimeout para dar tiempo a que React procese un clic en una sugerencia si es que hubo uno
         setTimeout(() => {
@@ -272,6 +294,10 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                     </div>
                 );
             case 'Evaluación e Integración':
+                const opcionesIntegracion = isCobranza 
+                    ? tiposIntegracion.filter(t => t.nombre.toUpperCase() === 'TRATAMIENTO' || t.nombre.toUpperCase() === 'CONVENIO')
+                    : tiposIntegracion;
+
                 return (
                     <div className="space-y-4 mt-4 lg:mt-2 lg:ml-14">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
@@ -279,7 +305,7 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                                 <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Integración</label>
                                 <select value={v.typeIntegration || ''} onChange={e => updateVisit(segmentName, idx, 'typeIntegration', e.target.value)} className="input-cell w-full uppercase text-[10px]">
                                     <option value="" disabled>Seleccionar...</option>
-                                    {tiposIntegracion.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
+                                    {opcionesIntegracion.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
                                 </select>
                             </div>
                             <div>
@@ -295,17 +321,25 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                             </div>
                             <div>
                                 <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Subproducto</label>
-                                <select value={v.subProduct || ''} onChange={e => updateVisit(segmentName, idx, 'subProduct', e.target.value)} className="input-cell w-full uppercase text-[10px]">
-                                    <option value="" disabled>Seleccionar...</option>
-                                    {subproductos.map(s => <option key={s.id} value={s.nombre}>{s.nombre}</option>)}
-                                </select>
+                                {isCobranza ? (
+                                    <div className="bg-slate-50 w-full p-2.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-400 h-[42px] flex items-center px-4 shadow-inner cursor-not-allowed">NINGUNO</div>
+                                ) : (
+                                    <select value={v.subProduct || ''} onChange={e => updateVisit(segmentName, idx, 'subProduct', e.target.value)} className="input-cell w-full uppercase text-[10px]">
+                                        <option value="" disabled>Seleccionar...</option>
+                                        {subproductos.map(s => <option key={s.id} value={s.nombre}>{s.nombre}</option>)}
+                                    </select>
+                                )}
                             </div>
                             <div>
                                 <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Programa</label>
-                                <select value={v.program || ''} onChange={e => updateVisit(segmentName, idx, 'program', e.target.value)} className="input-cell w-full uppercase text-[10px]" disabled={v.product === 'Captación'}>
-                                    <option value="" disabled>Seleccionar...</option>
-                                    {programas.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
-                                </select>
+                                {isCobranza ? (
+                                    <div className="bg-slate-50 w-full p-2.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-400 h-[42px] flex items-center px-4 shadow-inner cursor-not-allowed">NINGUNO</div>
+                                ) : (
+                                    <select value={v.program || ''} onChange={e => updateVisit(segmentName, idx, 'program', e.target.value)} className="input-cell w-full uppercase text-[10px]" disabled={v.product === 'Captación'}>
+                                        <option value="" disabled>Seleccionar...</option>
+                                        {programas.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                                    </select>
+                                )}
                             </div>
                         </div>
 
@@ -327,7 +361,29 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                         </div>
                     </div>
                 );
-            case 'Seguimiento de Cartera':
+                case 'Seguimiento de Cartera': {
+                // 1. Buscamos la VERDAD ABSOLUTA en el catálogo de contactos-usuarios
+                const clienteCore = mockDatabase.find(c => c.idContacto === v.idContacto || (v.name && c.name?.toUpperCase() === v.name?.toUpperCase()));
+                
+                // 2. Lógica para decidir qué pintar en la caja del Bucket
+                const getBucketVisual = () => {
+                    if (v.moraActual === undefined || v.moraActual === null || v.moraActual === '') {
+                        return clienteCore?.categoriaGestion || v.categoriaGestion || 'S/N';
+                    }
+                    
+                    if (clienteCore) {
+                        // Si el gestor ya manipuló la mora en pantalla, calculamos la nueva proyección al vuelo
+                        if (Number(v.moraActual) !== Number(clienteCore.moraActual)) {
+                            return calcularBucketAuto(v.moraActual);
+                        }
+                        // PRIMERA INSTANCIA: Si no la ha tocado, mostramos el valor exacto de contactos-usuarios (Ej. "B3")
+                        return clienteCore.categoriaGestion || 'S/N';
+                    }
+                    
+                    // Fallback de seguridad si es un cliente que no venía en la lista
+                    return calcularBucketAuto(v.moraActual);
+                };
+
                 return (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100 mt-4 lg:mt-2 lg:ml-14 shadow-sm">
                         <div>
@@ -350,13 +406,45 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                                 <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-black uppercase text-primary h-[42px] flex items-center px-4">{v.ultimoEstatus || 'S/N'}</div>
                             )}
                         </div>
+                        
+                        {/* 🟢 CAMPOS NUMÉRICOS LIMPIOS Y SEPARADOS */}
                         <div className="col-span-1 sm:col-span-2">
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Mora (Inicio / Actual)</label>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Días de Mora (Inicio / Actual)</label>
                             <div className="flex flex-col sm:flex-row gap-2">
-                                <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-accent">Inicio: {v.moraInicioMes || 0} días</div>
-                                <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-red-500">Actual: {v.moraActual || 0} días</div>
+                                <div className="flex-1 relative">
+                                    {(!v.moraInicioMes && v.moraInicioMes !== 0 && v.moraInicioMes !== '0') && (
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400 uppercase pointer-events-none">Inicio</span>
+                                    )}
+                                    <input 
+                                        type="number" 
+                                        min="0"
+                                        value={v.moraInicioMes ?? ''} 
+                                        onChange={e => {
+                                            const val = e.target.value.replace(/\D/g, ''); 
+                                            updateVisit(segmentName, idx, 'moraInicioMes', val);
+                                        }} 
+                                        className={`input-cell w-full text-[10px] font-bold text-accent transition-all ${(!v.moraInicioMes && v.moraInicioMes !== 0 && v.moraInicioMes !== '0') ? 'pl-14' : 'pl-3'}`} 
+                                    />
+                                </div>
+                                <div className="flex-1 relative">
+                                    {(!v.moraActual && v.moraActual !== 0 && v.moraActual !== '0') && (
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-rose-400 uppercase pointer-events-none">Actual</span>
+                                    )}
+                                    <input 
+                                        type="number" 
+                                        min="0"
+                                        value={v.moraActual ?? ''} 
+                                        onChange={e => {
+                                            const val = e.target.value.replace(/\D/g, ''); 
+                                            updateVisit(segmentName, idx, 'moraActual', val);
+                                            updateVisit(segmentName, idx, 'moraDays', val); // Sincroniza payload
+                                        }} 
+                                        className={`input-cell w-full text-[10px] font-bold text-red-500 border-rose-100 bg-rose-50/30 transition-all ${(!v.moraActual && v.moraActual !== 0 && v.moraActual !== '0') ? 'pl-16' : 'pl-3'}`} 
+                                    />
+                                </div>
                             </div>
                         </div>
+
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Fechas (Último Pago / Venc.)</label>
                             <div className="flex gap-2">
@@ -371,22 +459,407 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                                 <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-accent">Act: {formatCurrency(v.saldoActual)}</div>
                             </div>
                         </div>
+
+                        {/* ✅ EL BUCKET EVALÚA PRIMERA INSTANCIA VS MODIFICACIÓN */}
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Bucket de Mora</label>
+                            <div className="bg-slate-50 w-full p-2.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-500 h-[42px] flex items-center px-4 shadow-inner cursor-not-allowed">
+                                {getBucketVisual()}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Monto Amort.</label>
+                            <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4">{formatCurrency(v.montoAmortizacion)}</div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Monto p/Corriente</label>
+                            <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-red-600 h-[42px] flex items-center px-4">{formatCurrency(v.montoRequeridoCorriente)}</div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta Aplicada</label>
                             {isCobranza ? (
                                 <select
-                                    id={`bucket-${segmentName}-${idx}`}
-                                    value={v.categoriaGestion || ''}
-                                    onChange={e => updateVisit(segmentName, idx, 'categoriaGestion', e.target.value)}
+                                    id={`herr-aplicada-${segmentName}-${idx}`}
+                                    value={v.herramientaAplicada || ''}
+                                    onChange={e => updateVisit(segmentName, idx, 'herramientaAplicada', e.target.value)}
                                     className="input-cell w-full uppercase text-[10px] h-[42px]"
                                 >
-                                    <option value="" disabled>Seleccionar bucket...</option>
-                                    {subEstatus.map(b => <option key={b.id || b.id_sub_estatus} value={b.nombre}>{b.nombre}</option>)}
+                                    <option value="" disabled>Seleccionar...</option>
+                                    {herramientas.map(h => <option key={h.id || h.id_herramienta} value={h.nombre}>{h.nombre}</option>)}
                                 </select>
                             ) : (
-                                <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-black uppercase text-accent h-[42px] flex items-center px-4">{v.categoriaGestion || 'PREVENTIVO'}</div>
+                                <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4">{v.herramientaAplicada || 'NINGUNA'}</div>
                             )}
                         </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo de Gestión (Personal)</label>
+                            <select value={v.typeVisitManagement || ''} onChange={e => updateVisit(segmentName, idx, 'typeVisitManagement', e.target.value)} className="input-cell w-full uppercase text-[10px] h-[42px]">
+                                <option value="" disabled>Seleccionar tipo...</option>
+                                {tiposGestion.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta para Aplicar</label>
+                            <select value={v.herramientaAplicar || ''} onChange={e => updateVisit(segmentName, idx, 'herramientaAplicar', e.target.value)} className="input-cell w-full uppercase text-[10px] h-[42px]">
+                                <option value="" disabled>Seleccionar...</option>
+                                {herramientas.map(h => <option key={h.id} value={h.nombre}>{h.nombre}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                );
+            }
+                return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100 mt-4 lg:mt-2 lg:ml-14 shadow-sm">
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">ID Crédito</label>
+                            <div className="input-cell w-full font-mono-tech flex items-center px-4 h-[42px] bg-white border-slate-100 text-primary">{v.idCredito || 'S/N'}</div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Estatus Cartera</label>
+                            {isCobranza ? (
+                                <select
+                                    id={`estatus-${segmentName}-${idx}`}
+                                    value={v.ultimoEstatus || ''}
+                                    onChange={e => updateVisit(segmentName, idx, 'ultimoEstatus', e.target.value)}
+                                    className="input-cell w-full uppercase text-[10px] h-[42px]"
+                                >
+                                    <option value="" disabled>Seleccionar estatus...</option>
+                                    {estatusCartera.map(es => <option key={es.id || es.id_etiqueta} value={es.nombre}>{es.nombre}</option>)}
+                                </select>
+                            ) : (
+                                <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-black uppercase text-primary h-[42px] flex items-center px-4">{v.ultimoEstatus || 'S/N'}</div>
+                            )}
+                        </div>
+                        
+                        {/* 🟢 FASE 2.1: ETIQUETAS SEPARADAS Y SINCRONIZACIÓN DE PAYLOAD */}
+                        <div className="col-span-1 sm:col-span-2">
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <div className="flex-1 relative">
+                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-wide mb-1 block pl-1">Días de Mora Inicio</label>
+                                    <div className="relative">
+                                        {(!v.moraInicioMes && v.moraInicioMes !== 0 && v.moraInicioMes !== '0') && (
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400 uppercase pointer-events-none">Inicio</span>
+                                        )}
+                                        <input 
+                                            type="number" 
+                                            min="0"
+                                            value={v.moraInicioMes ?? ''} 
+                                            onChange={e => handleNumericChange(e.target.value, (val) => updateVisit(segmentName, idx, 'moraInicioMes', val))} 
+                                            className={`input-cell w-full text-[10px] font-bold text-accent transition-all ${(!v.moraInicioMes && v.moraInicioMes !== 0 && v.moraInicioMes !== '0') ? 'pl-14' : 'pl-3'}`} 
+                                            placeholder=""
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex-1 relative">
+                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-wide mb-1 block pl-1">Días de Mora Actual</label>
+                                    <div className="relative">
+                                        {(!v.moraActual && v.moraActual !== 0 && v.moraActual !== '0') && (
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-rose-400 uppercase pointer-events-none">Actual</span>
+                                        )}
+                                        <input 
+                                            type="number" 
+                                            min="0"
+                                            value={v.moraActual ?? ''} 
+                                            onChange={e => {
+                                                handleNumericChange(e.target.value, (val) => {
+                                                    const parsedMora = parseInt(val, 10) || 0;
+                                                    const nuevoBucket = calcularBucketAuto(val);
+                                                    const nuevoEstatus = parsedMora === 0 ? 'Vigente' : 'Mora';
+
+                                                    // Sincronizamos secuencialmente todas las propiedades del objeto de visita
+                                                    updateVisit(segmentName, idx, 'moraActual', val);
+                                                    updateVisit(segmentName, idx, 'moraDays', parsedMora); // Sincroniza moraDays
+                                                    updateVisit(segmentName, idx, 'categoriaGestion', nuevoBucket); // Envía código real (A, B1, C2)
+                                                    updateVisit(segmentName, idx, 'ultimoEstatus', nuevoEstatus); // Cambia dinámicamente el estatus
+                                                });
+                                            }} 
+                                            className={`input-cell w-full text-[10px] font-bold text-red-500 border-rose-100 bg-rose-50/30 transition-all ${(!v.moraActual && v.moraActual !== 0 && v.moraActual !== '0') ? 'pl-16' : 'pl-3'}`} 
+                                            placeholder=""
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Fechas (Último Pago / Venc.)</label>
+                            <div className="flex gap-2">
+                                <div className="flex-1 bg-white p-1.5 rounded-lg border border-slate-100 text-[9px] font-bold flex flex-col justify-center items-center"><span className="text-[7px] text-slate-400">PAGO</span>{v.ultimaFechaPago || '-'}</div>
+                                <div className="flex-1 bg-white p-1.5 rounded-lg border border-slate-100 text-[9px] font-bold flex flex-col justify-center items-center"><span className="text-[7px] text-slate-400">VENC.</span>{v.fechaVencimiento || '-'}</div>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Saldos (Inicio / Actual)</label>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold">In: {formatCurrency(v.saldoInicioMes)}</div>
+                                <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-accent">Act: {formatCurrency(v.saldoActual)}</div>
+                            </div>
+                        </div>
+
+                        {/* Contenedor del Bucket de Mora Gris Original */}
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Bucket de Mora</label>
+                            <div className="bg-slate-50 w-full p-2.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-500 h-[42px] flex items-center px-4 shadow-inner cursor-not-allowed">
+                                {v.categoriaGestion || 'S/N'}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Monto Amort.</label>
+                            <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4">{formatCurrency(v.montoAmortizacion)}</div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Monto p/Corriente</label>
+                            <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-red-600 h-[42px] flex items-center px-4">{formatCurrency(v.montoRequeridoCorriente)}</div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta Aplicada</label>
+                            {isCobranza ? (
+                                <select
+                                    id={`herr-aplicada-${segmentName}-${idx}`}
+                                    value={v.herramientaAplicada || ''}
+                                    onChange={e => updateVisit(segmentName, idx, 'herramientaAplicada', e.target.value)}
+                                    className="input-cell w-full uppercase text-[10px] h-[42px]"
+                                >
+                                    <option value="" disabled>Seleccionar...</option>
+                                    {herramientas.map(h => <option key={h.id || h.id_herramienta} value={h.nombre}>{h.nombre}</option>)}
+                                </select>
+                            ) : (
+                                <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4">{v.herramientaAplicada || 'NINGUNA'}</div>
+                            )}
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo de Gestión (Personal)</label>
+                            <select value={v.typeVisitManagement || ''} onChange={e => updateVisit(segmentName, idx, 'typeVisitManagement', e.target.value)} className="input-cell w-full uppercase text-[10px] h-[42px]">
+                                <option value="" disabled>Seleccionar tipo...</option>
+                                {tiposGestion.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta para Aplicar</label>
+                            <select value={v.herramientaAplicar || ''} onChange={e => updateVisit(segmentName, idx, 'herramientaAplicar', e.target.value)} className="input-cell w-full uppercase text-[10px] h-[42px]">
+                                <option value="" disabled>Seleccionar...</option>
+                                {herramientas.map(h => <option key={h.id} value={h.nombre}>{h.nombre}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                );
+                return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100 mt-4 lg:mt-2 lg:ml-14 shadow-sm">
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">ID Crédito</label>
+                            <div className="input-cell w-full font-mono-tech flex items-center px-4 h-[42px] bg-white border-slate-100 text-primary">{v.idCredito || 'S/N'}</div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Estatus Cartera</label>
+                            {isCobranza ? (
+                                <select
+                                    id={`estatus-${segmentName}-${idx}`}
+                                    value={v.ultimoEstatus || ''}
+                                    onChange={e => updateVisit(segmentName, idx, 'ultimoEstatus', e.target.value)}
+                                    className="input-cell w-full uppercase text-[10px] h-[42px]"
+                                >
+                                    <option value="" disabled>Seleccionar estatus...</option>
+                                    {estatusCartera.map(es => <option key={es.id || es.id_etiqueta} value={es.nombre}>{es.nombre}</option>)}
+                                </select>
+                            ) : (
+                                <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-black uppercase text-primary h-[42px] flex items-center px-4">{v.ultimoEstatus || 'S/N'}</div>
+                            )}
+                        </div>
+                        
+                        {/* 🟢 FASE 2.1: CAMPOS NUMÉRICOS CON ETIQUETAS SEPARADAS */}
+                        <div className="col-span-1 sm:col-span-2">
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <div className="flex-1 relative">
+                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-wide mb-1 block pl-1">Días de Mora Inicio</label>
+                                    <div className="relative">
+                                        {(!v.moraInicioMes && v.moraInicioMes !== 0 && v.moraInicioMes !== '0') && (
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400 uppercase pointer-events-none">Inicio</span>
+                                        )}
+                                        <input 
+                                            type="number" 
+                                            min="0"
+                                            value={v.moraInicioMes ?? ''} 
+                                            onChange={e => handleNumericChange(e.target.value, (val) => updateVisit(segmentName, idx, 'moraInicioMes', val))} 
+                                            className={`input-cell w-full text-[10px] font-bold text-accent transition-all ${(!v.moraInicioMes && v.moraInicioMes !== 0 && v.moraInicioMes !== '0') ? 'pl-14' : 'pl-3'}`} 
+                                            placeholder=""
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex-1 relative">
+                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-wide mb-1 block pl-1">Días de Mora Actual</label>
+                                    <div className="relative">
+                                        {(!v.moraActual && v.moraActual !== 0 && v.moraActual !== '0') && (
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-rose-400 uppercase pointer-events-none">Actual</span>
+                                        )}
+                                        <input 
+                                            type="number" 
+                                            min="0"
+                                            value={v.moraActual ?? ''} 
+                                            // ✅ SOLUCIÓN DERIVED STATE: Actualiza el estado numérico crudo fluidamente
+                                            onChange={e => handleNumericChange(e.target.value, (val) => updateVisit(segmentName, idx, 'moraActual', val))} 
+                                            className={`input-cell w-full text-[10px] font-bold text-red-500 border-rose-100 bg-rose-50/30 transition-all ${(!v.moraActual && v.moraActual !== 0 && v.moraActual !== '0') ? 'pl-16' : 'pl-3'}`} 
+                                            placeholder=""
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Fechas (Último Pago / Venc.)</label>
+                            <div className="flex gap-2">
+                                <div className="flex-1 bg-white p-1.5 rounded-lg border border-slate-100 text-[9px] font-bold flex flex-col justify-center items-center"><span className="text-[7px] text-slate-400">PAGO</span>{v.ultimaFechaPago || '-'}</div>
+                                <div className="flex-1 bg-white p-1.5 rounded-lg border border-slate-100 text-[9px] font-bold flex flex-col justify-center items-center"><span className="text-[7px] text-slate-400">VENC.</span>{v.fechaVencimiento || '-'}</div>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Saldos (Inicio / Actual)</label>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold">In: {formatCurrency(v.saldoInicioMes)}</div>
+                                <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-accent">Act: {formatCurrency(v.saldoActual)}</div>
+                            </div>
+                        </div>
+
+                        {/* ✅ FASE 2.2: BUCKET DE MORA ORIGINAL ACTUALIZADO EN TIEMPO REAL AL VUELO */}
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Bucket de Mora</label>
+                            <div className="bg-slate-50 w-full p-2.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-500 h-[42px] flex items-center px-4 shadow-inner cursor-not-allowed transition-all duration-200">
+                                {v.moraActual !== undefined && v.moraActual !== null && v.moraActual !== '' 
+                                    ? calcularBucketAuto(v.moraActual) 
+                                    : (v.categoriaGestion || 'S/N')}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Monto Amort.</label>
+                            <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4">{formatCurrency(v.montoAmortizacion)}</div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Monto p/Corriente</label>
+                            <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-red-600 h-[42px] flex items-center px-4">{formatCurrency(v.montoRequeridoCorriente)}</div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta Aplicada</label>
+                            {isCobranza ? (
+                                <select
+                                    id={`herr-aplicada-${segmentName}-${idx}`}
+                                    value={v.herramientaAplicada || ''}
+                                    onChange={e => updateVisit(segmentName, idx, 'herramientaAplicada', e.target.value)}
+                                    className="input-cell w-full uppercase text-[10px] h-[42px]"
+                                >
+                                    <option value="" disabled>Seleccionar...</option>
+                                    {herramientas.map(h => <option key={h.id || h.id_herramienta} value={h.nombre}>{h.nombre}</option>)}
+                                </select>
+                            ) : (
+                                <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4">{v.herramientaAplicada || 'NINGUNA'}</div>
+                            )}
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo de Gestión (Personal)</label>
+                            <select value={v.typeVisitManagement || ''} onChange={e => updateVisit(segmentName, idx, 'typeVisitManagement', e.target.value)} className="input-cell w-full uppercase text-[10px] h-[42px]">
+                                <option value="" disabled>Seleccionar tipo...</option>
+                                {tiposGestion.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta para Aplicar</label>
+                            <select value={v.herramientaAplicar || ''} onChange={e => updateVisit(segmentName, idx, 'herramientaAplicar', e.target.value)} className="input-cell w-full uppercase text-[10px] h-[42px]">
+                                <option value="" disabled>Seleccionar...</option>
+                                {herramientas.map(h => <option key={h.id} value={h.nombre}>{h.nombre}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                );
+                return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100 mt-4 lg:mt-2 lg:ml-14 shadow-sm">
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">ID Crédito</label>
+                            <div className="input-cell w-full font-mono-tech flex items-center px-4 h-[42px] bg-white border-slate-100 text-primary">{v.idCredito || 'S/N'}</div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Estatus Cartera</label>
+                            {isCobranza ? (
+                                <select
+                                    id={`estatus-${segmentName}-${idx}`}
+                                    value={v.ultimoEstatus || ''}
+                                    onChange={e => updateVisit(segmentName, idx, 'ultimoEstatus', e.target.value)}
+                                    className="input-cell w-full uppercase text-[10px] h-[42px]"
+                                >
+                                    <option value="" disabled>Seleccionar estatus...</option>
+                                    {estatusCartera.map(es => <option key={es.id || es.id_etiqueta} value={es.nombre}>{es.nombre}</option>)}
+                                </select>
+                            ) : (
+                                <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-black uppercase text-primary h-[42px] flex items-center px-4">{v.ultimoEstatus || 'S/N'}</div>
+                            )}
+                        </div>
+                        
+                        {/* 🟢 FASE 2.1 y 3.3: DÍAS DE MORA Y BUCKET DINÁMICO */}
+                        <div className="col-span-1 sm:col-span-2">
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Días de Mora (Inicio / Actual)</label>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <div className="flex-1 relative">
+                                    {/* El texto desaparece si hay un valor capturado */}
+                                    {(!v.moraInicioMes && v.moraInicioMes !== 0 && v.moraInicioMes !== '0') && (
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400 uppercase pointer-events-none">Inicio</span>
+                                    )}
+                                    <input 
+                                        type="number" 
+                                        min="0"
+                                        value={v.moraInicioMes ?? ''} 
+                                        onChange={e => handleNumericChange(e.target.value, (val) => updateVisit(segmentName, idx, 'moraInicioMes', val))} 
+                                        className={`input-cell w-full text-[10px] font-bold text-accent transition-all ${(!v.moraInicioMes && v.moraInicioMes !== 0 && v.moraInicioMes !== '0') ? 'pl-14' : 'pl-3'}`} 
+                                        placeholder=""
+                                    />
+                                </div>
+                                <div className="flex-1 relative">
+                                    {/* El texto desaparece si hay un valor capturado */}
+                                    {(!v.moraActual && v.moraActual !== 0 && v.moraActual !== '0') && (
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-rose-400 uppercase pointer-events-none">Actual</span>
+                                    )}
+                                    <input 
+                                        type="number" 
+                                        min="0"
+                                        value={v.moraActual ?? ''} 
+                                        onChange={e => {
+                                            handleNumericChange(e.target.value, (val) => {
+                                                updateVisit(segmentName, idx, 'moraActual', val);
+                                                // ✅ MAGIA REACTIVA: Actualizamos la variable 'categoriaGestion' (que es donde guardamos el bucket)
+                                                // cada vez que el usuario teclea un número
+                                                updateVisit(segmentName, idx, 'categoriaGestion', calcularBucketAuto(val));
+                                            });
+                                        }} 
+                                        className={`input-cell w-full text-[10px] font-bold text-red-500 border-rose-100 bg-rose-50/30 transition-all ${(!v.moraActual && v.moraActual !== 0 && v.moraActual !== '0') ? 'pl-16' : 'pl-3'}`} 
+                                        placeholder=""
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Fechas (Último Pago / Venc.)</label>
+                            <div className="flex gap-2">
+                                <div className="flex-1 bg-white p-1.5 rounded-lg border border-slate-100 text-[9px] font-bold flex flex-col justify-center items-center"><span className="text-[7px] text-slate-400">PAGO</span>{v.ultimaFechaPago || '-'}</div>
+                                <div className="flex-1 bg-white p-1.5 rounded-lg border border-slate-100 text-[9px] font-bold flex flex-col justify-center items-center"><span className="text-[7px] text-slate-400">VENC.</span>{v.fechaVencimiento || '-'}</div>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Saldos (Inicio / Actual)</label>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold">In: {formatCurrency(v.saldoInicioMes)}</div>
+                                <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-accent">Act: {formatCurrency(v.saldoActual)}</div>
+                            </div>
+                        </div>
+
+                        {/* ✅ RENDERIZADO DEL BUCKET: Aquí se pintará lo que calculamos arriba en tiempo real */}
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Bucket de Mora</label>
+                            <div className="bg-slate-50 w-full p-2.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-500 h-[42px] flex items-center px-4 shadow-inner cursor-not-allowed transition-all">
+                                {v.categoriaGestion || 'S/N'}
+                            </div>
+                        </div>
+
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Monto Amort.</label>
                             <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4">{formatCurrency(v.montoAmortizacion)}</div>
@@ -461,13 +934,12 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
         <div className="group border border-slate-100 lg:border-0 lg:border-b lg:border-slate-50 rounded-2xl lg:rounded-none bg-white hover:bg-slate-50/30 p-4 transition-all mb-4 lg:mb-0">
             <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6">
                 
-                {/* Opciones Superiores Móvil / Fijas en Escritorio */}
                 <div className="flex items-center justify-between lg:w-auto lg:justify-start gap-4">
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 lg:h-auto bg-slate-900 lg:bg-transparent text-white lg:text-accent rounded flex items-center justify-center font-mono-tech text-[12px]">{idx + 1}</div>
                         <div className="w-32">
                             <select 
-                                id={`time-${segmentName}-${idx}`} // ID para validación
+                                id={`time-${segmentName}-${idx}`} 
                                 value={v.time} 
                                 onChange={e => updateVisit(segmentName, idx, 'time', e.target.value)} 
                                 className="input-cell !py-2 font-bold w-full"
@@ -482,7 +954,6 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                     <button onClick={() => removeRow(segmentName, idx)} className="lg:hidden p-2 text-rose-400 bg-rose-50 hover:bg-rose-100 rounded-lg transition-all"><Trash2 size={16} /></button>
                 </div>
 
-                {/* Cliente */}
                 <div className="flex-1 w-full min-w-0">
                     <label className="lg:hidden text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Nombre del Cliente</label>
                     <ClientNameInput 
@@ -495,12 +966,11 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                     />
                 </div>
 
-                {/* Clasificación (Filtrada) */}
                 {!isClientOnlySegment && (
                     <div className="w-full lg:w-48">
                         <label className="lg:hidden text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Clasificación</label>
                         <select 
-                            id={`class-${segmentName}-${idx}`} // ID para validación
+                            id={`class-${segmentName}-${idx}`} 
                             value={v.classification || ''} 
                             onChange={e => updateVisit(segmentName, idx, 'classification', e.target.value)} 
                             className="input-cell w-full !py-2 uppercase font-black tracking-widest text-[9px]"
@@ -515,9 +985,22 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                                     return nombreClase === 'CONTACTO' || nombreClase === 'PROSPECTO' || nombreClase === 'CLIENTE';
                                 }
                                 return true;
-                            }).map(c => (
-                                <option key={c.id} value={c.nombre}>{c.nombre}</option>
-                            ))}
+                            }).map(c => {
+                                const nombreClase = c.nombre.toUpperCase();
+                                
+                                const claseOriginalBD = mockDatabase.find(item => item.name.toUpperCase() === v.name?.toUpperCase())?.classification?.toUpperCase();
+                                const esContactoDeshabilitado = nombreClase === 'CONTACTO' && (claseOriginalBD === 'PROSPECTO' || claseOriginalBD === 'CLIENTE');
+
+                                return (
+                                    <option 
+                                        key={c.id} 
+                                        value={c.nombre}
+                                        disabled={esContactoDeshabilitado}
+                                    >
+                                        {c.nombre} {esContactoDeshabilitado ? '🔒' : ''}
+                                    </option>
+                                );
+                            })}
                         </select>
                     </div>
                 )}
@@ -633,11 +1116,11 @@ const SegmentSection = ({ title, visits, segmentName, isCobranza }) => {
 
 // --- COMPONENTE PRINCIPAL ---
 const PlaneacionOperativo = () => {
-    // IMPORTANTE: Extraemos kpiConfig para poder validar los KPIs
-    const { currentAgenda, sendForAuthorization, resetAgenda, getVisibleSegments, kpiConfig } = useAgenda();
+    // Extraemos kpiConfig para poder validar los KPIs
+    const { currentAgenda, sendForAuthorization, resetAgenda, getVisibleSegments, kpiConfig } = useAgenda();    
     const { selectedRole } = useRole();
     const isCobranza = selectedRole?.canal?.toUpperCase() === 'COBRANZA';
-    const visibleSegments = getVisibleSegments();
+    const visibleSegments = getVisibleSegments().filter(name => !(isCobranza && name === 'Promoción'));
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [showClearModal, setShowClearModal] = useState(false);
@@ -646,6 +1129,7 @@ const PlaneacionOperativo = () => {
     
     const initialDataRef = useRef(null);
     const prevIdRef = useRef(currentAgenda.id);
+  
 
     useEffect(() => {
         const currentDataStr = JSON.stringify({
@@ -744,27 +1228,30 @@ const PlaneacionOperativo = () => {
         });
     };
 
-    // 1. Normalizamos el estatus para evitar errores por espacios, mayúsculas o variaciones ("ejecutado" vs "ejecutada")
+    // 1. Normalizamos el estatus para evitar errores por espacios, mayúsculas o variaciones
     const statusActual = String(currentAgenda?.status || 'borrador').toLowerCase().trim();
     
     // 2. Definimos la lista blindada con todas las variaciones posibles
     const protectedStatuses = ['pendiente', 'aprobada', 'ejecutada', 'ejecutado', 'completada', 'completado'];
 
     if (protectedStatuses.includes(statusActual)) {
-        let icon, colorClass, message;
+        let icon, colorClass, message, titleMain;
         
-        // 3. Comprobación flexible (atrapa "ejecutado" y "ejecutada")
+        // 3. Comprobación flexible y Textos Solicitados por QA
         if (statusActual.includes('ejecutad') || statusActual.includes('completad')) {
             icon = <CheckCircle2 size={40} />; 
             colorClass = 'bg-slate-100 text-slate-600';
-            message = 'Jornada finalizada y bloqueada';
+            titleMain = 'Jornada Finalizada';
+            message = 'Tu agenda ha sido ejecutada y bloqueada';
         } else if (statusActual === 'aprobada') {
             icon = <CheckCircle2 size={40} />;
             colorClass = 'bg-emerald-50 text-emerald-600';
+            titleMain = 'AGENDA VALIDADA EXITOSAMENTE'; // <-- Texto exacto solicitado por QA
             message = 'Jornada autorizada para iniciar';
         } else {
             icon = <Clock size={40} />;
             colorClass = 'bg-blue-50 text-blue-600';
+            titleMain = 'AGENDA CAPTURADA EXITOSAMENTE'; // <-- Texto exacto solicitado por QA
             message = 'Esperando validación de tu jefe';
         }
 
@@ -774,7 +1261,8 @@ const PlaneacionOperativo = () => {
                     <div className={`w-24 h-24 mx-auto rounded-full flex items-center justify-center mb-8 shadow-inner ${colorClass}`}>
                         {icon}
                     </div>
-                    <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Agenda Protegida</h2>
+                    {/* El H2 ahora es dinámico y renderiza el texto de éxito */}
+                    <h2 className="text-3xl font-black text-primary uppercase tracking-tight">{titleMain}</h2>
                     <p className="text-accent text-[11px] font-black uppercase tracking-[0.2em] mt-3">
                         {message}
                     </p>
@@ -784,7 +1272,25 @@ const PlaneacionOperativo = () => {
     }
     
     return (
-        <div className="max-w-[1400px] mx-auto pb-40 px-4 md:px-8">
+        <div className="max-w-[1400px] mx-auto pb-40 px-4 md:px-8">            
+            {/* BANNER DE RECHAZO DEL JEFE: Visible si el estatus es requiere_modificacion */}
+            {statusActual === 'requiere_modificacion' && (
+                <div className="mt-8 bg-red-50 border border-red-200 rounded-2xl p-5 flex gap-4 items-start shadow-sm animate-in slide-in-from-top-2">
+                    <div className="bg-white p-2 rounded-xl shadow-sm border border-red-100 mt-1 flex-shrink-0">
+                        <AlertTriangle size={24} className="text-red-500" />
+                    </div>
+                    <div className="flex-1">
+                        <h4 className="text-[12px] font-black text-red-700 uppercase tracking-widest mb-1">
+                            Tu supervisor ha solicitado modificaciones a tu agenda
+                        </h4>
+                        <div className="bg-white/60 p-3 rounded-lg border border-red-100 mt-2">
+                            <p className="text-[13px] font-bold text-red-800 italic">
+                                "{currentAgenda.notaJefe || 'Revisa y ajusta los detalles de tu jornada.'}"
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
             <header className="mb-12 pt-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div>
                     <h2 className="text-5xl font-black text-primary tracking-tighter leading-none">PLANEACIÓN</h2>

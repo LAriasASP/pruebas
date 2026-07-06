@@ -3,6 +3,7 @@ import { useRole } from './RoleContext';
 import { useCatalogs } from './CatalogContext'; 
 import api from '../api/axiosConfig';
 import UIModal from '../components/UIModal'; 
+import toast from 'react-hot-toast'; 
 
 const MATRIZ_SEGMENTOS = {
     'ASESOR FINANCIERO': ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera'],
@@ -122,7 +123,7 @@ export const AgendaProvider = ({ children }) => {
                 case 'Seguimiento de Cartera':
                     return {
                         ...base, idCredito: '', moraInicioMes: '0', moraActual: '0', saldoInicioMes: '0', saldoActual: '0',
-                        categoriaGestion: 'preventivo', ultimoEstatus: 'Puntual', ultimaFechaPago: '-', fechaVencimiento: '-',
+                        categoriaGestion: 'S/N', ultimoEstatus: 'Puntual', ultimaFechaPago: '-', fechaVencimiento: '-',
                         montoAmortizacion: '0', montoRequeridoCorriente: '0', herramientaAplicada: 'Ninguna', herramientaAplicar: 'Ninguna', typeManagement: ''
                     };
                 case 'Gestión de Empresarias':
@@ -192,6 +193,7 @@ export const AgendaProvider = ({ children }) => {
                         ...prev,
                         id: agendaData.id,
                         status: agendaData.status?.toLowerCase() || 'borrador',
+                        notaJefe: agendaData.notaJefe || 'Revisa y ajusta los detalles de tu jornada.',
                         segments: safeSegments,
                         kpiCompromisos: parsedKpiCompromisos,
                         kpiReal: parsedKpiReal,
@@ -228,6 +230,54 @@ export const AgendaProvider = ({ children }) => {
 
         cargarAgendaDelDia();
     }, [selectedRole?.id]);
+
+
+    useEffect(() => {
+        if (!currentAgenda?.id) return; // Solo conectamos si ya hay una agenda cargada
+
+        const wsUrl = `ws://localhost:8090/business-control-cobranza/api/v1/ws/operativo/${currentAgenda.id}`;
+        let socket;
+
+        try {
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = () => console.log('🔌 [Operativo] Conectado al WebSocket');
+
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    // Si el jefe envía una actualización de estado (Aprobación o Rechazo)
+                    if (data.type === 'STATUS_UPDATE') {
+                        
+                        if (data.payload.status === 'requiere_modificacion') {
+                            toast.error('Tu supervisor ha devuelto tu agenda para corrección', { duration: 6000 });
+                        } else if (data.status === 'aprobada') {
+                            toast.success('¡Agenda Autorizada! Ya puedes iniciar tu ruta', { duration: 6000 });
+                        }
+
+                        // Actualizamos el contexto en tiempo real con la nota del jefe y el nuevo estado
+                        setCurrentAgenda(prev => ({
+                            ...prev,
+                            status: data.payload.status,
+                            notaJefe: data.payload.notaJefe
+                        }));
+                    }
+                } catch (error) {
+                    console.error('Error parseando mensaje WS:', error);
+                }
+            };
+
+        } catch (error) {
+            console.error("Error al conectar WS Operativo:", error);
+        }
+
+        return () => {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.close();
+            }
+        };
+    }, [currentAgenda?.id]); 
 
     // ── RENDERIZADO CONDICIONAL POR ROLES (RBAC) ──
     const getVisibleSegments = () => {
@@ -504,8 +554,8 @@ export const AgendaProvider = ({ children }) => {
                 }));
                 setAlertModal({
                     isOpen: true,
-                    title: 'Ruta Certificada',
-                    message: 'Agenda certificada y enviada a revisión exitosamente.',
+                    title: 'AGENDA CAPTURADA EXITOSAMENTE',
+                    message: 'Agenda enviada a supervisor para su validación.',
                     type: 'success'
                 });
             } else {
