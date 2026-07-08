@@ -1034,17 +1034,34 @@ const kpiBg = (pct) => pct >= 90 ? 'bg-emerald-500' : pct >= 70 ? 'bg-amber-400'
 const kpiDotCls = (pct, hasValue) => !hasValue ? 'bg-slate-200' : pct >= 90 ? 'bg-emerald-500' : pct >= 70 ? 'bg-amber-400' : 'bg-red-500';
 const fmtNum = (v, isCount) => { const n = Number(v); if (isNaN(n)) return '—'; return isCount ? String(n) : `$${n.toLocaleString()}`; };
 
-const MoneyInput = ({ value, onChange, isCount, disabled }) => (
-    <div className="w-[84px] text-center">
-        <FormattedNumberInput
-            type={isCount ? "number" : "currency"}
-            value={value}
-            onChange={onChange}
-            placeholder={isCount ? '0' : '$ 0.00'}
-            disabled={disabled}
-        />
-    </div>
-);
+const MoneyInput = ({ value, onChange, isCount, disabled }) => {
+    const [localValue, setLocalValue] = useState(value);
+
+    useEffect(() => {
+        setLocalValue(value);
+    }, [value]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (localValue !== undefined && localValue !== value) {
+                onChange(localValue);
+            }
+        }, 800);
+        return () => clearTimeout(timer);
+    }, [localValue, onChange, value]);
+
+    return (
+        <div className="w-[84px] text-center">
+            <FormattedNumberInput
+                type={isCount ? "number" : "currency"}
+                value={localValue}
+                onChange={v => setLocalValue(v)} // Solo actualiza localmente de inmediato
+                placeholder={isCount ? '0' : '$ 0.00'}
+                disabled={disabled}
+            />
+        </div>
+    );
+};
 
 const KpiRealPanel = ({ kpiCompromisos, kpiReal, onUpdate, isFrozen }) => {
     const { kpiConfig: groups } = useAgenda();
@@ -1175,7 +1192,8 @@ const EjecucionOperativoContent = () => {
 
     const checkIns = currentAgenda.checkIns || {};
     const unplannedVisits = currentAgenda.unplannedVisits || [];
-    const todayISO = new Date().toISOString().slice(0, 10);
+    const d = new Date();
+    const todayISO = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     const allFollowUps = scheduledFollowUps || [];
     const todayFollowUps = allFollowUps

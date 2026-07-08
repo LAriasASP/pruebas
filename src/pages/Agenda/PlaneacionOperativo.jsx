@@ -18,9 +18,9 @@ for (let hour = 8; hour <= 20; hour++) {
 
 // --- FUNCIONES AUXILIARES ---
 const handleNumericChange = (value, callback, limit = null) => {
-    const cleanValue = value.replace(/\D/g, '');
+    const cleanValue = String(value).replace(/\D/g, '');
     if (limit && cleanValue.length > limit) return;
-    callback(cleanValue);
+    callback(cleanValue === '' ? null : Number(cleanValue)); 
 };
 
 const formatCurrency = (val) => {
@@ -31,7 +31,7 @@ const formatCurrency = (val) => {
 };
 
 const handlePercentageChange = (value, callback) => {
-    let clean = value.replace(/[^\d.]/g, '');
+    let clean = String(value).replace(/[^\d.]/g, '');
     const parts = clean.split('.');
     if (parts.length > 2) clean = parts[0] + '.' + parts.slice(1).join('');
     let integerPart = parts[0] || '';
@@ -39,7 +39,7 @@ const handlePercentageChange = (value, callback) => {
     if (integerPart.length > 2) integerPart = integerPart.slice(0, 2);
     if (decimalPart.length > 2) decimalPart = decimalPart.slice(0, 2);
     const finalValue = parts.length > 1 ? `${integerPart}.${decimalPart}` : integerPart;
-    callback(finalValue);
+    callback(finalValue === '' ? null : Number(finalValue)); 
 };
 
 const calcularBucketAuto = (diasMora) => {
@@ -119,32 +119,68 @@ const ClientNameInput = ({ id, value, idx, segmentName, updateVisit, mockDatabas
 
     const handleSelect = (item) => {
         setQuery(item.name);
+        
+        // Validamos la clasificación
         const isClientOnlySegment = segmentName === 'Seguimiento de Cartera' || segmentName === 'Gestión de Empresarias';
-        
-        if (isClientOnlySegment) {
-            updateVisit(segmentName, idx, 'classification', 'CLIENTE');
-        } else if (item.classification) {
-            updateVisit(segmentName, idx, 'classification', item.classification.toUpperCase());
+        const finalClassification = isClientOnlySegment ? 'CLIENTE' : (item.classification ? item.classification.toUpperCase() : '');
+
+        // Parseo seguro de teléfonos
+        let arrayPhones = ["", "", ""];
+        if (item.phones) {
+            try {
+                arrayPhones = typeof item.phones === 'string' ? JSON.parse(item.phones) : item.phones;
+            } catch (e) {
+                console.error("Error parseando teléfonos", e);
+            }
         }
+        while(arrayPhones.length < 3) arrayPhones.push('');
+
+        updateVisit(segmentName, idx, {
+            idContacto: item.idContacto,
+            idCliente: item.idCliente,
+            idControl: item.idControl, 
+            name: item.name,
+            classification: finalClassification,
+            city: item.city,
+            colony: item.colony,
+            streets: item.streets,
+            phones: arrayPhones,
+            product: item.product,
+            idCredito: item.idCredito,
+            estimatedAmount: item.estimatedAmount,
+            annualRate: item.annualRate,
+            subProduct: item.subProduct,
+            program: item.program,
+            moraInicioMes: item.moraInicioMes,
+            moraActual: item.moraActual,
+            moraDays: item.moraDays,
+            saldoInicioMes: item.saldoInicioMes,
+            saldoActual: item.saldoActual,
+            portfolioStatus: item.portfolioStatus,
+            ultimoEstatus: item.ultimoEstatus,
+            fechaIngreso: item.fechaIngreso,
+            saldoOcupado: item.saldoOcupado,
+            saldoDisponible: item.saldoDisponible,
+            ultimaFechaPago: item.ultimaFechaPago,
+            fechaVencimiento: item.fechaVencimiento,
+            montoAmortizacion: item.montoAmortizacion,
+            montoRequeridoCorriente: item.montoRequeridoCorriente,
+            herramientaAplicada: item.herramientaAplicada,
+            categoriaGestion: item.categoriaGestion
+        });
         
-        updateVisit(segmentName, idx, 'name', item.name);
         setShowSuggestions(false);
     };
 
     //Función de validación cuando el usuario sale del campo (onBlur)
     const handleBlur = () => {
-        // Usamos setTimeout para dar tiempo a que React procese un clic en una sugerencia si es que hubo uno
         setTimeout(() => {
-            // Buscamos si el texto escrito coincide exactamente con algún nombre válido en este bloque
             const exactMatch = validItems.find(item => item.name.toUpperCase() === query.trim().toUpperCase());
             
             // Si el campo no está vacío y no hay coincidencia exacta, lo borramos
             if (!exactMatch && query.trim() !== '') {
                 setQuery('');
-                updateVisit(segmentName, idx, 'name', ''); // Borramos del estado global de la agenda
-                
-                // Opcional: Si además quieres borrar la clasificación cuando el nombre es inválido
-                // updateVisit(segmentName, idx, 'classification', ''); 
+                updateVisit(segmentName, idx, 'name', ''); 
             }
         }, 150);
     };
@@ -162,7 +198,7 @@ const ClientNameInput = ({ id, value, idx, segmentName, updateVisit, mockDatabas
                         setShowSuggestions(true);
                     }}
                     onFocus={() => query.length > 1 && setShowSuggestions(true)}
-                    onBlur={handleBlur} // NUEVO: Ejecutamos la validación estricta al salir
+                    onBlur={handleBlur}
                     className="input-cell !text-sm !py-2 bg-white w-full uppercase font-bold pr-10 hover:border-blue-300 focus:border-blue-500 transition-all shadow-sm"
                     placeholder="Escribe nombre o apellido..."
                 />
@@ -179,7 +215,6 @@ const ClientNameInput = ({ id, value, idx, segmentName, updateVisit, mockDatabas
                     {suggestions.map((item, sIdx) => (
                         <button
                             key={sIdx}
-                            // NUEVO: Usamos onMouseDown en lugar de onClick para que se ejecute antes del onBlur del input
                             onMouseDown={() => handleSelect(item)} 
                             className="w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors flex items-center justify-between group"
                         >
@@ -361,153 +396,156 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                         </div>
                     </div>
                 );
-                case 'Seguimiento de Cartera': {
-                // 1. Buscamos la VERDAD ABSOLUTA en el catálogo de contactos-usuarios
-                const clienteCore = mockDatabase.find(c => c.idContacto === v.idContacto || (v.name && c.name?.toUpperCase() === v.name?.toUpperCase()));
+            case 'Seguimiento de Cartera': {
+            // 1. Buscamos la VERDAD ABSOLUTA en el catálogo de contactos-usuarios
+            const clienteCore = mockDatabase.find(c => c.idContacto === v.idContacto || (v.name && c.name?.toUpperCase() === v.name?.toUpperCase()));
+            
+            // 2. Lógica para decidir qué pintar en la caja del Bucket
+            const getBucketVisual = () => {
+                if (v.moraActual === undefined || v.moraActual === null || v.moraActual === '') {
+                    return clienteCore?.categoriaGestion || v.categoriaGestion || 'S/N';
+                }
                 
-                // 2. Lógica para decidir qué pintar en la caja del Bucket
-                const getBucketVisual = () => {
-                    if (v.moraActual === undefined || v.moraActual === null || v.moraActual === '') {
-                        return clienteCore?.categoriaGestion || v.categoriaGestion || 'S/N';
+                if (clienteCore) {
+                    // Si el gestor ya manipuló la mora en pantalla, calculamos la nueva proyección al vuelo
+                    if (Number(v.moraActual) !== Number(clienteCore.moraActual)) {
+                        return calcularBucketAuto(v.moraActual);
                     }
-                    
-                    if (clienteCore) {
-                        // Si el gestor ya manipuló la mora en pantalla, calculamos la nueva proyección al vuelo
-                        if (Number(v.moraActual) !== Number(clienteCore.moraActual)) {
-                            return calcularBucketAuto(v.moraActual);
-                        }
-                        // PRIMERA INSTANCIA: Si no la ha tocado, mostramos el valor exacto de contactos-usuarios (Ej. "B3")
-                        return clienteCore.categoriaGestion || 'S/N';
-                    }
-                    
-                    // Fallback de seguridad si es un cliente que no venía en la lista
-                    return calcularBucketAuto(v.moraActual);
-                };
+                    // PRIMERA INSTANCIA: Si no la ha tocado, mostramos el valor exacto de contactos-usuarios (Ej. "B3")
+                    return clienteCore.categoriaGestion || 'S/N';
+                }
+                
+                // Fallback de seguridad si es un cliente que no venía en la lista
+                return calcularBucketAuto(v.moraActual);
+            };
 
-                return (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100 mt-4 lg:mt-2 lg:ml-14 shadow-sm">
-                        <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">ID Crédito</label>
-                            <div className="input-cell w-full font-mono-tech flex items-center px-4 h-[42px] bg-white border-slate-100 text-primary">{v.idCredito || 'S/N'}</div>
-                        </div>
-                        <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Estatus Cartera</label>
-                            {isCobranza ? (
-                                <select
-                                    id={`estatus-${segmentName}-${idx}`}
-                                    value={v.ultimoEstatus || ''}
-                                    onChange={e => updateVisit(segmentName, idx, 'ultimoEstatus', e.target.value)}
-                                    className="input-cell w-full uppercase text-[10px] h-[42px]"
-                                >
-                                    <option value="" disabled>Seleccionar estatus...</option>
-                                    {estatusCartera.map(es => <option key={es.id || es.id_etiqueta} value={es.nombre}>{es.nombre}</option>)}
-                                </select>
-                            ) : (
-                                <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-black uppercase text-primary h-[42px] flex items-center px-4">{v.ultimoEstatus || 'S/N'}</div>
-                            )}
-                        </div>
-                        
-                        {/* 🟢 CAMPOS NUMÉRICOS LIMPIOS Y SEPARADOS */}
-                        <div className="col-span-1 sm:col-span-2">
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Días de Mora (Inicio / Actual)</label>
-                            <div className="flex flex-col sm:flex-row gap-2">
-                                <div className="flex-1 relative">
-                                    {(!v.moraInicioMes && v.moraInicioMes !== 0 && v.moraInicioMes !== '0') && (
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400 uppercase pointer-events-none">Inicio</span>
-                                    )}
-                                    <input 
-                                        type="number" 
-                                        min="0"
-                                        value={v.moraInicioMes ?? ''} 
-                                        onChange={e => {
-                                            const val = e.target.value.replace(/\D/g, ''); 
-                                            updateVisit(segmentName, idx, 'moraInicioMes', val);
-                                        }} 
-                                        className={`input-cell w-full text-[10px] font-bold text-accent transition-all ${(!v.moraInicioMes && v.moraInicioMes !== 0 && v.moraInicioMes !== '0') ? 'pl-14' : 'pl-3'}`} 
-                                    />
-                                </div>
-                                <div className="flex-1 relative">
-                                    {(!v.moraActual && v.moraActual !== 0 && v.moraActual !== '0') && (
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-rose-400 uppercase pointer-events-none">Actual</span>
-                                    )}
-                                    <input 
-                                        type="number" 
-                                        min="0"
-                                        value={v.moraActual ?? ''} 
-                                        onChange={e => {
-                                            const val = e.target.value.replace(/\D/g, ''); 
-                                            updateVisit(segmentName, idx, 'moraActual', val);
-                                            updateVisit(segmentName, idx, 'moraDays', val); // Sincroniza payload
-                                        }} 
-                                        className={`input-cell w-full text-[10px] font-bold text-red-500 border-rose-100 bg-rose-50/30 transition-all ${(!v.moraActual && v.moraActual !== 0 && v.moraActual !== '0') ? 'pl-16' : 'pl-3'}`} 
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Fechas (Último Pago / Venc.)</label>
-                            <div className="flex gap-2">
-                                <div className="flex-1 bg-white p-1.5 rounded-lg border border-slate-100 text-[9px] font-bold flex flex-col justify-center items-center"><span className="text-[7px] text-slate-400">PAGO</span>{v.ultimaFechaPago || '-'}</div>
-                                <div className="flex-1 bg-white p-1.5 rounded-lg border border-slate-100 text-[9px] font-bold flex flex-col justify-center items-center"><span className="text-[7px] text-slate-400">VENC.</span>{v.fechaVencimiento || '-'}</div>
-                            </div>
-                        </div>
-                        <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Saldos (Inicio / Actual)</label>
-                            <div className="flex flex-col sm:flex-row gap-2">
-                                <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold">In: {formatCurrency(v.saldoInicioMes)}</div>
-                                <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-accent">Act: {formatCurrency(v.saldoActual)}</div>
-                            </div>
-                        </div>
-
-                        {/* ✅ EL BUCKET EVALÚA PRIMERA INSTANCIA VS MODIFICACIÓN */}
-                        <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Bucket de Mora</label>
-                            <div className="bg-slate-50 w-full p-2.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-500 h-[42px] flex items-center px-4 shadow-inner cursor-not-allowed">
-                                {getBucketVisual()}
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Monto Amort.</label>
-                            <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4">{formatCurrency(v.montoAmortizacion)}</div>
-                        </div>
-                        <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Monto p/Corriente</label>
-                            <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-red-600 h-[42px] flex items-center px-4">{formatCurrency(v.montoRequeridoCorriente)}</div>
-                        </div>
-                        <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta Aplicada</label>
-                            {isCobranza ? (
-                                <select
-                                    id={`herr-aplicada-${segmentName}-${idx}`}
-                                    value={v.herramientaAplicada || ''}
-                                    onChange={e => updateVisit(segmentName, idx, 'herramientaAplicada', e.target.value)}
-                                    className="input-cell w-full uppercase text-[10px] h-[42px]"
-                                >
-                                    <option value="" disabled>Seleccionar...</option>
-                                    {herramientas.map(h => <option key={h.id || h.id_herramienta} value={h.nombre}>{h.nombre}</option>)}
-                                </select>
-                            ) : (
-                                <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4">{v.herramientaAplicada || 'NINGUNA'}</div>
-                            )}
-                        </div>
-                        <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo de Gestión (Personal)</label>
-                            <select value={v.typeVisitManagement || ''} onChange={e => updateVisit(segmentName, idx, 'typeVisitManagement', e.target.value)} className="input-cell w-full uppercase text-[10px] h-[42px]">
-                                <option value="" disabled>Seleccionar tipo...</option>
-                                {tiposGestion.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
+            return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100 mt-4 lg:mt-2 lg:ml-14 shadow-sm">
+                    <div>
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">ID Crédito</label>
+                        <div className="input-cell w-full font-mono-tech flex items-center px-4 h-[42px] bg-white border-slate-100 text-primary">{v.idCredito || 'S/N'}</div>
+                    </div>
+                    <div>
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Estatus Cartera</label>
+                        {isCobranza ? (
+                            <select
+                                id={`estatus-${segmentName}-${idx}`}
+                                value={v.ultimoEstatus || ''}
+                                onChange={e => updateVisit(segmentName, idx, 'ultimoEstatus', e.target.value)}
+                                className="input-cell w-full uppercase text-[10px] h-[42px]"
+                            >
+                                <option value="" disabled>Seleccionar estatus...</option>
+                                {estatusCartera.map(es => <option key={es.id || es.id_etiqueta} value={es.nombre}>{es.nombre}</option>)}
                             </select>
-                        </div>
-                        <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta para Aplicar</label>
-                            <select value={v.herramientaAplicar || ''} onChange={e => updateVisit(segmentName, idx, 'herramientaAplicar', e.target.value)} className="input-cell w-full uppercase text-[10px] h-[42px]">
-                                <option value="" disabled>Seleccionar...</option>
-                                {herramientas.map(h => <option key={h.id} value={h.nombre}>{h.nombre}</option>)}
-                            </select>
+                        ) : (
+                            <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-black uppercase text-primary h-[42px] flex items-center px-4">{v.ultimoEstatus || 'S/N'}</div>
+                        )}
+                    </div>
+                    
+                    {/*  CAMPOS NUMÉRICOS LIMPIOS Y SEPARADOS */}
+                    <div className="col-span-1 sm:col-span-2">
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Días de Mora (Inicio / Actual)</label>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <div className="flex-1 relative">
+                                {(!v.moraInicioMes && v.moraInicioMes !== 0 && v.moraInicioMes !== '0') && (
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400 uppercase pointer-events-none">Inicio</span>
+                                )}
+                                <input 
+                                    type="number" 
+                                    min="0"
+                                    value={v.moraInicioMes ?? ''} 
+                                    onChange={e => {
+                                        const val = e.target.value.replace(/\D/g, ''); 
+                                        updateVisit(segmentName, idx, 'moraInicioMes', val);
+                                    }} 
+                                    className={`input-cell w-full text-[10px] font-bold text-accent transition-all ${(!v.moraInicioMes && v.moraInicioMes !== 0 && v.moraInicioMes !== '0') ? 'pl-14' : 'pl-3'}`} 
+                                />
+                            </div>
+
+                            {/* MORA ACTUAL (LA QUE CALCULA EL BUCKET) */}
+                            <div className="flex-1 relative">
+                                {(!v.moraActual && v.moraActual !== 0 && v.moraActual !== '0') && (
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-rose-400 uppercase pointer-events-none">Actual</span>
+                                )}
+                                <input 
+                                    type="number" 
+                                    min="0"
+                                    value={v.moraActual ?? ''} 
+                                    onChange={e => {
+                                        const val = e.target.value.replace(/\D/g, ''); 
+                                        const parsedMora = parseInt(val, 10) || 0;
+                                        
+                                        // Calculamos los nuevos valores
+                                        const nuevoBucket = calcularBucketAuto(val);
+                                        const nuevoEstatus = parsedMora === 0 ? 'Vigente' : 'Mora';
+
+                                        //  ACTUALIZACIÓN MASIVA EN 1 SOLO TIEMPO
+                                        updateVisit(segmentName, idx, {
+                                            moraActual: val,
+                                            moraDays: parsedMora,
+                                            categoriaGestion: nuevoBucket,
+                                            ultimoEstatus: nuevoEstatus
+                                        });
+                                    }} 
+                                    className={`input-cell w-full text-[10px] font-bold text-red-500 border-rose-100 bg-rose-50/30 transition-all ${(!v.moraActual && v.moraActual !== 0 && v.moraActual !== '0') ? 'pl-16' : 'pl-3'}`} 
+                                />
+                            </div>
                         </div>
                     </div>
-                );
+
+                    <div>
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Fechas (Último Pago / Venc.)</label>
+                        <div className="flex gap-2">
+                            <div className="flex-1 bg-white p-1.5 rounded-lg border border-slate-100 text-[9px] font-bold flex flex-col justify-center items-center"><span className="text-[7px] text-slate-400">PAGO</span>{v.ultimaFechaPago || '-'}</div>
+                            <div className="flex-1 bg-white p-1.5 rounded-lg border border-slate-100 text-[9px] font-bold flex flex-col justify-center items-center"><span className="text-[7px] text-slate-400">VENC.</span>{v.fechaVencimiento || '-'}</div>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Saldos (Inicio / Actual)</label>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold">In: {formatCurrency(v.saldoInicioMes)}</div>
+                            <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-accent">Act: {formatCurrency(v.saldoActual)}</div>
+                        </div>
+                    </div>
+
+                    {/* ✅ EL BUCKET EVALÚA PRIMERA INSTANCIA VS MODIFICACIÓN */}
+                    <div>
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Bucket de Mora</label>
+                        <div className="bg-slate-50 w-full p-2.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-500 h-[42px] flex items-center px-4 shadow-inner cursor-not-allowed">
+                            {getBucketVisual()}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Monto Amort.</label>
+                        <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4">{formatCurrency(v.montoAmortizacion)}</div>
+                    </div>
+                    <div>
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Monto p/Corriente</label>
+                        <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-red-600 h-[42px] flex items-center px-4">{formatCurrency(v.montoRequeridoCorriente)}</div>
+                    </div>
+                    <div>
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta Aplicada (Histórico)</label>
+                        <div className="bg-slate-50 w-full p-2.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-400 h-[42px] flex items-center px-4 shadow-inner cursor-not-allowed">
+                            {v.herramientaAplicada || 'NINGUNA'}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo de Gestión (Personal)</label>
+                        <select value={v.typeVisitManagement || ''} onChange={e => updateVisit(segmentName, idx, 'typeVisitManagement', e.target.value)} className="input-cell w-full uppercase text-[10px] h-[42px]">
+                            <option value="" disabled>Seleccionar tipo...</option>
+                            {tiposGestion.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta para Aplicar</label>
+                        <select value={v.herramientaAplicar || ''} onChange={e => updateVisit(segmentName, idx, 'herramientaAplicar', e.target.value)} className="input-cell w-full uppercase text-[10px] h-[42px]">
+                            <option value="" disabled>Seleccionar...</option>
+                            {herramientas.map(h => <option key={h.id} value={h.nombre}>{h.nombre}</option>)}
+                        </select>
+                    </div>
+                </div>
+            );
             }
                 return (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100 mt-4 lg:mt-2 lg:ml-14 shadow-sm">
@@ -614,20 +652,10 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                             <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-red-600 h-[42px] flex items-center px-4">{formatCurrency(v.montoRequeridoCorriente)}</div>
                         </div>
                         <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta Aplicada</label>
-                            {isCobranza ? (
-                                <select
-                                    id={`herr-aplicada-${segmentName}-${idx}`}
-                                    value={v.herramientaAplicada || ''}
-                                    onChange={e => updateVisit(segmentName, idx, 'herramientaAplicada', e.target.value)}
-                                    className="input-cell w-full uppercase text-[10px] h-[42px]"
-                                >
-                                    <option value="" disabled>Seleccionar...</option>
-                                    {herramientas.map(h => <option key={h.id || h.id_herramienta} value={h.nombre}>{h.nombre}</option>)}
-                                </select>
-                            ) : (
-                                <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4">{v.herramientaAplicada || 'NINGUNA'}</div>
-                            )}
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta Aplicada (Histórico)</label>
+                            <div className="bg-slate-50 w-full p-2.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-400 h-[42px] flex items-center px-4 shadow-inner cursor-not-allowed">
+                                {v.herramientaAplicada || 'NINGUNA'}
+                            </div>
                         </div>
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo de Gestión (Personal)</label>
@@ -741,20 +769,10 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                             <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-red-600 h-[42px] flex items-center px-4">{formatCurrency(v.montoRequeridoCorriente)}</div>
                         </div>
                         <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta Aplicada</label>
-                            {isCobranza ? (
-                                <select
-                                    id={`herr-aplicada-${segmentName}-${idx}`}
-                                    value={v.herramientaAplicada || ''}
-                                    onChange={e => updateVisit(segmentName, idx, 'herramientaAplicada', e.target.value)}
-                                    className="input-cell w-full uppercase text-[10px] h-[42px]"
-                                >
-                                    <option value="" disabled>Seleccionar...</option>
-                                    {herramientas.map(h => <option key={h.id || h.id_herramienta} value={h.nombre}>{h.nombre}</option>)}
-                                </select>
-                            ) : (
-                                <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4">{v.herramientaAplicada || 'NINGUNA'}</div>
-                            )}
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta Aplicada (Histórico)</label>
+                            <div className="bg-slate-50 w-full p-2.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-400 h-[42px] flex items-center px-4 shadow-inner cursor-not-allowed">
+                                {v.herramientaAplicada || 'NINGUNA'}
+                            </div>
                         </div>
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo de Gestión (Personal)</label>
@@ -869,20 +887,10 @@ const DesktopRowFull = ({ v, idx, segmentName, updateVisit, removeRow, isTimeAva
                             <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-red-600 h-[42px] flex items-center px-4">{formatCurrency(v.montoRequeridoCorriente)}</div>
                         </div>
                         <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta Aplicada</label>
-                            {isCobranza ? (
-                                <select
-                                    id={`herr-aplicada-${segmentName}-${idx}`}
-                                    value={v.herramientaAplicada || ''}
-                                    onChange={e => updateVisit(segmentName, idx, 'herramientaAplicada', e.target.value)}
-                                    className="input-cell w-full uppercase text-[10px] h-[42px]"
-                                >
-                                    <option value="" disabled>Seleccionar...</option>
-                                    {herramientas.map(h => <option key={h.id || h.id_herramienta} value={h.nombre}>{h.nombre}</option>)}
-                                </select>
-                            ) : (
-                                <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4">{v.herramientaAplicada || 'NINGUNA'}</div>
-                            )}
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta Aplicada (Histórico)</label>
+                            <div className="bg-slate-50 w-full p-2.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-400 h-[42px] flex items-center px-4 shadow-inner cursor-not-allowed">
+                                {v.herramientaAplicada || 'NINGUNA'}
+                            </div>
                         </div>
                         <div>
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo de Gestión (Personal)</label>
@@ -1129,6 +1137,7 @@ const PlaneacionOperativo = () => {
     
     const initialDataRef = useRef(null);
     const prevIdRef = useRef(currentAgenda.id);
+    const prevStatusRef = useRef(currentAgenda.status);
   
 
     useEffect(() => {
@@ -1136,15 +1145,19 @@ const PlaneacionOperativo = () => {
             segments: currentAgenda.segments,
             kpis: currentAgenda.kpiCompromisos
         });
-
-        if (initialDataRef.current === null || prevIdRef.current !== currentAgenda.id) {
+        if (
+            initialDataRef.current === null || 
+            prevIdRef.current !== currentAgenda.id || 
+            prevStatusRef.current !== currentAgenda.status
+        ) {
             initialDataRef.current = currentDataStr;
             prevIdRef.current = currentAgenda.id;
-            setIsDirty(false);
+            prevStatusRef.current = currentAgenda.status; // <-- Guardamos el nuevo estatus en memoria
+            setIsDirty(false); // <-- Forzamos a que inicie deshabilitado ("Sin Cambios")
         } else {
             setIsDirty(currentDataStr !== initialDataRef.current);
         }
-    }, [currentAgenda.segments, currentAgenda.kpiCompromisos, currentAgenda.id]);
+    }, [currentAgenda.segments, currentAgenda.kpiCompromisos, currentAgenda.id, currentAgenda.status]);
 
     const handleLimpiarFormulario = () => {
         resetAgenda();

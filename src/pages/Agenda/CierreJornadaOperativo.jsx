@@ -7,34 +7,34 @@ const CierreJornada = () => {
     const { currentAgenda, getRealCheckIns } = useAgenda();
 
     // 2. Calculamos el resumen Programado vs Ejecutado usando getRealCheckIns
-    //    (RF-11: cuenta solo las gestiones finalizadas/no realizadas en BD)
     const resumen = useMemo(() => {
         const segments = currentAgenda?.segments || {};
         const checkInsLocal = currentAgenda?.checkIns || {};
-        const unplannedVisits = currentAgenda?.unplannedVisits || [];
         const realCIs = (typeof getRealCheckIns === 'function' ? getRealCheckIns() : {}) || {};
 
         const stats = Object.keys(segments).map(seg => {
             const visits = (segments[seg] || []).filter(v => v && v.name);
-            const programado = visits.length;
+            const isImprevistosSeg = seg === 'Visita No Planeada' || seg === 'Imprevisto';
+            
+            const programado = isImprevistosSeg ? 0 : visits.length;
+            
             // Una visita se considera EJECUTADA si: viene FINALIZADA de BD (realCIs),
             // tiene check-in local del día, o ya está marcada con `_dbCheckIn`.
-            const ejecutado = visits.filter(v => realCIs[v.id] || checkInsLocal[v.id] || v._dbCheckIn).length;
-            const porcentaje = programado === 0 ? 0 : Math.round((ejecutado / programado) * 100);
+            const ejecutado = visits.filter(v => realCIs[v.id] || checkInsLocal[v.id] || v._dbCheckIn || v.isUnplanned).length;
+            
+            // Cálculo del porcentaje
+            let porcentaje = 0;
+            if (isImprevistosSeg) {
+                // Si es un imprevisto, no tiene porcentaje base, marcamos como "EXTRA"
+                porcentaje = ejecutado > 0 ? "EXTRA" : 0; 
+            } else {
+                porcentaje = programado === 0 ? 0 : Math.round((ejecutado / programado) * 100);
+            }
 
-            return { segmento: seg, programado, ejecutado, porcentaje };
+            return { segmento: seg, programado, ejecutado, porcentaje, isImprevistosSeg };
         });
-
-        if (unplannedVisits.length > 0) {
-            stats.push({
-                segmento: 'Visitas No Planeadas',
-                programado: 0,
-                ejecutado: unplannedVisits.length,
-                porcentaje: 100
-            });
-        }
-
-        return stats;
+        
+        return stats.filter(row => row.programado > 0 || row.ejecutado > 0);
     }, [currentAgenda, getRealCheckIns]);
 
     // 3. Calculamos los totales globales

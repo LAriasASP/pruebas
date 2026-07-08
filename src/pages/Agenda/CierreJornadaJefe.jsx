@@ -39,7 +39,8 @@ const CierreJornadaJefe = () => {
         const fetchAgendasCierre = async () => {
             setLoading(true);
             try {
-                const hoy = new Date().toISOString().split('T')[0];
+                const d = new Date();
+                const hoy = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                 const resAgendas = await api.get(`/agenda/equipo?fecha=${hoy}`);
                 const dataAgendas = resAgendas.data?.contenido || resAgendas.data || [];
                 setAgendas(dataAgendas);
@@ -116,7 +117,6 @@ const CierreJornadaJefe = () => {
         return (
             <div className="flex flex-col items-center justify-center py-32 text-slate-400">
                 <Loader2 size={36} className="animate-spin mb-4 text-indigo-500" />
-                <p className="text-xs font-black uppercase tracking-widest text-slate-500">Cargando módulo de cierre...</p>
             </div>
         );
     }

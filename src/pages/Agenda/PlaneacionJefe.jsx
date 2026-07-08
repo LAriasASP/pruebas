@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRole } from '../../context/RoleContext';
 import api from '../../api/axiosConfig'; 
 import {
-    CheckCircle2, Clock, AlertTriangle, ChevronRight, ChevronDown,
+    CheckCircle2, Clock, AlertTriangle, ChevronRight, ChevronDown, ChevronUp,
     User, Building2, MapPin, FileText, X, Send, RotateCcw,
-    Users, TrendingUp, Briefcase, Eye, ArrowLeft, Shield, Layers, Loader2
+    Users, TrendingUp, Briefcase, Eye, ArrowLeft, Shield, Layers, Loader2, Tag, Edit3
 } from 'lucide-react';
-import UIModal from '../../components/UIModal'; // <-- 1. Importamos el UIModal
+import UIModal from '../../components/UIModal'; 
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS RESCATADOS DEL MOCK
@@ -276,13 +276,434 @@ const SegmentReadOnly = ({ title, visits }) => {
     );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DESGLOSE DETALLADO CON MOTOR "DIFF" (HISTORIAL DE CAMBIOS)
+// ─────────────────────────────────────────────────────────────────────────────
+const DesgloseAgendaJefe = ({ agenda }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [snapshot, setSnapshot] = useState(null);
+
+    const isCobranza = agenda.operativo?.equipo?.toLowerCase() === 'cobranza';
+
+    // 1. Al cargar, lee la "foto" de la agenda antes de ser devuelta
+    useEffect(() => {
+        const savedSnapshot = localStorage.getItem(`diff_snapshot_${agenda.id}`);
+        if (savedSnapshot) {
+            try { setSnapshot(JSON.parse(savedSnapshot)); } catch (e) { }
+        }
+    }, [agenda.id]);
+
+    const totalVisitas = Object.values(agenda.segments || {}).flat().length;
+    if (totalVisitas === 0) return null;
+
+    // 2. Motor de comparación Diff
+    const getDiff = (segmentName, visitName, fieldKey, currentValue) => {
+        if (!snapshot) return { changed: false }; 
+        const oldVisit = snapshot[segmentName]?.find(v => v.name === visitName);
+        if (!oldVisit) return { changed: true, isNew: true }; 
+        
+        const oldVal = String(oldVisit[fieldKey] ?? '').trim();
+        const newVal = String(currentValue ?? '').trim();
+
+        if (oldVal !== newVal && newVal !== 'null') {
+            return { changed: true, oldValue: oldVisit[fieldKey] }; 
+        }
+        return { changed: false };
+    };
+
+    // 3. Componente Celda (Pinta los cambios si existen)
+    const FieldVal = ({ segmentName, visitName, fieldKey, val, isCurrency = false, defaultText = 'S/N' }) => {
+        const diff = getDiff(segmentName, visitName, fieldKey, val);
+        const displayVal = val === null || val === undefined || val === '' ? defaultText : (isCurrency ? formatCurrency(val) : val);
+        const displayOld = diff.oldValue === null || diff.oldValue === undefined || diff.oldValue === '' ? defaultText : (isCurrency ? formatCurrency(diff.oldValue) : diff.oldValue);
+
+        if (diff.changed && !diff.isNew) {
+            return (
+                <div className="flex flex-col">
+                    <span className="text-[9px] line-through text-red-400 font-medium">{displayOld}</span>
+                    <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 px-1 rounded border border-emerald-100">{displayVal}</span>
+                </div>
+            );
+        }
+        if (diff.isNew) return <span className="text-[11px] font-black text-blue-600 bg-blue-50 px-1 rounded">{displayVal}</span>;
+        return <>{displayVal}</>;
+    };
+
+    const ManagementResultField = ({ segmentName, visitName, resultString }) => {
+        const diff = getDiff(segmentName, visitName, 'managementResult', resultString);
+        
+        const parseResult = (res) => {
+            if (!res || res === 'null') return [];
+            const parts = String(res).split('|').map(s => s.trim()).filter(Boolean);
+            return [...new Set(parts)]; // Destruye duplicados
+        };
+
+        const renderTags = (tags, isOld = false) => (
+            <div className="flex flex-wrap gap-2 mt-1">
+                {tags.map((tag, tIdx) => {
+                    let bgColor = isOld ? "bg-red-50 border-red-200 text-red-500 line-through opacity-60" : "bg-white border-slate-200 text-slate-700 shadow-sm";
+                    
+                    if (!isOld) {
+                        const tagUpper = tag.toUpperCase();
+                        if (tagUpper.startsWith('GPS')) bgColor = "bg-blue-50 border-blue-200 text-blue-700 shadow-sm";
+                        else if (tagUpper.startsWith('NOTA')) bgColor = "bg-amber-50 border-amber-200 text-amber-700 shadow-sm";
+                        else if (tagUpper.startsWith('RES:') || tagUpper.startsWith('IMPREVISTO')) bgColor = "bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm";
+                    }
+                    return (
+                        <span key={tIdx} className={`text-[10px] font-bold px-2.5 py-1.5 rounded-md border ${bgColor}`}>
+                            {tag}
+                        </span>
+                    );
+                })}
+            </div>
+        );
+
+        const currentTags = parseResult(resultString);
+        const oldTags = parseResult(diff.oldValue);
+
+        return (
+            <div className="flex flex-col w-full bg-slate-50/50 p-4 rounded-xl border border-slate-100 mt-2">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Resultado de la Visita</span>
+                {diff.changed && !diff.isNew ? (
+                    <div className="flex flex-col gap-2">
+                        {oldTags.length > 0 && renderTags(oldTags, true)}
+                        <div className="flex items-start gap-2">
+                            <span className="text-amber-400 mt-1.5 font-bold">➔</span>
+                            {currentTags.length > 0 ? renderTags(currentTags) : <span className="text-[11px] font-bold text-slate-400 mt-1">Eliminado</span>}
+                        </div>
+                    </div>
+                ) : (
+                    currentTags.length > 0 ? renderTags(currentTags) : <span className="input-cell w-full text-[10px] font-bold text-slate-400 h-[42px] flex items-center px-4">Sin resultado capturado</span>
+                )}
+            </div>
+        );
+    };
+
+    // 5. RENDERIZADO (El espejo exacto de tu código operativo, en solo lectura)
+    const renderSegmentDetails = (segmentName, v) => {
+        const vName = v.name;
+        
+        switch (segmentName) {
+            case 'Promoción':
+                if (isCobranza) return null;
+                return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100 mt-4 lg:mt-2 lg:ml-14">
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Producto</label>
+                            <div className="input-cell w-full text-[10px] font-bold h-[42px] flex items-center px-4 text-primary">
+                                <FieldVal val={v.product} segmentName={segmentName} visitName={vName} fieldKey="product" />
+                            </div>
+                        </div>
+                        <div className="col-span-1 md:col-span-2">
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Dirección (Ciudad / Col / Calle)</label>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <div className="input-cell w-full sm:w-1/3 text-[10px] font-bold h-[42px] flex items-center px-4 text-primary"><FieldVal val={v.city} segmentName={segmentName} visitName={vName} fieldKey="city" defaultText="Ciudad" /></div>
+                                <div className="input-cell w-full sm:w-1/3 text-[10px] font-bold h-[42px] flex items-center px-4 text-primary"><FieldVal val={v.colony} segmentName={segmentName} visitName={vName} fieldKey="colony" defaultText="Colonia" /></div>
+                                <div className="input-cell w-full sm:w-1/3 text-[10px] font-bold h-[42px] flex items-center px-4 text-primary"><FieldVal val={v.streets} segmentName={segmentName} visitName={vName} fieldKey="streets" defaultText="Calles" /></div>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Teléfonos</label>
+                            <div className="input-cell w-full text-[10px] font-bold h-[42px] flex items-center px-4 text-primary">
+                                <FieldVal val={Array.isArray(v.phones) ? v.phones.filter(p=>p).join(' / ') : (typeof v.phones === 'string' ? JSON.parse(v.phones).filter(p=>p).join(' / ') : 'S/N')} segmentName={segmentName} visitName={vName} fieldKey="phones" />
+                            </div>
+                        </div>
+                    </div>
+                );
+            case 'Evaluación e Integración':
+                return (
+                    <div className="space-y-4 mt-4 lg:mt-2 lg:ml-14">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                            <div>
+                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Integración</label>
+                                <div className="input-cell w-full text-[10px] font-bold h-[42px] flex items-center px-4 text-primary"><FieldVal val={v.typeIntegration} segmentName={segmentName} visitName={vName} fieldKey="typeIntegration" /></div>
+                            </div>
+                            <div>
+                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Monto Estimado</label>
+                                <div className="input-cell w-full text-[10px] font-bold h-[42px] flex items-center px-4 text-primary"><FieldVal val={v.estimatedAmount} isCurrency={true} segmentName={segmentName} visitName={vName} fieldKey="estimatedAmount" defaultText="$ 0.00" /></div>
+                            </div>
+                            <div>
+                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tasa Anual</label>
+                                <div className="relative input-cell w-full text-[10px] font-bold h-[42px] flex items-center px-4 text-primary">
+                                    <FieldVal val={v.annualRate} segmentName={segmentName} visitName={vName} fieldKey="annualRate" defaultText="0.00" /> <span className="ml-1 text-slate-400">%</span>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Subproducto</label>
+                                <div className={`input-cell w-full text-[10px] font-black uppercase h-[42px] flex items-center px-4 ${isCobranza ? 'bg-slate-50 text-slate-400 shadow-inner' : 'text-primary'}`}>
+                                    <FieldVal val={isCobranza ? 'NINGUNO' : v.subProduct} segmentName={segmentName} visitName={vName} fieldKey="subProduct" defaultText="NINGUNO" />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Programa</label>
+                                <div className={`input-cell w-full text-[10px] font-black uppercase h-[42px] flex items-center px-4 ${isCobranza ? 'bg-slate-50 text-slate-400 shadow-inner' : 'text-primary'}`}>
+                                    <FieldVal val={isCobranza ? 'NINGUNO' : v.program} segmentName={segmentName} visitName={vName} fieldKey="program" defaultText="NINGUNO" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                            <div className="col-span-1 sm:col-span-2">
+                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Dirección (Ciudad / Col / Calle)</label>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    <div className="input-cell w-full sm:w-1/3 text-[10px] font-bold h-[42px] flex items-center px-4 text-primary"><FieldVal val={v.city} segmentName={segmentName} visitName={vName} fieldKey="city" defaultText="Ciudad" /></div>
+                                    <div className="input-cell w-full sm:w-1/3 text-[10px] font-bold h-[42px] flex items-center px-4 text-primary"><FieldVal val={v.colony} segmentName={segmentName} visitName={vName} fieldKey="colony" defaultText="Colonia" /></div>
+                                    <div className="input-cell w-full sm:w-1/3 text-[10px] font-bold h-[42px] flex items-center px-4 text-primary"><FieldVal val={v.streets} segmentName={segmentName} visitName={vName} fieldKey="streets" defaultText="Calles" /></div>
+                                </div>
+                            </div>
+                            <div className="col-span-1 sm:col-span-2">
+                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Estatus Cartera (Sistema)</label>
+                                <div className="input-cell w-full text-[10px] font-bold h-[42px] flex items-center px-4 text-primary">
+                                    <FieldVal val={isCobranza ? v.ultimoEstatus : v.portfolioStatus} segmentName={segmentName} visitName={vName} fieldKey={isCobranza ? "ultimoEstatus" : "portfolioStatus"} defaultText="AUTOMÁTICO" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            case 'Seguimiento de Cartera': 
+                return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100 mt-4 lg:mt-2 lg:ml-14 shadow-sm">
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">ID Crédito</label>
+                            <div className="input-cell w-full font-mono-tech flex items-center px-4 h-[42px] bg-white border-slate-100 text-primary">
+                                <FieldVal val={v.idCredito} segmentName={segmentName} visitName={vName} fieldKey="idCredito" defaultText="S/N" />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Estatus Cartera</label>
+                            <div className={`input-cell w-full text-[10px] font-black uppercase h-[42px] flex items-center px-4 ${isCobranza ? 'text-primary' : 'bg-white text-primary'}`}>
+                                <FieldVal val={v.ultimoEstatus} segmentName={segmentName} visitName={vName} fieldKey="ultimoEstatus" defaultText="S/N" />
+                            </div>
+                        </div>
+                        
+                        <div className="col-span-1 sm:col-span-2">
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-wide mb-1 block pl-1">Días de Mora (Inicio / Actual)</label>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <div className="flex-1 relative input-cell h-[42px] flex items-center px-3 text-[10px] font-bold text-accent">
+                                    <span className="text-[9px] font-black text-slate-400 uppercase pointer-events-none mr-2">Inicio</span>
+                                    <FieldVal val={v.moraInicioMes} segmentName={segmentName} visitName={vName} fieldKey="moraInicioMes" defaultText="0" />
+                                </div>
+                                <div className="flex-1 relative input-cell h-[42px] flex items-center px-3 text-[10px] font-bold text-red-500 border-rose-100 bg-rose-50/30">
+                                    <span className="text-[9px] font-black text-rose-400 uppercase pointer-events-none mr-2">Actual</span>
+                                    <FieldVal val={v.moraActual} segmentName={segmentName} visitName={vName} fieldKey="moraActual" defaultText="0" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Fechas (Último Pago / Venc.)</label>
+                            <div className="flex gap-2">
+                                <div className="flex-1 bg-white p-1.5 rounded-lg border border-slate-100 text-[9px] font-bold flex flex-col justify-center items-center"><span className="text-[7px] text-slate-400">PAGO</span><FieldVal val={v.ultimaFechaPago} segmentName={segmentName} visitName={vName} fieldKey="ultimaFechaPago" defaultText="-" /></div>
+                                <div className="flex-1 bg-white p-1.5 rounded-lg border border-slate-100 text-[9px] font-bold flex flex-col justify-center items-center"><span className="text-[7px] text-slate-400">VENC.</span><FieldVal val={v.fechaVencimiento} segmentName={segmentName} visitName={vName} fieldKey="fechaVencimiento" defaultText="-" /></div>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Saldos (Inicio / Actual)</label>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold">In: <FieldVal val={v.saldoInicioMes} isCurrency={true} segmentName={segmentName} visitName={vName} fieldKey="saldoInicioMes" /></div>
+                                <div className="flex-1 bg-white p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-accent">Act: <FieldVal val={v.saldoActual} isCurrency={true} segmentName={segmentName} visitName={vName} fieldKey="saldoActual" /></div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Bucket de Mora</label>
+                            <div className="bg-slate-50 w-full p-2.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-500 h-[42px] flex items-center px-4 shadow-inner cursor-not-allowed">
+                                <FieldVal val={v.categoriaGestion} segmentName={segmentName} visitName={vName} fieldKey="categoriaGestion" defaultText="S/N" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Monto Amort.</label>
+                            <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold h-[42px] flex items-center px-4"><FieldVal val={v.montoAmortizacion} isCurrency={true} segmentName={segmentName} visitName={vName} fieldKey="montoAmortizacion" /></div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Monto p/Corriente</label>
+                            <div className="bg-white w-full p-2.5 rounded-lg border border-slate-100 text-[10px] font-bold text-red-600 h-[42px] flex items-center px-4"><FieldVal val={v.montoRequeridoCorriente} isCurrency={true} segmentName={segmentName} visitName={vName} fieldKey="montoRequeridoCorriente" /></div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta Aplicada (Histórico)</label>
+                            <div className="bg-slate-50 w-full p-2.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-400 h-[42px] flex items-center px-4 shadow-inner cursor-not-allowed">
+                                <FieldVal val={v.herramientaAplicada} segmentName={segmentName} visitName={vName} fieldKey="herramientaAplicada" defaultText="NINGUNA" />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo de Gestión (Personal)</label>
+                            <div className="input-cell w-full text-[10px] font-bold h-[42px] flex items-center px-4 text-primary"><FieldVal val={v.typeVisitManagement} segmentName={segmentName} visitName={vName} fieldKey="typeVisitManagement" /></div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Herramienta para Aplicar</label>
+                            <div className="input-cell w-full text-[10px] font-bold h-[42px] flex items-center px-4 text-primary"><FieldVal val={v.herramientaAplicar} segmentName={segmentName} visitName={vName} fieldKey="herramientaAplicar" /></div>
+                        </div>
+                    </div>
+                );
+            case 'Gestión de Empresarias':
+                return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100 mt-4 lg:mt-2 lg:ml-14">
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Información</label>
+                            <div className="flex flex-col w-full text-[10px] font-bold text-accent bg-white p-2 rounded-lg border border-slate-50">
+                                <span>Ingreso: <FieldVal val={v.fechaIngreso} segmentName={segmentName} visitName={vName} fieldKey="fechaIngreso" defaultText="-" /></span>
+                                <span>Mora Actual: <FieldVal val={v.moraDays || v.moraActual} segmentName={segmentName} visitName={vName} fieldKey="moraDays" defaultText="0" /></span>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Saldos</label>
+                            <div className="flex flex-col w-full text-[10px] font-bold text-accent bg-white p-2 rounded-lg border border-slate-50">
+                                <span>Ocup: <FieldVal val={v.saldoOcupado} isCurrency={true} segmentName={segmentName} visitName={vName} fieldKey="saldoOcupado" /></span>
+                                <span className="text-emerald-600">Disp: <FieldVal val={v.saldoDisponible} isCurrency={true} segmentName={segmentName} visitName={vName} fieldKey="saldoDisponible" /></span>
+                            </div>
+                        </div>
+                        <div className="col-span-1 sm:col-span-2">
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo Gestión</label>
+                            <div className="input-cell w-full text-[10px] font-bold h-[42px] flex items-center px-4 text-primary"><FieldVal val={v.typeManagement} segmentName={segmentName} visitName={vName} fieldKey="typeManagement" /></div>
+                        </div>
+                    </div>
+                );
+            case 'Visita No Planeada':
+                const hasValue = (val) => val !== null && val !== undefined && val !== '' && val !== 'null';
+                
+                const fieldsToRender = [
+                    { label: "ID Crédito", val: v.idCredito, key: "idCredito" },
+                    { label: "Estatus Cartera", val: v.ultimoEstatus, key: "ultimoEstatus" },
+                    { label: "Días Mora", val: v.moraDays || v.moraActual, key: "moraDays" },
+                    { label: "Fecha Ingreso", val: v.fechaIngreso, key: "fechaIngreso" },
+                    { label: "Monto Estimado", val: v.estimatedAmount, key: "estimatedAmount", isCurrency: true },
+                    { label: "Saldo Actual", val: v.saldoActual, key: "saldoActual", isCurrency: true },
+                    { label: "Mora Inicio", val: v.moraInicioMes, key: "moraInicioMes" },
+                    { label: "Mora Actual", val: v.moraActual, key: "moraActual" },
+                    { label: "Último Pago", val: v.ultimaFechaPago, key: "ultimaFechaPago" },
+                    { label: "Vencimiento", val: v.fechaVencimiento, key: "fechaVencimiento" },
+                    { label: "Saldo Inicio", val: v.saldoInicioMes, key: "saldoInicioMes", isCurrency: true },
+                    { label: "Bucket de Mora", val: v.categoriaGestion, key: "categoriaGestion", isBucket: true },
+                    { label: "Monto Amort.", val: v.montoAmortizacion, key: "montoAmortizacion", isCurrency: true },
+                    { label: "Req. Corriente", val: v.montoRequeridoCorriente, key: "montoRequeridoCorriente", isCurrency: true },
+                    { label: "Herr. Histórica", val: v.herramientaAplicada, key: "herramientaAplicada", isBucket: true },
+                    { label: "Herr. a Aplicar", val: v.herramientaAplicar, key: "herramientaAplicar" },
+                    { label: "Tipo Gestión", val: v.typeVisitManagement, key: "typeVisitManagement" }
+                ].filter(f => hasValue(f.val));
+
+                if (fieldsToRender.length === 0) return null;
+
+                return (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100 lg:mt-2 lg:ml-14 shadow-sm">
+                        {fieldsToRender.map(f => (
+                            <div key={f.key}>
+                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">{f.label}</label>
+                                <div className={`input-cell w-full text-[10px] font-bold h-[42px] flex items-center px-4 ${f.isBucket ? 'bg-slate-50 text-slate-400 shadow-inner' : 'text-primary bg-white'}`}>
+                                    <FieldVal val={f.val} segmentName={segmentName} visitName={vName} fieldKey={f.key} isCurrency={f.isCurrency} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                );
+            default: return null;
+        }
+    };
+
+    return (
+        <div className="mt-8 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in duration-500 mb-8">
+            <button onClick={() => setIsOpen(!isOpen)} className="w-full px-6 py-5 flex items-center justify-between bg-slate-50 hover:bg-slate-100 transition-colors focus:outline-none">
+                <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${isOpen ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-indigo-50 text-indigo-600 border border-indigo-100'}`}>
+                        <FileText size={22} />
+                    </div>
+                    <div className="text-left">
+                        <h4 className="text-sm font-black text-indigo-950 uppercase tracking-widest flex items-center gap-2">
+                            Desglose de Ruta 
+                            {snapshot && <span className="bg-amber-100 text-amber-700 text-[9px] px-2 py-0.5 rounded-md border border-amber-200 ml-2">Revisando Cambios</span>}
+                        </h4>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">
+                            Análisis detallado de {totalVisitas} gestiones
+                        </p>
+                    </div>
+                </div>
+                <div className="bg-white w-8 h-8 flex items-center justify-center rounded-full shadow-sm border border-slate-200 text-slate-400">
+                    {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </div>
+            </button>
+
+            {isOpen && (
+                <div className="p-6 space-y-8 border-t border-slate-100 bg-slate-50/50">
+                    {Object.entries(agenda.segments || {}).map(([segName, visits]) => {
+                        if (!visits || visits.length === 0) return null;
+                        
+                        return (
+                            <div key={segName}>
+                                <h5 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.25em] mb-4 flex items-center gap-2">
+                                    <div className="w-2 h-4 bg-indigo-500 rounded-full"></div>
+                                    {segName}
+                                </h5>
+                                <div className="space-y-4 pl-4 border-l-2 border-indigo-100 ml-1">
+                                    {visits.map((v, i) => {
+                                        const vName = v.name;
+                                        const isNewRow = getDiff(segName, vName, 'name', vName).isNew; 
+                                        
+                                        return (
+                                            <div key={v.id || i} className={`bg-white p-5 rounded-2xl border transition-all relative ${isNewRow && snapshot ? 'border-blue-300 bg-blue-50/30 shadow-md' : 'border-slate-200 shadow-sm hover:border-indigo-300 hover:shadow-md'}`}>
+                                                
+                                                {isNewRow && snapshot && (
+                                                    <div className="absolute -top-3 -right-3 bg-blue-600 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-xl shadow-lg flex items-center gap-1">
+                                                        NUEVA VISITA
+                                                    </div>
+                                                )}
+
+                                                <div className="flex flex-col md:flex-row gap-4 mb-4 pb-4 border-b border-slate-100">
+                                                    <div className="flex items-center gap-4 min-w-[250px]">
+                                                        <div className="w-14 h-14 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center font-mono-tech font-black text-indigo-900 text-lg shadow-inner">
+                                                            <FieldVal val={v.time} segmentName={segName} visitName={vName} fieldKey="time" defaultText="--:--" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-black text-primary uppercase text-sm leading-tight">{vName}</p>
+                                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Clasif: <span className="text-indigo-600">{v.classification || 'S/N'}</span></p>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="flex-1 grid grid-cols-1 gap-4">
+                                                        <div>
+                                                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Actividad / Gestión</label>
+                                                            <div className="input-cell w-full text-[10px] font-bold h-[42px] flex items-center px-4 text-primary">
+                                                                <FieldVal val={v.activity || v.typeVisitManagement || v.typeIntegration || v.typeManagement} segmentName={segName} visitName={vName} fieldKey="activity" />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* EL ESPEJO DE LOS CAMPOS */}
+                                                {renderSegmentDetails(segName, v)}
+
+                                                {/* BLOQUE DE RESULTADOS SEPARADOS POR PIPES (Para todos) */}
+                                                {v.statusAction && v.statusAction !== 'PENDIENTE' && (
+                                                    <ManagementResultField segmentName={segName} visitName={vName} resultString={v.managementResult} />
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
+
 const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
     const [modModal, setModModal] = useState(false);
     const [localStatus, setLocalStatus] = useState(agenda.status);
     const [localNota, setLocalNota] = useState(agenda.notaJefe || '');
     const [isProcessing, setIsProcessing] = useState(false);
 
-    // NUEVO 1: Diccionario para traducir llaves técnicas a etiquetas elegantes
+    const handleMod = async (nota) => {
+        localStorage.setItem(`diff_snapshot_${agenda.id}`, JSON.stringify(agenda.segments));
+
+        await onRequestMod(agenda.id, nota);
+        setLocalStatus('requiere_modificacion');
+        setLocalNota(nota);
+        setModModal(false);
+    };
+
+    // Diccionario para traducir llaves técnicas a etiquetas elegantes
     const KPI_LABELS = {
         captNueva: 'Captación Nueva',
         captReinversion: 'Captación Reinv.',
@@ -299,7 +720,7 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
         promesasDia: 'Promesas'
     };
 
-    // NUEVO 2: Lógica dinámica de segmentos (atrapa "Visitas No Planeadas")
+    // Lógica dinámica de segmentos (atrapa "Visitas No Planeadas")
     const baseSegments = ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera', 'Gestión de Empresarias'];
     const extraSegments = Object.keys(agenda.segments || {}).filter(seg => !baseSegments.includes(seg));
     const allSegments = [...baseSegments, ...extraSegments];
@@ -309,13 +730,6 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
         await onApprove(agenda.id);
         setLocalStatus('aprobada');
         setIsProcessing(false);
-    };
-
-    const handleMod = async (nota) => {
-        await onRequestMod(agenda.id, nota);
-        setLocalStatus('requiere_modificacion');
-        setLocalNota(nota);
-        setModModal(false);
     };
 
     return (
@@ -397,6 +811,8 @@ const AgendaDetalle = ({ agenda, onBack, onApprove, onRequestMod }) => {
             {allSegments.map(seg => (
                 <SegmentReadOnly key={seg} title={seg} visits={agenda.segments[seg] || []} />
             ))}
+
+            <DesgloseAgendaJefe agenda={agenda} />
 
             {/* Acciones */}
             {localStatus === 'pendiente' && (
@@ -1105,6 +1521,7 @@ const VistaSubdirCobranza = ({ coordinadores, ejecutivos, allAgendas, rolName, o
 // ─────────────────────────────────────────────────────────────────────────────
 const PlaneacionJefe = () => {
     const { selectedRole } = useRole();
+    const [alertModal, setAlertModal] = useState({ isOpen: false, title: '', message: '', type: 'info' });
     const canal = selectedRole?.canal?.toLowerCase();
     const roleName = selectedRole?.name;
 
@@ -1112,71 +1529,89 @@ const PlaneacionJefe = () => {
     const [agendas, setAgendas] = useState([]);
     const [jerarquia, setJerarquia] = useState({ coordinadores: [], ejecutivos: [] });
 
-    // <-- 2. NUEVO: ESTADO GLOBAL PARA EL MODAL DE ALERTAS -->
-    const [alertModal, setAlertModal] = useState({
-        isOpen: false,
-        title: '',
-        message: '',
-        type: 'info'
-    });
-
     const counts = contarEstados(agendas);
 
+    //  1. EL ESCUDO ANTI-SPAM (Guarda la hora exacta de la última alerta)
+    const ultimaAlertaRef = useRef(0);
+
+    // 1. FUNCIÓN ÚNICA DE CARGA DE DATOS
+    const fetchDashboardData = async (silent = false) => {
+        if (!silent) setLoading(true); 
+        try {
+            const d = new Date();
+            const hoy = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            const resAgendas = await api.get(`/agenda/equipo?fecha=${hoy}`);
+            const dataAgendas = resAgendas.data?.contenido || [];
+            
+            const parsedAgendas = dataAgendas.map(ag => {
+                let parsedSegments = ag.segments || {};
+                if (typeof parsedSegments === 'string') {
+                    try { parsedSegments = JSON.parse(parsedSegments); } catch (e) { }
+                }
+                return { ...ag, segments: parsedSegments };
+            });
+            setAgendas(parsedAgendas);
+        } catch (err) {
+            console.error("Error al cargar dashboard de planeación", err);
+        } finally {
+            if (!silent) setLoading(false);
+        }
+    };
+
+    // 2. USEEFFECT DE CARGA INICIAL
+    useEffect(() => {
+        if (canal) fetchDashboardData();
+    }, [canal]);
+
+    // 3. USEEFFECT DEL WEBSOCKET
     useEffect(() => {
         if (!canal) return;
 
-        const wsUrl = `ws://localhost:8090/business-control-cobranza/api/v1/ws/dashboard`;
+        const API_COBRANZA = import.meta.env.VITE_API_ORIGIN_COBRANZA;
+        const wsUrl = `${API_COBRANZA.replace(/^http/, 'ws')}/api/v1/ws/notificaciones`;
         let socket;
 
         try {
             socket = new WebSocket(wsUrl);
-            socket.onopen = () => console.log('🔌 [Jefe] Conectado al Dashboard');
+            socket.onopen = () => console.log('💡 [WS Jefe - Planeación] Conectado.');
 
             socket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 
-                // Validar que la notificación le pertenezca a mi canal (cobranza o comercial)
-                if (data.payload?.canal === canal) {
+                // Aseguramos que sea del mismo canal
+                if (data.payload?.canal?.toLowerCase() === canal.toLowerCase()) {
+                    if (data.type === 'AGENDA_UPDATE' || data.type === 'STATUS_UPDATE') {
+                        
+                        const ahora = Date.now();
+                        if (ahora - ultimaAlertaRef.current < 1500) {
+                            console.log("Fantasma detectado: Alerta doble bloqueada.");
+                            fetchDashboardData(true); // Siempre refrescamos los datos en silencio
+                            return; 
+                        }
 
-                    if (data.type === 'AGENDA_UPDATE') {
-                        toast('El tablero se ha actualizado', { icon: '🔔' });
-                        // Lo ideal aquí es ejecutar fetchDashboardData() de nuevo para que traiga la BD fresca,
-                        // o actualizar el estado 'agendas' localmente.
-                    }
-
-                    if (data.type === 'NEW_CHECKIN') {
-                        toast.success(`${data.payload.operativoNombre} registró una gestión`, { position: 'bottom-right' });
+                        const estatusPayload = data.payload?.estatus || data.payload?.status;
+                        
+                        // ¡Solo lanzamos el Modal si el estatus es 'pendiente'!
+                        if (estatusPayload === 'pendiente') {
+                            ultimaAlertaRef.current = ahora; 
+                            setAlertModal({
+                                isOpen: true,
+                                title: 'Nueva Agenda por Revisar',
+                                message: `Un gestor a tu cargo ha certificado su agenda y espera tu aprobación.`,
+                                type: 'info'
+                            });
+                        }
+                        
+                        // Recarga silenciosa
+                        fetchDashboardData(true); 
                     }
                 }
             };
-        } catch (error) { console.error("Error WS", error); }
+        } catch (error) {
+            console.error("Error en WS de Planeación", error);
+        }
 
         return () => { if (socket && socket.readyState === WebSocket.OPEN) socket.close(); };
-    }, [canal]);
-
-    useEffect(() => {
-        const fetchDashboardData = async () => {
-            setLoading(true);
-            try {
-                const hoy = new Date().toISOString().split('T')[0];
-                const resAgendas = await api.get(`/agenda/equipo?fecha=${hoy}`);
-                const dataAgendas = resAgendas.data?.contenido || [];
-                
-                const parsedAgendas = dataAgendas.map(ag => {
-                    let parsedSegments = ag.segments || {};
-                    if (typeof parsedSegments === 'string') {
-                        try { parsedSegments = JSON.parse(parsedSegments); } catch (e) { }
-                    }
-                    return { ...ag, segments: parsedSegments };
-                });
-                setAgendas(parsedAgendas);
-            } catch (err) {
-                console.error("Error al cargar dashboard", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        if (canal) fetchDashboardData();
     }, [canal]);
 
     const handleApproveAgenda = async (idPlan) => {
@@ -1189,7 +1624,8 @@ const PlaneacionJefe = () => {
             if (response.data.codigo === 'OK') {
                 setAgendas(prev => prev.map(ag => ag.id === idPlan ? { ...ag, status: 'aprobada' } : ag));
            
-                // <-- 3. SUSTITUIMOS EL ALERT NATIVO (Éxito) -->
+                ultimaAlertaRef.current = Date.now(); 
+
                 setAlertModal({
                     isOpen: true,
                     title: 'Autorización Exitosa',
@@ -1199,7 +1635,6 @@ const PlaneacionJefe = () => {
             }
         } catch (error) {
             console.error("Error al autorizar", error);
-            // <-- 3. SUSTITUIMOS EL ALERT NATIVO (Error) -->
             setAlertModal({
                 isOpen: true,
                 title: 'Error de Autorización',
@@ -1222,7 +1657,8 @@ const PlaneacionJefe = () => {
                     : ag
             ));
             
-            // <-- 3. SUSTITUIMOS EL ALERT NATIVO (Éxito) -->
+            ultimaAlertaRef.current = Date.now(); 
+
             setAlertModal({
                 isOpen: true,
                 title: 'Modificación Solicitada',
@@ -1232,7 +1668,6 @@ const PlaneacionJefe = () => {
 
         } catch (error) {
             console.error("Error al solicitar modificación:", error);
-            // <-- 3. SUSTITUIMOS EL ALERT NATIVO (Error) -->
             setAlertModal({
                 isOpen: true,
                 title: 'Error de Solicitud',
@@ -1245,7 +1680,6 @@ const PlaneacionJefe = () => {
     const WRAP = ({ children }) => (
         <div className="max-w-[1400px] mx-auto pb-20 px-4 md:px-8 pt-6">
             {children}
-            {/* <-- 4. INYECTAMOS EL COMPONENTE UIModal --> */}
             <UIModal
                 isOpen={alertModal.isOpen}
                 onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
@@ -1259,18 +1693,10 @@ const PlaneacionJefe = () => {
     if (loading) return <div className="flex flex-col items-center justify-center py-32"><Loader2 className="animate-spin text-blue-500" /></div>;
 
     const renderVistaJerarquica = () => {
-        // 1. Inferimos el nivel. Si tu Context tiene selectedRole.nivel úsalo,
-        // si no, lo detectamos por el nombre del rol.
         const nivel = selectedRole?.nivel ||
                      (roleName?.toUpperCase().includes('N3') ? 3 :
                       roleName?.toUpperCase().includes('N2') || roleName?.toLowerCase().includes('zona') || roleName?.toLowerCase().includes('subdirector') || roleName?.toLowerCase().includes('coordinador') ? 2 : 1);
 
-        // ─────────────────────────────────────────────────────────────────
-        // BIFURCACIÓN POR CANAL — Cobranza usa jerarquía basada en puestos:
-        //   N3 Subdirector → VistaSubdirCobranza
-        //   N2 Coordinador → VistaCoordCobranza
-        //   N1 Ejecutivo   → VistaEjecutivoCobranza
-        // ─────────────────────────────────────────────────────────────────
         if (canal === 'cobranza') {
             const { coordinadores, ejecutivos, allAgendas } = agruparParaCobranza(agendas);
 
@@ -1288,8 +1714,6 @@ const PlaneacionJefe = () => {
             }
 
             if (nivel === 2) {
-                // Como Coordinador, "miCoordinador" representa el contexto del usuario
-                // y "ejecutivos" son los Ejecutivos de Cobranza que le reportan.
                 const miCoordinador = coordinadores[0] || { id: selectedRole?.id, nombre: roleName };
                 return (
                     <VistaCoordCobranza
@@ -1303,7 +1727,6 @@ const PlaneacionJefe = () => {
                 );
             }
 
-            // NIVEL 1 (Ejecutivo de Cobranza)
             const miEjecutivo = ejecutivos[0] || {
                 id: selectedRole?.id,
                 nombre: roleName || 'Ejecutivo',
@@ -1320,13 +1743,9 @@ const PlaneacionJefe = () => {
             );
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // CANAL COMERCIAL — jerarquía por Zona/Sucursal (vista original).
-        // ─────────────────────────────────────────────────────────────────
         const zonasData = agruparPorZona(agendas);
         const zonasNombres = Object.keys(zonasData);
 
-        // NIVEL 3: Director (Vista Nacional)
         if (nivel === 3 || roleName?.toUpperCase().includes('N3')) {
             return (
                 <VistaDirector
@@ -1339,7 +1758,6 @@ const PlaneacionJefe = () => {
             );
         }
 
-        // NIVEL 2: Subdirector / Gerente de Zona
         if (nivel === 2) {
             const miZona = zonasNombres[0] || 'Mi Zona';
             const sucursalesDeMiZona = zonasData[miZona] || {};
@@ -1355,7 +1773,6 @@ const PlaneacionJefe = () => {
             );
         }
 
-        // NIVEL 1: Gerente de Sucursal (Por defecto)
         const miZona = zonasNombres[0] || 'Mi Zona';
         const miSucursal = zonasData[miZona] ? Object.keys(zonasData[miZona])[0] : 'Mi Sucursal';
 

@@ -5,7 +5,8 @@ import {
     CheckCircle2, Clock, AlertTriangle, ChevronRight, ArrowLeft,
     User, Building2, MapPin, Activity, Users, TrendingUp, Navigation, Target, Loader2
 } from 'lucide-react';
-import toast from 'react-hot-toast';
+// ✅ IMPORTACIÓN CORREGIDA DEL MODAL
+import UIModal from '../../components/UIModal'; 
 
 // ── Helpers ────────────────────────────────────────────────────────
 const STATUS_STYLES = {
@@ -66,7 +67,7 @@ const extraerCoordenadasGPS = (managementResult) => {
         const partes = managementResult.split('|');
         const fragmentoGps = partes.find(p => p.includes('GPS:'));
         if (fragmentoGps) {
-            return fragmentoGps.replace('GPS:', '').trim(); // Debería escupir "16.71412, -92.63203"
+            return fragmentoGps.replace('GPS:', '').trim(); 
         }
     } catch (e) {
         console.error("Error parseando GPS en el Front", e);
@@ -448,22 +449,24 @@ const KpiBar = ({ agendas }) => {
 
 
 // ── Supervisor Views ───────────────────────────────────────────────────────
-const VistaGerente = ({ agendas }) => {
-    const [detail, setDetail] = useState(null);
-    if (detail) return <AgendaExecDetail agenda={detail} onBack={() => setDetail(null)} />;
+const VistaGerente = ({ agendas, detailId, setDetailId }) => {
+    const detailAgenda = agendas.find(a => a.id === detailId);
+    if (detailAgenda) return <AgendaExecDetail agenda={detailAgenda} onBack={() => setDetailId(null)} />;
+    
     return (
         <div>
             <KpiBar agendas={agendas} />           
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {agendas.map(ag => <OperativeCard key={ag.id} agenda={ag} onClick={() => setDetail(ag)} />)}
+                {agendas.map(ag => <OperativeCard key={ag.id} agenda={ag} onClick={() => setDetailId(ag.id)} />)}
             </div>
         </div>
     );
 };
 
-const VistaSucursal = ({ sucursal, agendas, onBack }) => {
-    const [detail, setDetail] = useState(null);
-    if (detail) return <AgendaExecDetail agenda={detail} onBack={() => setDetail(null)} />;
+const VistaSucursal = ({ sucursal, agendas, onBack, detailId, setDetailId }) => {
+    const detailAgenda = agendas.find(a => a.id === detailId);
+    if (detailAgenda) return <AgendaExecDetail agenda={detailAgenda} onBack={() => setDetailId(null)} />;
+    
     return (
         <div className="animate-in slide-in-from-right-4 duration-300">
             <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-accent hover:text-primary uppercase tracking-widest mb-6 transition-colors">
@@ -472,15 +475,14 @@ const VistaSucursal = ({ sucursal, agendas, onBack }) => {
             <h3 className="text-xl font-black text-primary uppercase mb-4">{sucursal}</h3>
             <KpiBar agendas={agendas} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {agendas.map(ag => <OperativeCard key={ag.id} agenda={ag} onClick={() => setDetail(ag)} />)}
+                {agendas.map(ag => <OperativeCard key={ag.id} agenda={ag} onClick={() => setDetailId(ag.id)} />)}
             </div>
         </div>
     );
 };
 
-const VistaZona = ({ zonaData, rolName }) => {
-    const [selected, setSelected] = useState(null);
-    if (selected) return <VistaSucursal sucursal={selected.suc} agendas={selected.agendas} onBack={() => setSelected(null)} />;
+const VistaZona = ({ zonaData, rolName, selectedSucursal, setSelectedSucursal, detailId, setDetailId }) => {
+    if (selectedSucursal) return <VistaSucursal sucursal={selectedSucursal.suc} agendas={selectedSucursal.agendas} onBack={() => setSelectedSucursal(null)} detailId={detailId} setDetailId={setDetailId} />;
     
     return (
         <div>
@@ -518,13 +520,13 @@ const VistaZona = ({ zonaData, rolName }) => {
 };
 
 
-const VistaEjecutivo = ({ ejecutivo, agendas }) => {
-    const [detail, setDetail] = useState(null);
+const VistaEjecutivo = ({ ejecutivo, agendas, detailId, setDetailId }) => {
     const misAgendas = agendas.filter(ag => ag.ejecutivoId === ejecutivo.id);
-    if (detail) return <AgendaExecDetail agenda={detail} onBack={() => setDetail(null)} />;
+    const detailAgenda = misAgendas.find(a => a.id === detailId);
+
+    if (detailAgenda) return <AgendaExecDetail agenda={detailAgenda} onBack={() => setDetailId(null)} />;
 
     const stats = calculateProgressStats(misAgendas);
-
     return (
         <div className="animate-in slide-in-from-right-4 duration-300">
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-6 flex flex-col md:flex-row gap-6">
@@ -541,7 +543,7 @@ const VistaEjecutivo = ({ ejecutivo, agendas }) => {
                 </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {misAgendas.map(ag => <OperativeCard key={ag.id} agenda={ag} onClick={() => setDetail(ag)} />)}
+                {misAgendas.map(ag => <OperativeCard key={ag.id} agenda={ag} onClick={() => setDetailId(ag.id)} />)}
             </div>
         </div>
     );
@@ -552,308 +554,269 @@ const EjecucionJefe = () => {
     const { selectedRole } = useRole();
     const { canal, nivel, name: rolName } = selectedRole;
 
+    // 1. Declaración ÚNICA del estado del modal
+    const [alertModal, setAlertModal] = useState({ isOpen: false, title: '', message: '', type: 'success' });
+
     const [loading, setLoading] = useState(true);
     const [agendas, setAgendas] = useState([]);
     const [jerarquia, setJerarquia] = useState({ coordinadores: [], ejecutivos: [] });
 
     const [selectedZona, setSelectedZona] = useState(null);
+    const [selectedSucursal, setSelectedSucursal] = useState(null);
     const [selectedEj, setSelectedEj] = useState(null);
+    const [detailId, setDetailId] = useState(null);
+
+    // 2. Extraemos la función de carga para que el WebSocket la pueda invocar
+    const fetchDashboardData = async (silent = false) => {
+        if (!silent) setLoading(true); 
+        try {
+            const d = new Date();
+            const hoy = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            
+            const resAgendas = await api.get(`/agenda/equipo?fecha=${hoy}`);
+            const dataAgendasRaw = resAgendas.data?.contenido || resAgendas.data || [];
+
+            const dataAgendas = dataAgendasRaw.filter(ag => {
+                const equipoAgenda = ag.operativo?.equipo?.toLowerCase() || '';
+                return equipoAgenda === canal?.toLowerCase();
+            });
+
+            const parsedAgendas = dataAgendas.map(ag => {
+                let parsedSegments = ag.segments || {};
+                if (typeof parsedSegments === 'string') {
+                    try { parsedSegments = JSON.parse(parsedSegments); } catch (e) { }
+                }
+                return { ...ag, segments: parsedSegments };
+            });
+
+            setAgendas(parsedAgendas);
+
+            if (canal === 'cobranza') {
+                const resJerarquia = await api.get('/agenda/jerarquia/cobranza');
+                const dataJerarquia = resJerarquia.data?.contenido || resJerarquia.data || { coordinadores: [], ejecutivos: [] };
+                setJerarquia(dataJerarquia);
+            }
+        } catch (err) {
+            console.error("Error al cargar dashboard de jefes (Ejecución)", err);
+        } finally {
+            if (!silent) setLoading(false);
+        }
+    };
+
+    // 3. Carga inicial
+    useEffect(() => {
+        if (canal) fetchDashboardData();
+    }, [canal]);
 
     useEffect(() => {
-        // Te sugiero pasar el ID del usuario/canal en la URL para que el Backend sepa a quién notificar
-        const wsUrl = `ws://localhost:8090/business-control-cobranza/api/v1/ws/dashboard/${canal}`;
+        if (!canal) return;
+
+        const API_COBRANZA = import.meta.env.VITE_API_ORIGIN_COBRANZA;
+        const wsUrl = `${API_COBRANZA.replace(/^http/, 'ws')}/api/v1/ws/notificaciones`;
         let socket;
 
         try {
             socket = new WebSocket(wsUrl);
-
-            socket.onopen = () => console.log('🔌 [Jefe] Conectado al Dashboard en Tiempo Real');
+            socket.onopen = () => console.log('[WS Jefe - Ejecución] Sincronizado en tiempo real.');
 
             socket.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
+                const data = JSON.parse(event.data);
+                console.log("[WS Jefe] Mensaje recibido del servidor:", data);
+
+                if (data.type === 'NEW_CHECKIN' || data.type === 'AGENDA_UPDATE' || data.type === 'STATUS_UPDATE') {
                     
-                    // EVENTO 1: Un operativo mandó una nueva agenda o una corrección (Alta/Actualización)
-                    if (data.type === 'NEW_AGENDA' || data.type === 'AGENDA_UPDATED') {
-                        toast('Agenda lista para revisión', { 
-                            icon: '🔔', 
-                            duration: 5000 
-                        });
-                        
-                        // Agregamos o actualizamos la agenda en el tablero del jefe
-                        setAgendas(prev => {
-                            const existe = prev.find(ag => ag.id === data.payload.id);
-                            if (existe) {
-                                return prev.map(ag => ag.id === data.payload.id ? data.payload : ag);
-                            }
-                            return [...prev, data.payload];
-                        });
-                    }
+                    const canalPayload = data.payload?.canal?.toLowerCase();
+                    const esMismoCanal = canalPayload === canal.toLowerCase();
+                    const esImprevistoUOrganico = !canalPayload; 
 
-                    // EVENTO 2: Un operativo hizo Check-in en la calle (Gestión)
-                    if (data.type === 'NEW_CHECKIN') {
-                        toast.success(`${data.payload.operativoNombre} registró una gestión`, { 
-                            duration: 4000, 
-                            position: 'bottom-right' 
-                        });
+                    if (esMismoCanal || esImprevistoUOrganico) {
+                        console.log("[WS Jefe] Forzando recarga silenciosa del tablero por actualización.");
                         
-                        // Actualizamos la agenda específica para que las barras de progreso se muevan solas
-                        setAgendas(prev => prev.map(ag => 
-                            ag.id === data.payload.idAgenda ? data.payload.agendaActualizada : ag
-                        ));
+                        fetchDashboardData(true); 
                     }
-
-                } catch (error) {
-                    console.error('Error parseando el mensaje WebSocket:', error);
                 }
             };
 
-        } catch (error) {
-            console.error("No se pudo establecer la conexión de WebSockets", error);
+            socket.onerror = (error) => console.error("Error WS Ejecución Jefe:", error);
+        } catch (error) { 
+            console.error("Fallo crítico al conectar WebSocket", error); 
         }
 
-        return () => {
-            if (socket && socket.readyState === WebSocket.OPEN) socket.close();
-        };
-    }, [canal]);
+        return () => { if (socket && socket.readyState === WebSocket.OPEN) socket.close(); };
+    }, [canal]); 
 
-    // Carga de datos al inicio
-    useEffect(() => {
-        const fetchDashboardData = async () => {
-            setLoading(true);
-            try {
-                const hoy = new Date().toISOString().split('T')[0];
-                const resAgendas = await api.get(`/agenda/equipo?fecha=${hoy}`);
-                const dataAgendasRaw = resAgendas.data?.contenido || resAgendas.data || [];
+    // 5. Consolidamos los returns en una función para que el modal se renderice SIEMPRE al final
+    const renderContenido = () => {
+        if (loading) {
+            return (
+                <div className="flex flex-col items-center justify-center py-32 text-slate-400">
+                    <Loader2 size={36} className="animate-spin mb-4 text-blue-500" />
+                </div>
+            );
+        }
 
-                const dataAgendas = dataAgendasRaw.filter(ag => {
-                    const equipoAgenda = ag.operativo?.equipo?.toLowerCase() || '';
-                    return equipoAgenda === canal.toLowerCase();
-                });
+        // ── CANAL COMERCIAL ────────────────────────────────────────────
+        if (canal === 'comercial') {
+            const zonas = agruparPorZona(agendas);
 
-                const parsedAgendas = dataAgendas.map(ag => {
-                    let parsedSegments = ag.segments || {};
-                    if (typeof parsedSegments === 'string') {
-                        try { parsedSegments = JSON.parse(parsedSegments); } catch (e) { }
-                    }
-                    return { ...ag, segments: parsedSegments };
-                });
+            if (nivel === 1) { 
+                const myAgendas = agendas; 
+                const miSucursal = myAgendas[0]?.sucursal || 'Mi Sucursal';
 
-                setAgendas(parsedAgendas);
-
-                if (canal === 'cobranza') {
-                    const resJerarquia = await api.get('/agenda/jerarquia/cobranza');
-                    const dataJerarquia = resJerarquia.data?.contenido || resJerarquia.data || { coordinadores: [], ejecutivos: [] };
-                    setJerarquia(dataJerarquia);
-                }
-            } catch (err) {
-                console.error("Error al cargar dashboard de jefes (Ejecución)", err);
-            } finally {
-                setLoading(false);
+                return (
+                    <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8 animate-in fade-in duration-500">
+                        <header className="mb-8">
+                            <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Supervisión de Ruta</h2>
+                            <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Operativos en campo · {miSucursal}</p>
+                        </header>
+                        <VistaGerente agendas={myAgendas} detailId={detailId} setDetailId={setDetailId} />
+                    </div>
+                );
             }
-        };
 
-        fetchDashboardData();
-    }, [canal]);
-
-    // Conexión WebSockets
-    useEffect(() => {
-        const wsUrl = 'ws://localhost:8090/business-control-cobranza/api/v1/ws/dashboard';
-        let socket;
-
-        try {
-            socket = new WebSocket(wsUrl);
-
-            socket.onopen = () => {
-                console.log('🔌 Conectado al WebSocket Real del Dashboard');
-            };
-
-            socket.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.type === 'AGENDA_UPDATE' && data.payload) {
-                        setAgendas(prevAgendas => 
-                            prevAgendas.map(ag => 
-                                ag.id === data.payload.idPlan ? data.payload : ag
-                            )
-                        );
-                    }
-                } catch (error) {
-                    console.error('Error parseando el mensaje WebSocket:', error);
-                }
-            };
-
-            socket.onerror = (error) => {
-                console.error('❌ Error en la conexión WebSocket:', error);
-            };
-
-        } catch (error) {
-            console.error("No se pudo establecer la conexión de WebSockets", error);
-        }
-
-        return () => {
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.close();
+            if (nivel === 2) { 
+                const myZonaName = Object.keys(zonas)[0] || 'ZONA I';
+                const myZona = zonas[myZonaName]; 
+                return (
+                    <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8 animate-in fade-in duration-500">
+                        <header className="mb-8">
+                            <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Supervisión de Zona</h2>
+                            <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">{myZonaName} · Ejecución en curso</p>
+                        </header>
+                        {myZona && <VistaZona zonaData={myZona} rolName={rolName} selectedSucursal={selectedSucursal} setSelectedSucursal={setSelectedSucursal} detailId={detailId} setDetailId={setDetailId} />}
+                    </div>
+                );
             }
-        };
-    }, []);
 
-    if (loading) {
-        return (
-            <div className="flex flex-col items-center justify-center py-32 text-slate-400">
-                <Loader2 size={36} className="animate-spin mb-4 text-blue-500" />
-                <p className="text-xs font-black uppercase tracking-widest text-slate-500">Cargando Tablero de Ejecución...</p>
-            </div>
-        );
-    }
-
-    // ── CANAL COMERCIAL ────────────────────────────────────────────
-    if (canal === 'comercial') {
-        const zonas = agruparPorZona(agendas);
-
-        if (nivel === 1) { 
-            const myAgendas = agendas; 
-            const miSucursal = myAgendas[0]?.sucursal || 'Mi Sucursal';
-
+            if (selectedZona) {
+                return (
+                    <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8">
+                        <button onClick={() => setSelectedZona(null)} className="flex items-center gap-2 text-[10px] font-black text-accent hover:text-primary uppercase tracking-widest mb-6 transition-colors">
+                            <ArrowLeft size={14} /> Todas las Zonas
+                        </button>
+                        <h3 className="text-xl font-black text-primary uppercase mb-6">{selectedZona.nombre}</h3>
+                        <VistaZona zonaData={zonas[selectedZona.id] || {}} rolName={rolName} selectedSucursal={selectedSucursal} setSelectedSucursal={setSelectedSucursal} detailId={detailId} setDetailId={setDetailId} />
+                    </div>
+                );
+            }
+            
             return (
                 <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8 animate-in fade-in duration-500">
                     <header className="mb-8">
-                        <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Supervisión de Ruta</h2>
-                        <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Operativos en campo · {miSucursal}</p>
+                        <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Supervisión Nacional</h2>
+                        <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Ejecución en Ruta · Todas las Zonas</p>
                     </header>
-                    <VistaGerente agendas={myAgendas} />
-                </div>
-            );
-        }
-
-        if (nivel === 2) { 
-            const myZonaName = Object.keys(zonas)[0] || 'ZONA I';
-            const myZona = zonas[myZonaName]; 
-            return (
-                <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8 animate-in fade-in duration-500">
-                    <header className="mb-8">
-                        <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Supervisión de Zona</h2>
-                        <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">{myZonaName} · Ejecución en curso</p>
-                    </header>
-                    {myZona && <VistaZona zonaData={myZona} rolName={rolName} />}
-                </div>
-            );
-        }
-
-        if (selectedZona) {
-            return (
-                <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8">
-                    <button onClick={() => setSelectedZona(null)} className="flex items-center gap-2 text-[10px] font-black text-accent hover:text-primary uppercase tracking-widest mb-6 transition-colors">
-                        <ArrowLeft size={14} /> Todas las Zonas
-                    </button>
-                    <h3 className="text-xl font-black text-primary uppercase mb-6">{selectedZona.nombre}</h3>
-                    <VistaZona zonaData={zonas[selectedZona.id] || {}} rolName={rolName} />
-                </div>
-            );
-        }
-        
-        return (
-            <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8 animate-in fade-in duration-500">
-                <header className="mb-8">
-                    <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Supervisión Nacional</h2>
-                    <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Ejecución en Ruta · Todas las Zonas</p>
-                </header>
-                <KpiBar agendas={agendas} />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {Object.keys(zonas).map(zonaName => {
-                        const zAgendas = agendas.filter(ag => ag.zona === zonaName);
-                        const done = zAgendas.reduce((a, ag) => a + Object.keys(getRealCheckIns(ag) || {}).length, 0);
-                        const total = zAgendas.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO')).length, 0);
-                        
-                        return (
-                            <div 
-                                key={zonaName} 
-                                onClick={() => setSelectedZona({ id: zonaName, nombre: zonaName })}
-                                className="block w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:shadow-md hover:border-blue-300 cursor-pointer transition-all group"
-                            >
-                                <div className="flex items-start justify-between mb-5">
-                                    <div className="pr-4">
-                                        <MapPin size={18} className="text-blue-500 mb-2" />
-                                        <h3 className="font-black text-lg text-primary uppercase leading-tight break-words">
-                                            {zonaName}
-                                        </h3>
-                                        <p className="text-xs font-bold text-slate-400 mt-1">
-                                            {zAgendas.length} operativos
-                                        </p>
+                    <KpiBar agendas={agendas} />
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {Object.keys(zonas).map(zonaName => {
+                            const zAgendas = agendas.filter(ag => ag.zona === zonaName);
+                            const done = zAgendas.reduce((a, ag) => a + Object.keys(getRealCheckIns(ag) || {}).length, 0);
+                            const total = zAgendas.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO')).length, 0);
+                            
+                            return (
+                                <div 
+                                    key={zonaName} 
+                                    onClick={() => setSelectedZona({ id: zonaName, nombre: zonaName })}
+                                    className="block w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:shadow-md hover:border-blue-300 cursor-pointer transition-all group"
+                                >
+                                    <div className="flex items-start justify-between mb-5">
+                                        <div className="pr-4">
+                                            <MapPin size={18} className="text-blue-500 mb-2" />
+                                            <h3 className="font-black text-lg text-primary uppercase leading-tight break-words">
+                                                {zonaName}
+                                            </h3>
+                                            <p className="text-xs font-bold text-slate-400 mt-1">
+                                                {zAgendas.length} operativos
+                                            </p>
+                                        </div>
+                                        <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-50 transition-colors">
+                                            <ChevronRight size={18} className="text-slate-400 group-hover:text-blue-600" />
+                                        </div>
                                     </div>
-                                    <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-50 transition-colors">
-                                        <ChevronRight size={18} className="text-slate-400 group-hover:text-blue-600" />
-                                    </div>
+                                    
+                                    <ProgressBar done={done} total={total} />
                                 </div>
-                                
-                                <ProgressBar done={done} total={total} />
-                            </div>
-                        );
-                    })}
+                            );
+                        })}
+                    </div>
                 </div>
-            </div>
-        );
-    }
+            );
+        }
 
-    // ── CANAL COBRANZA ─────────────────────────────────────────────
-    if (canal === 'cobranza') {
-        if (nivel === 1) { 
-            const myEj = jerarquia.ejecutivos[0] || {}; 
+        // ── CANAL COBRANZA ─────────────────────────────────────────────
+        if (canal === 'cobranza') {
+            if (nivel === 1) { 
+                const myEj = jerarquia.ejecutivos[0] || {}; 
+                return (
+                    <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8 animate-in fade-in duration-500">
+                        <header className="mb-8">
+                            <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Mis Gestores en Ruta</h2>
+                            <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Región Ejecutivo · Ejecución en curso</p>
+                        </header>
+                        <VistaEjecutivo ejecutivo={myEj} agendas={agendas} detailId={detailId} setDetailId={setDetailId} />
+                    </div>
+                );
+            }
+
+            if (selectedEj) {
+                return (
+                    <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8">
+                        <button onClick={() => setSelectedEj(null)} className="flex items-center gap-2 text-[10px] font-black text-accent hover:text-primary uppercase tracking-widest mb-6 transition-colors">
+                            <ArrowLeft size={14} /> Todos los Ejecutivos
+                        </button>
+                        <VistaEjecutivo ejecutivo={selectedEj} agendas={agendas} detailId={detailId} setDetailId={setDetailId} />
+                    </div>
+                );
+            }
+            
             return (
                 <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8 animate-in fade-in duration-500">
                     <header className="mb-8">
-                        <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Mis Gestores en Ruta</h2>
-                        <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Región Ejecutivo · Ejecución en curso</p>
+                        <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Supervisión Cobranza</h2>
+                        <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Ejecutivos en Campo · Ruta en Curso</p>
                     </header>
-                    <VistaEjecutivo ejecutivo={myEj} agendas={agendas} />
-                </div>
-            );
-        }
-
-        if (selectedEj) {
-            return (
-                <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8">
-                    <button onClick={() => setSelectedEj(null)} className="flex items-center gap-2 text-[10px] font-black text-accent hover:text-primary uppercase tracking-widest mb-6 transition-colors">
-                        <ArrowLeft size={14} /> Todos los Ejecutivos
-                    </button>
-                    <VistaEjecutivo ejecutivo={selectedEj} agendas={agendas} />
-                </div>
-            );
-        }
-        
-        return (
-            <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8 animate-in fade-in duration-500">
-                <header className="mb-8">
-                    <h2 className="text-3xl font-black text-primary uppercase tracking-tight">Supervisión Cobranza</h2>
-                    <p className="text-[11px] font-black text-accent uppercase tracking-[0.3em] mt-1">Ejecutivos en Campo · Ruta en Curso</p>
-                </header>
-                <KpiBar agendas={agendas} />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {jerarquia.ejecutivos.map(ej => {
-                        const ejAg = agendas.filter(ag => ag.ejecutivoId === ej.id);
-                        const done = ejAg.reduce((a, ag) => a + Object.keys(getRealCheckIns(ag)).length, 0);
-                        const total = ejAg.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO')).length, 0);
-                        return (
-                            <div key={ej.id} onClick={() => setSelectedEj(ej)}
-                                className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:border-blue-200 cursor-pointer transition-all group">
-                                <div className="flex items-start justify-between mb-3">
-                                    <div>
-                                        <User size={14} className="text-slate-400 mb-1" />
-                                        <p className="font-black text-[14px] text-primary uppercase">{ej.nombre}</p>
-                                        <p className="text-[10px] text-accent">{ejAg.length} gestor{ejAg.length !== 1 ? 'es' : ''}</p>
+                    <KpiBar agendas={agendas} />
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {jerarquia.ejecutivos.map(ej => {
+                            const ejAg = agendas.filter(ag => ag.ejecutivoId === ej.id);
+                            const done = ejAg.reduce((a, ag) => a + Object.keys(getRealCheckIns(ag)).length, 0);
+                            const total = ejAg.reduce((a, ag) => a + Object.values(ag.segments || {}).flat().filter(v => v.name || v._segment === 'Visita No Planeada' || v.managementResult?.includes('IMPREVISTO')).length, 0);
+                            return (
+                                <div key={ej.id} onClick={() => setSelectedEj(ej)}
+                                    className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:border-blue-200 cursor-pointer transition-all group">
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div>
+                                            <User size={14} className="text-slate-400 mb-1" />
+                                            <p className="font-black text-[14px] text-primary uppercase">{ej.nombre}</p>
+                                            <p className="text-[10px] text-accent">{ejAg.length} gestor{ejAg.length !== 1 ? 'es' : ''}</p>
+                                        </div>
+                                        <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-400 transition-colors" />
                                     </div>
-                                    <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-400 transition-colors" />
+                                    <ProgressBar done={done} total={total} />
                                 </div>
-                                <ProgressBar done={done} total={total} />
-                            </div>
-                        );
-                    })}
+                            );
+                        })}
+                    </div>
                 </div>
-            </div>
-        );
-    }
+            );
+        }
 
-    return null;
+        return null;
+    };
+
+    // Retorno único para inyectar el Modal sin importar en qué canal o nivel estemos
+    return (
+        <>
+            {renderContenido()}
+            <UIModal
+                isOpen={alertModal.isOpen}
+                onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+                title={alertModal.title}
+                message={alertModal.message}
+                type={alertModal.type}
+            />
+        </>
+    );
 };
 
 export default EjecucionJefe;

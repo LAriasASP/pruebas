@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useRole } from './RoleContext';
 import { useCatalogs } from './CatalogContext'; 
 import api from '../api/axiosConfig';
@@ -161,123 +161,119 @@ export const AgendaProvider = ({ children }) => {
 
     const [loadingAgenda, setLoadingAgenda] = useState(false);
     const [scheduledFollowUps, setScheduledFollowUps] = useState([]);
+    const agendaIdRef = useRef(currentAgenda.id);
+    const agendaStatusRef = useRef(currentAgenda.status);
+
+    useEffect(() => {
+        agendaIdRef.current = currentAgenda.id;
+        agendaStatusRef.current = currentAgenda.status;
+    }, [currentAgenda.id, currentAgenda.status]);
+
+    const cargarAgendaDelDia = async (silent = false) => {
+        if (!silent) setLoadingAgenda(true);
+        try {
+            const res = await api.get('/agenda/operativo/hoy');
+            const agendaData = Array.isArray(res.data?.contenido) ? res.data.contenido[0] : (res.data?.contenido || res.data);
+
+            if (agendaData && Object.keys(agendaData).length > 0) {
+                let parsedSegments = agendaData.segments || {};
+                if (typeof parsedSegments === 'string') parsedSegments = JSON.parse(parsedSegments);
+
+                let parsedKpiCompromisos = agendaData.kpiCompromisos || {};
+                if (typeof parsedKpiCompromisos === 'string') parsedKpiCompromisos = JSON.parse(parsedKpiCompromisos);
+
+                let parsedKpiReal = agendaData.kpiReal || {};
+                if (typeof parsedKpiReal === 'string') parsedKpiReal = JSON.parse(parsedKpiReal);
+
+                const safeSegments = {
+                    ...parsedSegments,
+                    'Promoción': parsedSegments['Promoción'] || [],
+                    'Evaluación e Integración': parsedSegments['Evaluación e Integración'] || [],
+                    'Seguimiento de Cartera': parsedSegments['Seguimiento de Cartera'] || [],
+                    'Gestión de Empresarias': parsedSegments['Gestión de Empresarias'] || []
+                };
+
+                setCurrentAgenda(prev => ({
+                    ...prev,
+                    id: agendaData.id,
+                    status: agendaData.status?.toLowerCase() || 'borrador',
+                    notaJefe: agendaData.notaJefe || 'Revisa y ajusta los detalles de tu jornada.',
+                    segments: safeSegments,
+                    kpiCompromisos: parsedKpiCompromisos,
+                    kpiReal: parsedKpiReal,
+                    metadata: { ...prev.metadata, role: selectedRole?.name }
+                }));
+            } else {
+                const isBorrador = selectedRole?.id === 'coordinador-l';
+                setCurrentAgenda(prev => ({ 
+                    ...prev, 
+                    status: isBorrador ? 'borrador' : 'borrador',
+                    id: null,
+                    segments: {
+                        'Promoción': [], 'Evaluación e Integración': [], 'Seguimiento de Cartera': [], 'Gestión de Empresarias': []
+                    }
+                }));
+            }
+
+        } catch (error) {
+            const mensajeError = error.response?.data?.mensaje || "";
+            if (error.response?.status === 404 || mensajeError.includes("No se encontró información de la agenda")) {
+                setCurrentAgenda(prev => ({ 
+                    ...prev, status: 'borrador', id: null,
+                    segments: {
+                        'Promoción': [], 'Evaluación e Integración': [], 'Seguimiento de Cartera': [], 'Gestión de Empresarias': []
+                    }
+                }));
+            } else {
+                console.error("Error crítico al cargar la agenda del día", error);
+            }
+        } finally {
+            if (!silent) setLoadingAgenda(false);
+        }
+    };
 
     useEffect(() => {
         if (!selectedRole || selectedRole.category !== 'Operativo') return;
-
-        const cargarAgendaDelDia = async () => {
-            setLoadingAgenda(true);
-            try {
-                const res = await api.get('/agenda/operativo/hoy');
-                const agendaData = Array.isArray(res.data?.contenido) ? res.data.contenido[0] : (res.data?.contenido || res.data);
-
-                if (agendaData && Object.keys(agendaData).length > 0) {
-                    let parsedSegments = agendaData.segments || {};
-                    if (typeof parsedSegments === 'string') parsedSegments = JSON.parse(parsedSegments);
-
-                    let parsedKpiCompromisos = agendaData.kpiCompromisos || {};
-                    if (typeof parsedKpiCompromisos === 'string') parsedKpiCompromisos = JSON.parse(parsedKpiCompromisos);
-
-                    let parsedKpiReal = agendaData.kpiReal || {};
-                    if (typeof parsedKpiReal === 'string') parsedKpiReal = JSON.parse(parsedKpiReal);
-
-                    const safeSegments = {
-                        ...parsedSegments,
-                        'Promoción': parsedSegments['Promoción'] || [],
-                        'Evaluación e Integración': parsedSegments['Evaluación e Integración'] || [],
-                        'Seguimiento de Cartera': parsedSegments['Seguimiento de Cartera'] || [],
-                        'Gestión de Empresarias': parsedSegments['Gestión de Empresarias'] || []
-                    };
-
-                    setCurrentAgenda(prev => ({
-                        ...prev,
-                        id: agendaData.id,
-                        status: agendaData.status?.toLowerCase() || 'borrador',
-                        notaJefe: agendaData.notaJefe || 'Revisa y ajusta los detalles de tu jornada.',
-                        segments: safeSegments,
-                        kpiCompromisos: parsedKpiCompromisos,
-                        kpiReal: parsedKpiReal,
-                        metadata: { ...prev.metadata, role: selectedRole.name }
-                    }));
-                } else {
-                    const isBorrador = selectedRole.id === 'coordinador-l';
-                    setCurrentAgenda(prev => ({ 
-                        ...prev, 
-                        status: isBorrador ? 'borrador' : 'borrador',
-                        id: null,
-                        segments: {
-                            'Promoción': [], 'Evaluación e Integración': [], 'Seguimiento de Cartera': [], 'Gestión de Empresarias': []
-                        }
-                    }));
-                }
-
-            } catch (error) {
-                const mensajeError = error.response?.data?.mensaje || "";
-                if (error.response?.status === 404 || mensajeError.includes("No se encontró información de la agenda")) {
-                    setCurrentAgenda(prev => ({ 
-                        ...prev, status: 'borrador', id: null,
-                        segments: {
-                            'Promoción': [], 'Evaluación e Integración': [], 'Seguimiento de Cartera': [], 'Gestión de Empresarias': []
-                        }
-                    }));
-                } else {
-                    console.error("Error crítico al cargar la agenda del día", error);
-                }
-            } finally {
-                setLoadingAgenda(false);
-            }
-        };
-
         cargarAgendaDelDia();
     }, [selectedRole?.id]);
-
+    
 
     useEffect(() => {
-        if (!currentAgenda?.id) return; // Solo conectamos si ya hay una agenda cargada
-
-        const wsUrl = `ws://localhost:8090/business-control-cobranza/api/v1/ws/operativo/${currentAgenda.id}`;
+        const API_COBRANZA = import.meta.env.VITE_API_ORIGIN_COBRANZA;
+        const wsUrl = `${API_COBRANZA.replace(/^http/, 'ws')}/api/v1/ws/notificaciones`;
         let socket;
 
         try {
             socket = new WebSocket(wsUrl);
-
-            socket.onopen = () => console.log('🔌 [Operativo] Conectado al WebSocket');
-
             socket.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
+                const data = JSON.parse(event.data);
+                
+                if ((data.type === 'STATUS_UPDATE' || data.type === 'AGENDA_UPDATE') && String(data.payload?.idPlan) === String(agendaIdRef.current)) {
                     
-                    // Si el jefe envía una actualización de estado (Aprobación o Rechazo)
-                    if (data.type === 'STATUS_UPDATE') {
+                    const nuevoEstatus = (data.payload.estatus || data.payload.status)?.toLowerCase();
+                    const estatusAnterior = agendaStatusRef.current?.toLowerCase();
+                    
+                    if (nuevoEstatus && nuevoEstatus !== estatusAnterior) {
                         
-                        if (data.payload.status === 'requiere_modificacion') {
-                            toast.error('Tu supervisor ha devuelto tu agenda para corrección', { duration: 6000 });
-                        } else if (data.status === 'aprobada') {
-                            toast.success('¡Agenda Autorizada! Ya puedes iniciar tu ruta', { duration: 6000 });
+                        if (nuevoEstatus === 'requiere_modificacion') {
+                            setAlertModal({ isOpen: true, title: 'Agenda Devuelta', message: `Tu supervisor ha devuelto tu agenda para corrección.`, type: 'danger' });
+                        } 
+                        else if ((nuevoEstatus === 'aprobada' || nuevoEstatus === 'autorizada') && estatusAnterior === 'pendiente') {
+                            setAlertModal({ isOpen: true, title: '¡Agenda Autorizada!', message: '¡Excelente! Tu supervisor aprobó tu agenda. Puedes iniciar la ejecución.', type: 'success' });
                         }
-
-                        // Actualizamos el contexto en tiempo real con la nota del jefe y el nuevo estado
-                        setCurrentAgenda(prev => ({
-                            ...prev,
-                            status: data.payload.status,
-                            notaJefe: data.payload.notaJefe
-                        }));
+                        else if (nuevoEstatus === 'completada' || data.payload.notaDictamen) {
+                            setAlertModal({ isOpen: true, title: 'Jornada Evaluada', message: 'Tu supervisor ha registrado el dictamen final de tu jornada.', type: 'info' });
+                        }
                     }
-                } catch (error) {
-                    console.error('Error parseando mensaje WS:', error);
+                    cargarAgendaDelDia(true);
                 }
             };
+            socket.onerror = (error) => console.error("Error WS Operativo Context:", error);
+        } catch (error) { console.error("Fallo crítico", error); }
 
-        } catch (error) {
-            console.error("Error al conectar WS Operativo:", error);
-        }
+        return () => { if (socket && socket.readyState === WebSocket.OPEN) socket.close(); };
+    }, []);
 
-        return () => {
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.close();
-            }
-        };
-    }, [currentAgenda?.id]); 
 
     // ── RENDERIZADO CONDICIONAL POR ROLES (RBAC) ──
     const getVisibleSegments = () => {
@@ -285,21 +281,56 @@ export const AgendaProvider = ({ children }) => {
         return MATRIZ_SEGMENTOS[roleName] ?? SEGMENTOS_DEFAULT;
     };
 
-    const updateVisit = (segmentName, index, field, value) => {
+    const updateVisit = (segmentName, index, fieldOrObject, value) => {
         setCurrentAgenda(prev => {
             const newSegments = { ...prev.segments };
-            const updatedRow = { ...newSegments[segmentName][index], [field]: value };
+            //  CLONAMOS EL ARREGLO PARA OBLIGAR A REACT A REPINTAR
+            const newSegmentArray = [...newSegments[segmentName]]; 
+            const visit = { ...newSegmentArray[index] };
 
-            if (field === 'name' && value) {
-                const match = directorio.find(item => item.name === value.toUpperCase());
-                if (match) {
-                    Object.keys(match).forEach(key => { updatedRow[key] = match[key]; });
-                    updatedRow.idContacto = match.id || match.idContacto || match.id_contacto || null;
-                    updatedRow.idControl = match.idControl || match.id_control || null;
+            if (typeof fieldOrObject === 'object' && fieldOrObject !== null) {
+                //  MODO 1: ACTUALIZACIÓN MASIVA (Usado para la Mora y el Bucket)
+                Object.keys(fieldOrObject).forEach(key => {
+                    visit[key] = fieldOrObject[key];
+                });
+            } else {
+                // 🚀 MODO 2: ACTUALIZACIÓN INDIVIDUAL
+                visit[fieldOrObject] = value;
+
+                //  TU LÓGICA ORIGINAL RESTAURADA Y MEJORADA (Autollenado por Nombre)
+                if (fieldOrObject === 'name' && value) {
+                    const match = directorio.find(item => item.name === value.toUpperCase());
+                    if (match) {
+                        // Copiamos todas las llaves del match
+                        Object.keys(match).forEach(key => { 
+                            visit[key] = match[key]; 
+                        });
+                        
+                        // Aseguramos los IDs críticos
+                        visit.idContacto = match.idContacto || match.id_contacto || match.id || null;
+                        visit.idControl = match.idControl || match.id_control || null;
+                        visit.idCliente = match.idCliente || match.id_cliente || null;
+
+                        // Parseo seguro de teléfonos para que no se rompa la pantalla
+                        let arrayPhones = ["", "", ""];
+                        if (match.phones) {
+                            try {
+                                arrayPhones = typeof match.phones === 'string' ? JSON.parse(match.phones) : match.phones;
+                            } catch (e) {
+                                console.error("Error parseando teléfonos", e);
+                            }
+                        }
+                        while(arrayPhones.length < 3) arrayPhones.push('');
+                        visit.phones = arrayPhones;
+                    }
                 }
             }
 
-            newSegments[segmentName][index] = updatedRow;
+            visit.isModified = true;
+
+            newSegmentArray[index] = visit;
+            newSegments[segmentName] = newSegmentArray; // Asignamos el arreglo clonado
+            
             return { ...prev, segments: newSegments };
         });
     };
@@ -312,13 +343,16 @@ export const AgendaProvider = ({ children }) => {
     };
 
     const updateKpiReal = async (field, value) => {
-        try {
-            setCurrentAgenda(prev => ({
-                ...prev, kpiReal: { ...prev.kpiReal, [field]: value }
-            }));
+        const valorNumerico = value === '' || isNaN(value) ? 0 : Number(value);
+
+        setCurrentAgenda(prev => ({
+            ...prev, kpiReal: { ...prev.kpiReal, [field]: valorNumerico }
+        }));
+
+       try {
             if (currentAgenda.id) {
                 await api.put('/gestion-diaria/kpis/real', {
-                    idPlan: currentAgenda.id, llaveFront: field, nuevoValor: value || 0
+                    idPlan: currentAgenda.id, llaveFront: field, nuevoValor: valorNumerico
                 });
             }
         } catch (error) {
@@ -329,11 +363,23 @@ export const AgendaProvider = ({ children }) => {
     const registerCheckIn = async (visitId, data) => {
         try {
             const payload = {
-                idVisita: visitId, visitaRealizada: data.visitaRealizada, clienteEncontrado: data.clienteEncontrado,
-                actividadRealizada: data.actividadRealizada, motivoNoVisita: data.motivoNoVisita,
-                motivoNoActividad: data.motivoNoActividad, resultado: data.resultado, tipoGestion: data.tipoGestion,
-                checkInTime: data.checkInTime, visitaDuration: data.visitaDuration, lat: data.lat, lng: data.lng,
-                gpsStatus: data.gpsStatus, pagoMonto: data.pagoMonto, pagoFecha: data.pagoFecha, notes: data.notes
+                idPlan: currentAgenda.id, 
+                idVisita: visitId, 
+                visitaRealizada: data.visitaRealizada, 
+                clienteEncontrado: data.clienteEncontrado,
+                actividadRealizada: data.actividadRealizada, 
+                motivoNoVisita: data.motivoNoVisita,
+                motivoNoActividad: data.motivoNoActividad, 
+                resultado: data.resultado, 
+                tipoGestion: data.tipoGestion,
+                checkInTime: data.checkInTime, 
+                visitaDuration: data.visitaDuration, 
+                lat: data.lat, 
+                lng: data.lng,
+                gpsStatus: data.gpsStatus, 
+                pagoMonto: data.pagoMonto, 
+                pagoFecha: data.pagoFecha, 
+                notes: data.notes
             };
             await api.post('/gestion-diaria/ejecucion', payload);
 
@@ -523,8 +569,35 @@ export const AgendaProvider = ({ children }) => {
                 mappedSegments[segmentName] = currentAgenda.segments[segmentName].map(v => {
                     const herramientaStr = v.herramientaAplicar || v.herramientaAplicada;
 
+                    // Función para limpiar números
+                    const cleanNum = (val) => {
+                        if (val === null || val === undefined || val === '') return null;
+                        const parsed = Number(String(val).replace(/[^0-9.-]+/g, ""));
+                        return isNaN(parsed) ? null : parsed;
+                    };
+
+                    const { herramientaAplicada, herramientaAplicar, ...cleanVisit } = v;
+                    
+                    const estAmount = cleanNum(v.estimatedAmount);
+                    const aRate = cleanNum(v.annualRate);
+
                     return {
-                        ...v,
+                        ...cleanVisit,                        
+                        estimatedAmount: estAmount !== null ? String(estAmount) : null,
+                        annualRate: aRate !== null ? String(aRate) : null,
+
+                        montoAmortizacion: cleanNum(v.montoAmortizacion),
+                        montoRequeridoCorriente: cleanNum(v.montoRequeridoCorriente),
+                        saldoInicioMes: cleanNum(v.saldoInicioMes),
+                        saldoActual: cleanNum(v.saldoActual),
+                        saldoOcupado: cleanNum(v.saldoOcupado),
+                        saldoDisponible: cleanNum(v.saldoDisponible),
+                        moraInicioMes: cleanNum(v.moraInicioMes),
+                        moraActual: cleanNum(v.moraActual),
+                        moraDays: cleanNum(v.moraDays),
+                        
+                        herramientaAplicada: herramientaStr,
+                        
                         idProducto: findCatalogId(catalogos.productos, v.product),
                         idSubProducto: findCatalogId(catalogos.subproductos, v.subProduct),
                         idPrograma: findCatalogId(catalogos.programas, v.program),
@@ -534,19 +607,29 @@ export const AgendaProvider = ({ children }) => {
                 });
             });
 
+            // 4. Limpiamos también los KPIs para que viajen como Números y no como Strings
+            const numericKpis = {};
+            Object.keys(currentAgenda.kpiCompromisos || {}).forEach(k => {
+                 const val = currentAgenda.kpiCompromisos[k];
+                 numericKpis[k] = val ? Number(String(val).replace(/[^0-9.-]+/g,"")) : 0;
+            });
+
             const payload = {
                 idPlan: currentAgenda.id,
                 idArea: idAreaMapeado,
-                kpiCompromisos: currentAgenda.kpiCompromisos,
+                kpiCompromisos: numericKpis,
                 segments: mappedSegments 
             };
 
             const response = await api.post(`/agenda/plan/certificar`, payload);
 
             if (response.data && response.data.codigo === 'OK') {
+                const realId = response.data.contenido?.id || prev.id;
+                agendaIdRef.current = realId;
+
                 setCurrentAgenda(prev => ({
                     ...prev,
-                    id: response.data.contenido?.id || prev.id,
+                    id: realId, 
                     status: 'pendiente', 
                     segments: {
                         'Promoción': [], 'Evaluación e Integración': [], 'Seguimiento de Cartera': [], 'Gestión de Empresarias': []
