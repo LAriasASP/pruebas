@@ -4,7 +4,7 @@ import { useAgenda } from '../../context/AgendaContext';
 import { Target, Lock, TrendingUp, DollarSign, Users, Activity, Loader2 } from 'lucide-react';
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 1. Funciones Auxiliares para Formato
+// 1. Funciones Auxiliares para Formato y Validación (BLINDADAS)
 // ──────────────────────────────────────────────────────────────────────────────
 const formatCurrency = (val) => {
     if (!val && val !== 0) return '$0.00';
@@ -20,18 +20,30 @@ const formatQuantity = (val) => {
     return new Intl.NumberFormat('es-MX').format(num);
 };
 
-const handleNumericChange = (value, tipo, callback) => {
+const handleNumericChange = (e, tipo, callback) => {
+    let value = e.target.value;
+    let finalValue = '';
+
     if (tipo === 'CANTIDAD') {
-        // Solo permite números enteros (remueve todo lo que no sea dígito)
-        const clean = value.replace(/\D/g, '');
-        callback(clean);
+        finalValue = value.replace(/\D/g, '');
+        if (finalValue !== '' && parseInt(finalValue, 10) > 100000000) {
+            finalValue = '100000000';
+        }
     } else {
-        // Permite números y un solo punto decimal para MONEDA
         let clean = value.replace(/[^\d.]/g, '');
         const parts = clean.split('.');
         if (parts.length > 2) clean = parts[0] + '.' + parts.slice(1).join('');
-        callback(clean);
+        
+        let numericVal = parseFloat(clean);
+        if (!isNaN(numericVal) && numericVal > 100000000) {
+            finalValue = '100000000';
+        } else {
+            finalValue = clean;
+        }
     }
+
+    e.target.value = finalValue;
+    callback(finalValue === '' ? '' : finalValue);
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -59,12 +71,10 @@ const colorMap = {
 const KpiField = ({ label, fieldKey, value, tipoValor, onChange, disabled }) => {
     const [isFocused, setIsFocused] = useState(false);
 
-    // Formateamos visualmente dependiendo de lo que dictó la BD
     const displayValue = isFocused 
         ? (value || '') 
         : (tipoValor === 'CANTIDAD' ? formatQuantity(value) : formatCurrency(value));
 
-    // El placeholder también cambia para dar mejor retroalimentación al usuario
     const placeholderText = tipoValor === 'CANTIDAD' ? '0' : '$ 0.00';
 
     return (
@@ -79,12 +89,13 @@ const KpiField = ({ label, fieldKey, value, tipoValor, onChange, disabled }) => 
                     value={displayValue}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
-                    // Pasamos el tipo a la función de validación
-                    onChange={(e) => handleNumericChange(e.target.value, tipoValor, (val) => onChange(fieldKey, val))}
+                    onChange={(e) => handleNumericChange(e, tipoValor, (val) => onChange(fieldKey, val))}
                     disabled={disabled}
                     placeholder={placeholderText}
-                    className={`input-cell font-bold text-center text-primary tracking-wider transition-all w-full !py-3
-                        ${disabled ? 'opacity-50 cursor-not-allowed bg-slate-50 text-slate-400' : 'hover:border-blue-300 focus:border-blue-500'}`
+                    className={`input-cell font-bold text-center tracking-wider transition-all w-full !py-3
+                        ${disabled 
+                            ? '!bg-slate-50 text-slate-400 !shadow-inner border-slate-200 cursor-not-allowed' 
+                            : '!bg-white text-primary hover:border-blue-300 focus:border-blue-500'}`
                     }
                 />
                 {disabled && (
@@ -113,7 +124,6 @@ const KpiGroup = ({ group, color, iconName, fields, kpi, onUpdate, disabled }) =
                         key={f.key}
                         label={f.label}
                         fieldKey={f.key}
-                        // MAGIA AQUÍ: Traducimos el booleano 'count' del backend a nuestro Tipo
                         tipoValor={f.count ? 'CANTIDAD' : 'MONEDA'} 
                         value={kpi[f.key]}
                         onChange={onUpdate}
@@ -129,11 +139,15 @@ const KpiGroup = ({ group, color, iconName, fields, kpi, onUpdate, disabled }) =
 // 4. Componente Principal
 // ──────────────────────────────────────────────────────────────────────────────
 
-const KpiCompromisos = () => {
+const KpiCompromisos = ({ disabled: isSubmitting }) => {
     const { selectedRole } = useRole();
     const { currentAgenda, updateKpi, kpiConfig, loadingKpiConfig } = useAgenda();
 
-    const isLocked = currentAgenda.status === 'pendiente' || currentAgenda.status === 'aprobada';
+    // Verificamos si la agenda ya está bloqueada por base de datos
+    const isStatusLocked = currentAgenda.status === 'pendiente' || currentAgenda.status === 'aprobada';
+    
+    const isLocked = isStatusLocked || isSubmitting;
+    
     const kpi = currentAgenda.kpiCompromisos || {};
 
     if (selectedRole?.category !== 'Operativo') return null;
@@ -159,20 +173,20 @@ const KpiCompromisos = () => {
                         Compromisos KPI del Día
                     </h3>
                 </div>
-                {isLocked ? (
+                {isStatusLocked ? (
                     <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest bg-white/10 px-5 py-2.5 rounded-2xl border border-white/10 text-white/60">
                         <Lock size={12} />
                         Comprometido
                     </div>
                 ) : (
                     <div className="text-[9px] font-black uppercase tracking-widest text-white/50">
-                        Obligatorio · Planeación
+                        {isSubmitting ? 'Guardando...' : 'Obligatorio · Planeación'}
                     </div>
                 )}
             </div>
 
             <div className="bg-white rounded-b-3xl border-x border-b border-slate-100 shadow-xl shadow-slate-200/50 p-6 md:p-8 space-y-8">
-                {isLocked && (
+                {isStatusLocked && (
                     <div className="flex items-center gap-3 bg-amber-50 border border-amber-100 text-amber-700 px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest">
                         <Lock size={13} />
                         Los compromisos están bloqueados. La agenda ya fue enviada para autorización.
@@ -188,7 +202,7 @@ const KpiCompromisos = () => {
                         fields={group.fields}
                         kpi={kpi}
                         onUpdate={updateKpi}
-                        disabled={isLocked}
+                        disabled={isLocked} 
                     />
                 ))}
             </div>

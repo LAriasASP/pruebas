@@ -45,7 +45,7 @@ const useDynamicUI = () => {
             };
         });
         config['Visita No Planeada'] = { label: 'IMPREV', dot: 'bg-rose-500', badge: 'bg-rose-50 text-rose-700' };
-        config['Imprevisto'] = { label: 'IMPREV', dot: 'bg-rose-500', badge: 'bg-rose-50 text-rose-700' }; // Por si acaso hay locales
+        config['Imprevisto'] = { label: 'IMPREV', dot: 'bg-rose-500', badge: 'bg-rose-50 text-rose-700' }; 
         return config;
     }, [bloques]);
 
@@ -66,34 +66,34 @@ const useDynamicUI = () => {
     }, [resultadosGestion]);
 
     const MOCK_RESULTADOS = useMemo(() => {
-        if (resultadosGestion.length === 0) return ['Realizado', 'No realizado'];
-        return resultadosGestion.map(r => r.nombre);
+        if (resultadosGestion.length === 0) return ['REALIZADO', 'NO REALIZADO'];
+        return resultadosGestion.map(r => r.nombre.toUpperCase());
     }, [resultadosGestion]);
 
     const STATUS_STYLES = useMemo(() => {
         const config = {};
         estadosAgenda.forEach(est => {
             const key = est.nombre.toLowerCase();
-            if (key.includes('borrador')) config[key] = { label: est.nombre, bg: 'bg-slate-100', text: 'text-slate-500', dot: 'bg-slate-400' };
-            else if (key.includes('pendient')) config[key] = { label: est.nombre, bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-400' };
-            else if (key.includes('aprobada') || key.includes('autoriz')) config[key] = { label: est.nombre, bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' };
-            else if (key.includes('modif') || key.includes('rechaz')) config[key] = { label: est.nombre, bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' };
-            else config[key] = { label: est.nombre, bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-500' };
+            const upperLabel = String(est.nombre).toUpperCase();
+            if (key.includes('borrador')) config[key] = { label: upperLabel, bg: 'bg-slate-100', text: 'text-slate-500', dot: 'bg-slate-400' };
+            else if (key.includes('pendient')) config[key] = { label: upperLabel, bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-400' };
+            else if (key.includes('aprobada') || key.includes('autoriz')) config[key] = { label: upperLabel, bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' };
+            else if (key.includes('modif') || key.includes('rechaz')) config[key] = { label: upperLabel, bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' };
+            else config[key] = { label: upperLabel, bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-500' };
         });
         
-        // Salvavidas por si el catálogo no carga a tiempo
-        if (!config['borrador']) config['borrador'] = { label: 'Borrador', bg: 'bg-slate-100', text: 'text-slate-500', dot: 'bg-slate-400' };
-        if (!config['pendiente']) config['pendiente'] = { label: 'Pendiente', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-400' };
-        if (!config['aprobada']) config['aprobada'] = { label: 'Autorizada', bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' };
-        if (!config['requiere_modificacion']) config['requiere_modificacion'] = { label: 'Req. Modificación', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' };
+        if (!config['borrador']) config['borrador'] = { label: 'BORRADOR', bg: 'bg-slate-100', text: 'text-slate-500', dot: 'bg-slate-400' };
+        if (!config['pendiente']) config['pendiente'] = { label: 'PENDIENTE', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-400' };
+        if (!config['aprobada']) config['aprobada'] = { label: 'AUTORIZADA', bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' };
+        if (!config['requiere_modificacion']) config['requiere_modificacion'] = { label: 'REQ. MODIFICACIÓN', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' };
         
         return config;
     }, [estadosAgenda]);
 
     const blockedScreenCfg = useMemo(() => ({
-        borrador: { Icon: FileText, bg: 'bg-slate-50', ic: 'text-slate-400', title: 'Agenda no certificada', msg: 'Completa y certifica tu agenda en Planeación para habilitar la ejecución.' },
-        pendiente: { Icon: Clock, bg: 'bg-amber-50', ic: 'text-amber-500', title: 'Esperando autorización', msg: 'Tu agenda está en revisión. Tu jefe debe aprobarla antes de que puedas iniciar la ruta.' },
-        requiere_modificacion: { Icon: AlertCircle, bg: 'bg-red-50', ic: 'text-red-500', title: 'Requiere modificaciones', msg: 'Tu jefe solicitó ajustes. Revisa la pestaña Planeación, corrige y re-certifica.' },
+        borrador: { Icon: FileText, bg: 'bg-slate-50', ic: 'text-slate-400', title: 'AGENDA NO CERTIFICADA', msg: 'COMPLETA Y CERTIFICA TU AGENDA EN PLANEACIÓN PARA HABILITAR LA EJECUCIÓN.' },
+        pendiente: { Icon: Clock, bg: 'bg-amber-50', ic: 'text-amber-500', title: 'ESPERANDO AUTORIZACIÓN', msg: 'TU AGENDA ESTÁ EN REVISIÓN. TU JEFE DEBE APROBARLA ANTES DE QUE PUEDAS INICIAR LA RUTA.' },
+        requiere_modificacion: { Icon: AlertCircle, bg: 'bg-red-50', ic: 'text-red-500', title: 'REQUIERE MODIFICACIONES', msg: 'TU JEFE SOLICITÓ AJUSTES. REVISA LA PESTAÑA PLANEACIÓN, CORRIGE Y RE-CERTIFICA.' },
     }), []);
 
     return { SEG_CFG, RESULTADO_BADGE, MOCK_RESULTADOS, STATUS_STYLES, blockedScreenCfg };
@@ -105,7 +105,23 @@ const DynamicUIContext = createContext();
 const useDynamicUIContext = () => useContext(DynamicUIContext);
 
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers BLINDADOS ────────────────────────────────────────────────────────
+const handleNumericChange = (e, callback, limit = null) => {
+    let cleanValue = String(e.target.value).replace(/\D/g, '');
+    if (limit && cleanValue.length > limit) {
+        cleanValue = cleanValue.slice(0, limit);
+    }
+    e.target.value = cleanValue; 
+    callback(cleanValue === '' ? '' : Number(cleanValue));
+};
+
+const formatCurrency = (val) => {
+    if (val === '' || val === null || val === undefined) return '';
+    const num = parseFloat(val);
+    if (isNaN(num)) return '';
+    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(num);
+};
+
 const ProgressRing = ({ done, total, size = 68 }) => {
     const r = (size - 10) / 2;
     const circ = 2 * Math.PI * r;
@@ -129,13 +145,13 @@ const ProgressRing = ({ done, total, size = 68 }) => {
 const SegBadge = ({ seg }) => {
     const { SEG_CFG } = useDynamicUIContext();
     const c = SEG_CFG[seg] || SEG_CFG['Imprevisto'] || { badge: 'bg-slate-100 text-slate-700', label: 'OTRO' };
-    return <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${c.badge}`}>{c.label}</span>;
+    return <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${c.badge}`}>{String(c.label).toUpperCase()}</span>;
 };
 
 const ResultBadge = ({ resultado }) => {
     const { RESULTADO_BADGE } = useDynamicUIContext();
     const cls = RESULTADO_BADGE[resultado] || 'bg-slate-100 text-slate-600';
-    return <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide ${cls}`}>{resultado}</span>;
+    return <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide ${cls}`}>{String(resultado).toUpperCase()}</span>;
 };
 
 const nowTimeStr = () => {
@@ -144,8 +160,6 @@ const nowTimeStr = () => {
 };
 
 // ── GPS Hook ─────────────────────────────────────────────────────────────────
-// RF-06 / CA-02: La geolocalización es obligatoria. Exponemos errorCode para
-// poder distinguir "permiso denegado" (1) de "no disponible / timeout" (2/3).
 const useGPS = (active) => {
     const [state, setState] = useState({ status: 'idle', lat: null, lng: null, errorCode: null, capturedAt: null });
 
@@ -185,8 +199,8 @@ const BlockedScreen = ({ status }) => {
             <div className={`w-24 h-24 rounded-full ${c.bg} flex items-center justify-center mb-8`}>
                 <c.Icon size={40} className={c.ic} />
             </div>
-            <h2 className="text-2xl font-black text-primary uppercase tracking-tight mb-3">{c.title}</h2>
-            <p className="text-sm text-accent font-medium leading-relaxed max-w-xs">{c.msg}</p>
+            <h2 className="text-2xl font-black text-primary uppercase tracking-tight mb-3">{String(c.title).toUpperCase()}</h2>
+            <p className="text-sm text-accent font-black uppercase leading-relaxed max-w-xs">{String(c.msg).toUpperCase()}</p>
         </div>
     );
 };
@@ -207,7 +221,6 @@ const YesNo = ({ id, value, onChange }) => (
 const CARTERA_SEGS = ['Seguimiento de Cartera', 'Gestión de Empresarias'];
 
 const CheckInModal = ({ visit, onClose, onSubmit }) => {
-    // 1. Agregamos useRole y extraemos tiposGestion del catálogo
     const { selectedRole } = useRole();
     const { 
         motivosNoVisita = [], 
@@ -215,12 +228,11 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
         motivosNoActividad = [], 
         resultadosGestion = [], 
         subEstatus = [],
-        tiposGestion = [] // NUEVO: Extraemos el catálogo
+        tiposGestion = [] 
     } = useCatalogs() || {};
 
     const isCarteraSegment = CARTERA_SEGS.includes(visit._segment);
 
-    // 2. Filtramos los tipos de gestión según el rol (igual que en UnplannedForm)
     const tiposGestionFiltrados = useMemo(() => {
         if (!tiposGestion || tiposGestion.length === 0) return [];
         const canal = selectedRole?.canal?.toUpperCase();
@@ -238,7 +250,6 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
         motivoNoVisita: '',
         motivoNoActividad: '',
         resultado: '',
-        // 3. NUEVO: Inicializamos tipoGestion con lo planeado (o vacío si no se planeó)
         tipoGestion: visit.activity || visit.typeVisitManagement || visit.typeManagement || visit.typeIntegration || '',
         subestatus: 'N/A',
         estatusCartera: '',
@@ -247,7 +258,6 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
     });
     
     const [alertConfig, setAlertConfig] = useState({ isOpen: false, message: '', focusId: null });
-    // RF-06 / CA-02: Modal específico para errores de GPS (obligatorio)
     const [gpsErrorModal, setGpsErrorModal] = useState({ isOpen: false, message: '' });
     const [photoPreview, setPhotoPreview] = useState(null);
     const [startMs] = useState(() => Date.now());
@@ -255,8 +265,8 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
     const gps = useGPS(true);
     const fileRef = useRef(null);
 
-    const isCompromiso = form.resultado?.toLowerCase().includes('compromiso');
-    const isPromesa = form.resultado?.toLowerCase().includes('promesa');
+    const isCompromiso = String(form.resultado).toUpperCase().includes('COMPROMISO');
+    const isPromesa = String(form.resultado).toUpperCase().includes('PROMESA');
     const needsAmountDate = isCompromiso || isPromesa;
     const visitaNoRealizada = form.visitaRealizada === false;
 
@@ -286,30 +296,27 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
     };
 
     const validateForm = () => {
-        if (form.visitaRealizada === null) return { msg: 'Indica si se realizó la visita.', id: 'visitaRealizada' };
+        if (form.visitaRealizada === null) return { msg: 'INDICA SI SE REALIZÓ LA VISITA.', id: 'visitaRealizada' };
         
         if (visitaNoRealizada) {
-            if (!form.motivoNoVisita) return { msg: 'Selecciona el motivo por el cual no se realizó la visita.', id: 'motivoNoVisita' };
+            if (!form.motivoNoVisita) return { msg: 'SELECCIONA EL MOTIVO POR EL CUAL NO SE REALIZÓ LA VISITA.', id: 'motivoNoVisita' };
         } else {
-            // 4. NUEVO: Validación estricta para asegurar que siempre haya una actividad
             if (!form.tipoGestion || form.tipoGestion.trim() === '') {
-                return { msg: 'Por favor, captura el Tipo de Gestión o Actividad realizada.', id: 'tipoGestion' };
+                return { msg: 'POR FAVOR, CAPTURA EL TIPO DE GESTIÓN O ACTIVIDAD REALIZADA.', id: 'tipoGestion' };
             }
 
             if (isCarteraSegment) {
-                if (form.clienteEncontrado === null) return { msg: 'Indica si encontraste al cliente.', id: 'clienteEncontrado' };
-                if (!form.resultado) return { msg: 'Selecciona el estatus actualizado de la cartera.', id: 'resultadoCartera' };
+                if (form.clienteEncontrado === null) return { msg: 'INDICA SI ENCONTRASTE AL CLIENTE.', id: 'clienteEncontrado' };
+                if (!form.resultado) return { msg: 'SELECCIONA EL ESTATUS ACTUALIZADO DE LA CARTERA.', id: 'resultadoCartera' };
             } else {
-                if (form.actividadRealizada === null) return { msg: 'Indica si se completó la actividad.', id: 'actividadRealizada' };
-                if (form.actividadRealizada === false && !form.motivoNoActividad) return { msg: 'Selecciona el motivo por el que no se realizó la actividad.', id: 'motivoNoActividad' };
-                if (form.actividadRealizada === true && !form.resultado) return { msg: 'Selecciona el resultado de la gestión.', id: 'resultadoGestion' };
+                if (form.actividadRealizada === null) return { msg: 'INDICA SI SE COMPLETÓ LA ACTIVIDAD.', id: 'actividadRealizada' };
+                if (form.actividadRealizada === false && !form.motivoNoActividad) return { msg: 'SELECCIONA EL MOTIVO POR EL QUE NO SE REALIZÓ LA ACTIVIDAD.', id: 'motivoNoActividad' };
+                if (form.actividadRealizada === true && !form.resultado) return { msg: 'SELECCIONA EL RESULTADO DE LA GESTIÓN.', id: 'resultadoGestion' };
             }
 
-            // RF-08 / CA-03: Promesa o Compromiso de Pago → Monto y Fecha son
-            // estrictamente obligatorios en CUALQUIER segmento.
             if (needsAmountDate) {
-                if (!form.pagoMonto) return { msg: 'Especifica el Monto de la Promesa/Compromiso de Pago.', id: 'pagoMonto' };
-                if (!form.pagoFecha) return { msg: 'Especifica la Fecha de la Promesa/Compromiso de Pago.', id: 'pagoFecha' };
+                if (!form.pagoMonto) return { msg: 'ESPECIFICA EL MONTO DE LA PROMESA O COMPROMISO.', id: 'pagoMonto' };
+                if (!form.pagoFecha) return { msg: 'ESPECIFICA LA FECHA DE LA PROMESA O COMPROMISO.', id: 'pagoFecha' };
             }
         }
         return null;
@@ -324,47 +331,45 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
             return;
         }
 
-        // RF-06 / CA-02: Georreferenciación obligatoria
         if (gps.status === 'loading') {
             setGpsErrorModal({
                 isOpen: true,
-                message: 'Aún estamos obteniendo tu ubicación GPS. Por favor espera unos segundos y vuelve a intentarlo.'
+                message: 'AÚN ESTAMOS OBTENIENDO TU UBICACIÓN GPS. POR FAVOR ESPERA UNOS SEGUNDOS Y VUELVE A INTENTARLO.'
             });
             return;
         }
         if (gps.status !== 'ok' || !gps.lat || !gps.lng) {
             const msg = gps.errorCode === 1
-                ? 'La geolocalización es obligatoria para registrar la visita. Habilita el permiso de ubicación en tu navegador o dispositivo y vuelve a intentarlo.'
-                : 'No fue posible obtener tu ubicación GPS. La geolocalización es obligatoria para registrar la visita. Verifica tu señal y vuelve a intentarlo.';
+                ? 'LA GEOLOCALIZACIÓN ES OBLIGATORIA PARA REGISTRAR LA VISITA. HABILITA EL PERMISO DE UBICACIÓN EN TU NAVEGADOR Y VUELVE A INTENTARLO.'
+                : 'NO FUE POSIBLE OBTENER TU UBICACIÓN GPS. VERIFICA TU SEÑAL Y VUELVE A INTENTARLO.';
             setGpsErrorModal({ isOpen: true, message: msg });
             return;
         }
 
         const durationMin = Math.round((Date.now() - startMs) / 60000);
-        const resultadoBase = visitaNoRealizada ? 'No realizada' : form.resultado;
+        const resultadoBase = visitaNoRealizada ? 'NO REALIZADA' : String(form.resultado).toUpperCase();
 
         let resultadoConcatenado = resultadoBase;
         resultadoConcatenado += ` | GPS: ${gps.lat}, ${gps.lng}`;
 
         if (needsAmountDate && form.pagoMonto && form.pagoFecha) {
-            resultadoConcatenado += ` | Promesa: $${form.pagoMonto} (${form.pagoFecha})`;
+            resultadoConcatenado += ` | PROMESA: $${form.pagoMonto} (${form.pagoFecha})`;
         }
 
         if (form.notes && form.notes.trim() !== '') {
-            resultadoConcatenado += ` | Notas: ${form.notes.trim()}`;
+            resultadoConcatenado += ` | NOTAS: ${String(form.notes).trim().toUpperCase()}`;
         }
 
         onSubmit({
             ...form,
             resultado: resultadoConcatenado,
-            tipoGestion: form.tipoGestion || '—',
+            tipoGestion: String(form.tipoGestion || '—').toUpperCase(),
             checkInTime: nowTimeStr(),
             visitaOpenTime: openTime,
             visitaDuration: durationMin,
             latitud: gps.lat,
             longitud: gps.lng,
             timestampLocal: gps.capturedAt || new Date().toISOString(),
-            // Compatibilidad hacia atrás con el payload previo
             lat: gps.lat, lng: gps.lng, gpsStatus: gps.status
         });
     };
@@ -377,12 +382,12 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                 {/* ── HEADER ── */}
                 <div className="sticky top-0 bg-white px-6 pt-6 pb-4 border-b border-slate-100 flex items-start justify-between z-10">
                     <div>
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Registrar Gestión</p>
-                        <h3 className="text-[15px] font-black text-primary uppercase leading-tight mt-0.5">{visit.name}</h3>
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">REGISTRAR GESTIÓN</p>
+                        <h3 className="text-[15px] font-black text-primary uppercase leading-tight mt-0.5">{String(visit.name).toUpperCase()}</h3>
                         <div className="flex items-center gap-2 mt-1">
                             <SegBadge seg={visit._segment} />
                             {(visit.typeVisitManagement || visit.typeManagement) && (
-                                <span className="text-[9px] text-slate-400 font-semibold">{visit.typeVisitManagement || visit.typeManagement}</span>
+                                <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{String(visit.typeVisitManagement || visit.typeManagement).toUpperCase()}</span>
                             )}
                         </div>
                     </div>
@@ -395,106 +400,105 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                 <div className="px-6 py-5 space-y-5">
                     <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest ${gps.status === 'ok' ? 'bg-emerald-50 text-emerald-700' : gps.status === 'error' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
                         {gps.status === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
-                        {gps.status === 'loading' && 'Capturando coordenadas GPS...'}
+                        {gps.status === 'loading' && 'CAPTURANDO COORDENADAS GPS...'}
                         {gps.status === 'ok' && `GPS: ${gps.lat}, ${gps.lng}`}
-                        {gps.status === 'error' && 'Ubicación no disponible — GPS obligatorio'}
-                        {gps.status === 'idle' && 'Inicializando...'}
+                        {gps.status === 'error' && 'UBICACIÓN NO DISPONIBLE — GPS OBLIGATORIO'}
+                        {gps.status === 'idle' && 'INICIALIZANDO...'}
                         {gps.status === 'error' && (
                             <button
                                 type="button"
                                 onClick={gps.retry}
-                                className="ml-auto bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded-lg text-[9px] tracking-widest"
+                                className="ml-auto bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded-lg text-[9px] tracking-widest font-black uppercase"
                             >
-                                Reintentar
+                                REINTENTAR
                             </button>
                         )}
                     </div>
 
                     <div>
-                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-1">¿Se realizó la visita?</label>
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-1">¿SE REALIZÓ LA VISITA?</label>
                         <YesNo id="visitaRealizada" value={form.visitaRealizada} onChange={v => setForm(p => ({ ...p, visitaRealizada: v, clienteEncontrado: null, actividadRealizada: null, motivoNoVisita: '' }))} />
                     </div>
 
                     {visitaNoRealizada && (
                         <div className="animate-in fade-in duration-200 bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-3">
-                            <p className="text-[8px] font-black text-amber-700 uppercase tracking-widest">¿Por qué no se realizó?</p>
+                            <p className="text-[8px] font-black text-amber-700 uppercase tracking-widest">¿POR QUÉ NO SE REALIZÓ?</p>
                             <select id="motivoNoVisita" value={form.motivoNoVisita}
                                 onChange={e => setForm(p => ({ ...p, motivoNoVisita: e.target.value }))}
-                                className="input-cell focus:ring-rose-400">
-                                <option value="" disabled>Seleccionar motivo...</option>
-                                {motivosNoVisita.map(m => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
-                            </select>
-                        </div>
-                    )}
-
-                    {/* 6. NUEVO: Input/Select de Tipo de Gestión dinámico */}
-                    {!visitaNoRealizada && isCarteraSegment && form.visitaRealizada !== null && (
-                        <div className="animate-in fade-in duration-200">
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Tipo de Gestión *</label>
-                            <select id="tipoGestion" value={form.tipoGestion} onChange={e => setForm(p => ({ ...p, tipoGestion: e.target.value }))} className="input-cell focus:ring-rose-400">
-                                <option value="" disabled>Seleccionar tipo de gestión...</option>
-                                {tiposGestionFiltrados.map(t => <option key={t.id || t.nombre} value={t.nombre}>{t.nombre}</option>)}
+                                className="input-cell focus:ring-rose-400 font-bold uppercase text-[10px]">
+                                <option value="" disabled>SELECCIONAR MOTIVO...</option>
+                                {motivosNoVisita.map(m => <option key={m.id} value={m.nombre}>{String(m.nombre).toUpperCase()}</option>)}
                             </select>
                         </div>
                     )}
 
                     {!visitaNoRealizada && isCarteraSegment && form.visitaRealizada !== null && (
                         <div className="animate-in fade-in duration-200">
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-1 mt-5">¿Se encontró al cliente?</label>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">TIPO DE GESTIÓN *</label>
+                            <select id="tipoGestion" value={form.tipoGestion} onChange={e => setForm(p => ({ ...p, tipoGestion: e.target.value }))} className="input-cell focus:ring-rose-400 font-bold uppercase text-[10px]">
+                                <option value="" disabled>SELECCIONAR TIPO DE GESTIÓN...</option>
+                                {tiposGestionFiltrados.map(t => <option key={t.id || t.nombre} value={t.nombre}>{String(t.nombre).toUpperCase()}</option>)}
+                            </select>
+                        </div>
+                    )}
+
+                    {!visitaNoRealizada && isCarteraSegment && form.visitaRealizada !== null && (
+                        <div className="animate-in fade-in duration-200">
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 block pl-1 mt-5">¿SE ENCONTRÓ AL CLIENTE?</label>
                             <YesNo id="clienteEncontrado" value={form.clienteEncontrado} onChange={v => setForm(p => ({ ...p, clienteEncontrado: v }))} />
                         </div>
                     )}
 
                     {!visitaNoRealizada && isCarteraSegment && form.clienteEncontrado !== null && (
                         <div className="animate-in fade-in duration-200">
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Actualizar Estatus de Cartera *</label>
-                            <select id="resultadoCartera" value={form.resultado} onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))} className="input-cell focus:ring-rose-400">
-                                <option value="" disabled>Seleccionar resultado...</option>
-                                {estatusCartera.map(e => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">ACTUALIZAR ESTATUS DE CARTERA *</label>
+                            <select id="resultadoCartera" value={form.resultado} onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))} className="input-cell focus:ring-rose-400 font-bold uppercase text-[10px]">
+                                <option value="" disabled>SELECCIONAR RESULTADO...</option>
+                                {estatusCartera.map(e => <option key={e.id} value={e.nombre}>{String(e.nombre).toUpperCase()}</option>)}
                             </select>
                         </div>
                     )}
 
                     {!visitaNoRealizada && !isCarteraSegment && form.visitaRealizada !== null && (
                         <div className="animate-in fade-in duration-200 bg-violet-50 border border-violet-100 rounded-2xl p-4 space-y-3">
-                            <label className="text-[8px] font-black text-violet-500 uppercase tracking-widest mb-1 block">Actividad Planeada / Realizada *</label>
-                            <input id="tipoGestion" type="text" value={form.tipoGestion} onChange={e => setForm(p => ({ ...p, tipoGestion: e.target.value }))} className="input-cell bg-white focus:ring-violet-400 w-full" placeholder="Describe la actividad..." />
+                            <label className="text-[8px] font-black text-violet-500 uppercase tracking-widest mb-1 block">ACTIVIDAD PLANEADA / REALIZADA *</label>
+                            <input id="tipoGestion" type="text" value={form.tipoGestion} onChange={e => setForm(p => ({ ...p, tipoGestion: String(e.target.value).toUpperCase() }))} className="input-cell bg-white focus:ring-violet-400 w-full font-bold uppercase text-[10px]" placeholder="DESCRIBE LA ACTIVIDAD..." />
 
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mt-4">¿Se completó la actividad?</label>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mt-4">¿SE COMPLETÓ LA ACTIVIDAD?</label>
                             <YesNo id="actividadRealizada" value={form.actividadRealizada} onChange={v => setForm(p => ({ ...p, actividadRealizada: v, motivoNoActividad: '' }))} />
                         </div>
                     )}
 
                     {!visitaNoRealizada && !isCarteraSegment && form.actividadRealizada === false && (
                         <div className="animate-in fade-in duration-200 bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-3">
-                            <p className="text-[8px] font-black text-amber-700 uppercase tracking-widest">¿Por qué no se realizó la actividad?</p>
+                            <p className="text-[8px] font-black text-amber-700 uppercase tracking-widest">¿POR QUÉ NO SE REALIZÓ LA ACTIVIDAD?</p>
                             <select id="motivoNoActividad" value={form.motivoNoActividad || ''}
                                 onChange={e => setForm(p => ({ ...p, motivoNoActividad: e.target.value }))}
-                                className="input-cell focus:ring-rose-400">
-                                <option value="" disabled>Seleccionar motivo...</option>
-                                {motivosNoActividad.map(m => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
+                                className="input-cell focus:ring-rose-400 font-bold uppercase text-[10px]">
+                                <option value="" disabled>SELECCIONAR MOTIVO...</option>
+                                {motivosNoActividad.map(m => <option key={m.id} value={m.nombre}>{String(m.nombre).toUpperCase()}</option>)}
                             </select>
                         </div>
                     )}
 
                     {!visitaNoRealizada && !isCarteraSegment && form.actividadRealizada === true && (
                         <div className="animate-in fade-in duration-200">
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Resultado de la Gestión</label>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">RESULTADO DE LA GESTIÓN</label>
                             <select id="resultadoGestion" value={form.resultado}
                                 onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))}
-                                className="input-cell focus:ring-rose-400">
-                                <option value="" disabled>Seleccionar resultado...</option>
-                                {resultadosGestion.map(r => <option key={r.id} value={r.nombre}>{r.nombre}</option>)}
+                                className="input-cell focus:ring-rose-400 font-bold uppercase text-[10px]">
+                                <option value="" disabled>SELECCIONAR RESULTADO...</option>
+                                {resultadosGestion.map(r => <option key={r.id} value={r.nombre}>{String(r.nombre).toUpperCase()}</option>)}
                             </select>
                         </div>
                     )}
 
                     {!visitaNoRealizada && isCarteraSegment && form.resultado && form.resultado !== '' && (
                         <div className="animate-in fade-in duration-200">
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Sub-estatus</label>
-                            <select value={form.subestatus} onChange={e => setForm(p => ({ ...p, subestatus: e.target.value }))} className="input-cell">
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">SUB-ESTATUS</label>
+                            <select value={form.subestatus} onChange={e => setForm(p => ({ ...p, subestatus: e.target.value }))} className="input-cell font-bold uppercase text-[10px]">
                                 <option value="N/A">N/A</option>
-                                {subEstatus.map(s => <option key={s.id} value={s.nombre}>{s.nombre}</option>)}
+                                {subEstatus.map(s => <option key={s.id} value={s.nombre}>{String(s.nombre).toUpperCase()}</option>)}
                             </select>
                         </div>
                     )}
@@ -504,25 +508,26 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                             <div className="flex items-start gap-2">
                                 <div className="flex-1">
                                     <p className={`text-[9px] font-black uppercase tracking-widest ${isCompromiso ? 'text-blue-700' : 'text-indigo-700'}`}>
-                                        {isCompromiso ? 'Datos del Compromiso de Pago *' : 'Datos de la Promesa de Pago *'}
+                                        {isCompromiso ? 'DATOS DEL COMPROMISO DE PAGO *' : 'DATOS DE LA PROMESA DE PAGO *'}
                                     </p>
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                <div id="pagoMonto" tabIndex="-1" className="outline-none focus:ring-2 focus:ring-rose-400 rounded-xl">
                                     <FormattedNumberInput
-                                        label="¿Cuánto? *"
+                                        label="¿CUÁNTO? *"
                                         type="currency"
                                         value={form.pagoMonto}
                                         onChange={val => setForm(p => ({ ...p, pagoMonto: val }))}
                                         placeholder="$ 0.00"
+                                        className="font-bold text-[10px]"
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">¿Para cuándo? *</label>
+                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">¿PARA CUÁNDO? *</label>
                                     <input id="pagoFecha" type="date" value={form.pagoFecha}
                                         onChange={e => setForm(p => ({ ...p, pagoFecha: e.target.value }))}
-                                        className="input-cell focus:ring-rose-400" />
+                                        className="input-cell focus:ring-rose-400 font-bold uppercase text-[10px]" />
                                 </div>
                             </div>
                         </div>
@@ -530,15 +535,19 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
 
                     {decisionTomada && (
                         <div className="animate-in fade-in duration-200">
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Notas</label>
-                            <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-                                placeholder="Observaciones de la visita..." rows={3} className="input-cell resize-none" />
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">NOTAS</label>
+                            <textarea 
+                                value={form.notes} 
+                                onChange={e => setForm(p => ({ ...p, notes: String(e.target.value).toUpperCase() }))}
+                                placeholder="OBSERVACIONES DE LA VISITA..." 
+                                className="input-cell w-full !h-auto min-h-[120px] resize-y font-bold uppercase text-[10px] p-3 leading-relaxed" 
+                            />
                         </div>
                     )}
 
                     {decisionTomada && (
                         <div className="animate-in fade-in duration-200">
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Evidencia Fotográfica (Opcional)</label>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">EVIDENCIA FOTOGRÁFICA (OPCIONAL)</label>
                             <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhoto} />
                             {photoPreview ? (
                                 <div className="relative">
@@ -549,7 +558,7 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                             ) : (
                                 <button onClick={() => fileRef.current?.click()}
                                     className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-500 py-5 rounded-xl transition-colors text-[10px] font-black uppercase tracking-widest">
-                                    <Camera size={16} /> Adjuntar Foto
+                                    <Camera size={16} /> ADJUNTAR FOTO
                                 </button>
                             )}
                         </div>
@@ -560,33 +569,32 @@ const CheckInModal = ({ visit, onClose, onSubmit }) => {
                 <div className="sticky bottom-0 bg-white px-6 pb-6 pt-4 border-t border-slate-50">
                     <button onClick={submit}
                         className={`w-full py-5 rounded-[20px] text-[11px] font-black uppercase tracking-[0.3em] transition-all shadow-xl
-                        ${isReady ? 'bg-primary text-white hover:bg-blue-700 hover:scale-[1.02] active:scale-95' : 'bg-slate-50 border-2 border-slate-200 text-slate-400 opacity-70'}`}>
-                        Registrar Gestión
+                        ${isReady ? 'bg-primary text-white hover:bg-blue-700 hover:scale-[1.02] active:scale-95' : 'bg-slate-50 border-2 border-slate-200 text-slate-400 opacity-70 cursor-not-allowed'}`}>
+                        REGISTRAR GESTIÓN
                     </button>
                 </div>
             </div>
 
-            {/* MODAL DE ERROR DE VALIDACIÓN */}
+            {/* MODALES DE ERROR */}
             <UIModal
                 isOpen={alertConfig.isOpen}
                 onClose={handleCloseAlert}
                 type="warning"
-                title="Datos Incompletos"
+                title="DATOS INCOMPLETOS"
                 message={alertConfig.message}
                 showConfirmButton={true}
-                confirmButtonText="Completar"
+                confirmButtonText="COMPLETAR"
                 onConfirm={handleCloseAlert}
             />
 
-            {/* RF-06 / CA-02: Modal cuando el GPS es obligatorio y falla */}
             <UIModal
                 isOpen={gpsErrorModal.isOpen}
                 onClose={() => setGpsErrorModal({ isOpen: false, message: '' })}
                 type="danger"
-                title="Geolocalización Obligatoria"
+                title="GEOLOCALIZACIÓN OBLIGATORIA"
                 message={gpsErrorModal.message}
                 showConfirmButton={true}
-                confirmButtonText="Reintentar GPS"
+                confirmButtonText="REINTENTAR GPS"
                 onConfirm={() => {
                     setGpsErrorModal({ isOpen: false, message: '' });
                     if (gps.status !== 'loading') gps.retry();
@@ -609,15 +617,13 @@ const UnplannedForm = ({ onAdd, onCancel, isFrozen }) => {
 
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
-
-    // ESTADO PARA EL MODAL DE ERROR CON AUTO-FOCUS
     const [alertConfig, setAlertConfig] = useState({ isOpen: false, message: '', focusId: null });
-    // RF-06 / CA-02: GPS obligatorio para imprevistos
+    
     const gps = useGPS(true);
     const [gpsErrorModal, setGpsErrorModal] = useState({ isOpen: false, message: '' });
 
-    const isCompromiso = form.resultado.toLowerCase().includes('compromiso');
-    const isPromesa = form.resultado.toLowerCase().includes('promesa');
+    const isCompromiso = String(form.resultado).toUpperCase().includes('COMPROMISO');
+    const isPromesa = String(form.resultado).toUpperCase().includes('PROMESA');
     const needsAmountDate = isCompromiso || isPromesa;
     
     const tiposGestionFiltrados = useMemo(() => {
@@ -649,13 +655,22 @@ const UnplannedForm = ({ onAdd, onCancel, isFrozen }) => {
     const selectContact = (contact) => {
         setForm(p => ({
             ...p,
-            name: contact.nombre || contact.name,
+            name: String(contact.nombre || contact.name).toUpperCase(),
             idContacto: contact.id_contacto || contact.idContacto || contact.id || null
         }));
         setShowSuggestions(false);
     };
 
-    // Función auxiliar para cerrar la alerta y poner foco
+    const handleBlur = () => {
+        setTimeout(() => {
+            const exactMatch = directorio.find(item => (item.nombre || item.name || '').toUpperCase() === form.name.trim().toUpperCase());
+            if (!exactMatch && form.name.trim() !== '') {
+                setForm(p => ({ ...p, name: '', idContacto: null }));
+            }
+            setShowSuggestions(false);
+        }, 150);
+    };
+
     const handleCloseAlert = () => {
         setAlertConfig(prev => ({ ...prev, isOpen: false }));
         if (alertConfig.focusId) {
@@ -663,44 +678,40 @@ const UnplannedForm = ({ onAdd, onCancel, isFrozen }) => {
         }
     };
 
-    // NUEVO: Barrera de validación estricta
     const validateForm = () => {
-        if (!form.name || form.name.trim() === '') return { msg: 'Por favor, ingresa el Nombre del Cliente.', id: 'unplanned-name' };
-        if (!form.tipoGestion || form.tipoGestion === '') return { msg: 'Por favor, selecciona un Tipo de Gestión.', id: 'unplanned-tipo' };
-        if (!form.resultado || form.resultado === '') return { msg: 'Por favor, selecciona el Resultado de la visita.', id: 'unplanned-resultado' };
+        if (!form.name || form.name.trim() === '') return { msg: 'POR FAVOR, INGRESA UN NOMBRE VÁLIDO DE LA CARTERA DE CLIENTES.', id: 'unplanned-name' };
+        if (!form.tipoGestion || form.tipoGestion === '') return { msg: 'POR FAVOR, SELECCIONA UN TIPO DE GESTIÓN.', id: 'unplanned-tipo' };
+        if (!form.resultado || form.resultado === '') return { msg: 'POR FAVOR, SELECCIONA EL RESULTADO DE LA VISITA.', id: 'unplanned-resultado' };
         
         if (needsAmountDate) {
-            if (!form.pagoMonto) return { msg: 'Especifica el Monto de la promesa o compromiso.', id: 'unplanned-monto' };
-            if (!form.pagoFecha) return { msg: 'Especifica la Fecha de la promesa o compromiso.', id: 'unplanned-fecha' };
+            if (!form.pagoMonto) return { msg: 'ESPECIFICA EL MONTO DE LA PROMESA O COMPROMISO.', id: 'unplanned-monto' };
+            if (!form.pagoFecha) return { msg: 'ESPECIFICA LA FECHA DE LA PROMESA O COMPROMISO.', id: 'unplanned-fecha' };
         }
         return null;
     };
 
-    // Evaluamos en tiempo real si el formulario está listo
     const validationError = validateForm();
     const isReady = validationError === null;
     
     const submit = () => {
         if (isFrozen) return;
 
-        // Si la barrera detecta errores, abrimos el modal
         if (!isReady) {
             setAlertConfig({ isOpen: true, message: validationError.msg, focusId: validationError.id });
             return;
         }
 
-        // RF-06 / CA-02: Georreferenciación obligatoria también en imprevistos
         if (gps.status === 'loading') {
             setGpsErrorModal({
                 isOpen: true,
-                message: 'Aún estamos obteniendo tu ubicación GPS. Por favor espera unos segundos y vuelve a intentarlo.'
+                message: 'AÚN ESTAMOS OBTENIENDO TU UBICACIÓN GPS. POR FAVOR ESPERA UNOS SEGUNDOS Y VUELVE A INTENTARLO.'
             });
             return;
         }
         if (gps.status !== 'ok' || !gps.lat || !gps.lng) {
             const msg = gps.errorCode === 1
-                ? 'La geolocalización es obligatoria para registrar la visita. Habilita el permiso de ubicación en tu navegador o dispositivo y vuelve a intentarlo.'
-                : 'No fue posible obtener tu ubicación GPS. La geolocalización es obligatoria para registrar la visita. Verifica tu señal y vuelve a intentarlo.';
+                ? 'LA GEOLOCALIZACIÓN ES OBLIGATORIA PARA REGISTRAR LA VISITA. HABILITA EL PERMISO DE UBICACIÓN EN TU NAVEGADOR Y VUELVE A INTENTARLO.'
+                : 'NO FUE POSIBLE OBTENER TU UBICACIÓN GPS. VERIFICA TU SEÑAL Y VUELVE A INTENTARLO.';
             setGpsErrorModal({ isOpen: true, message: msg });
             return;
         }
@@ -710,15 +721,14 @@ const UnplannedForm = ({ onAdd, onCancel, isFrozen }) => {
             idContacto: form.idContacto,
             _segment: 'Imprevisto',
             checkInTime: nowTimeStr(),
-            tipoGestion: form.tipoGestion,
-            resultado: form.resultado,
-            notes: form.notes,
+            tipoGestion: String(form.tipoGestion).toUpperCase(),
+            resultado: String(form.resultado).toUpperCase(),
+            notes: String(form.notes).toUpperCase(),
             pagoMonto: form.pagoMonto,
             pagoFecha: form.pagoFecha,
             latitud: gps.lat,
             longitud: gps.lng,
             timestampLocal: gps.capturedAt || new Date().toISOString(),
-            // Compatibilidad con payload previo
             lat: gps.lat, lng: gps.lng, gpsStatus: gps.status
         });
     };
@@ -728,40 +738,39 @@ const UnplannedForm = ({ onAdd, onCancel, isFrozen }) => {
     return (
         <div className="mt-6 border-2 border-dashed border-rose-200 rounded-3xl p-6 bg-rose-50/30 animate-in slide-in-from-bottom-4 duration-300 space-y-4 relative">
             <div className="flex items-center justify-between">
-                <h4 className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Visita No Planeada</h4>
+                <h4 className="text-[10px] font-black text-rose-600 uppercase tracking-widest">VISITA NO PLANEADA</h4>
                 <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 transition-colors bg-white rounded-full p-1 shadow-sm">
                     <X size={15} />
                 </button>
             </div>
 
-            {/* RF-06 / CA-02: Banner GPS también en imprevistos */}
             <div className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest ${gps.status === 'ok' ? 'bg-emerald-50 text-emerald-700' : gps.status === 'error' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
                 {gps.status === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
-                {gps.status === 'loading' && 'Capturando coordenadas GPS...'}
+                {gps.status === 'loading' && 'CAPTURANDO COORDENADAS GPS...'}
                 {gps.status === 'ok' && `GPS: ${gps.lat}, ${gps.lng}`}
-                {gps.status === 'error' && 'Ubicación no disponible — GPS obligatorio'}
+                {gps.status === 'error' && 'UBICACIÓN NO DISPONIBLE — GPS OBLIGATORIO'}
                 {gps.status === 'error' && (
                     <button
                         type="button"
                         onClick={gps.retry}
-                        className="ml-auto bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded-lg text-[9px] tracking-widest"
+                        className="ml-auto bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded-lg text-[9px] tracking-widest font-black uppercase"
                     >
-                        Reintentar
+                        REINTENTAR
                     </button>
                 )}
             </div>
 
             <div className="relative">
-                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Nombre del Cliente *</label>
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">NOMBRE DEL CLIENTE *</label>
                 <input 
-                    id="unplanned-name" // <-- ID AGREGADO
+                    id="unplanned-name"
                     type="text" 
                     value={form.name} 
                     onChange={handleNameChange}
                     onFocus={() => form.name.length >= 2 && setShowSuggestions(true)}
-                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} 
-                    placeholder="Escribe para buscar en tu cartera..." 
-                    className="input-cell uppercase font-bold w-full focus:ring-rose-400" 
+                    onBlur={handleBlur} 
+                    placeholder="ESCRIBE PARA BUSCAR EN TU CARTERA..." 
+                    className="input-cell uppercase font-bold w-full focus:ring-rose-400 text-[10px]" 
                 />
                 
                 {showSuggestions && suggestions.length > 0 && (
@@ -769,9 +778,9 @@ const UnplannedForm = ({ onAdd, onCancel, isFrozen }) => {
                         {suggestions.map((s, i) => (
                             <li key={i}
                                 onMouseDown={(e) => { e.preventDefault(); selectContact(s); }}
-                                className="px-4 py-3 text-[11px] font-bold text-slate-600 hover:bg-blue-50 hover:text-blue-700 cursor-pointer border-b border-slate-50 last:border-0 transition-colors"
+                                className="px-4 py-3 text-[11px] font-bold text-slate-600 hover:bg-blue-50 hover:text-blue-700 cursor-pointer border-b border-slate-50 last:border-0 transition-colors uppercase"
                             >
-                                {s.nombre || s.name}
+                                {String(s.nombre || s.name).toUpperCase()}
                             </li>
                         ))}
                     </ul>
@@ -780,22 +789,22 @@ const UnplannedForm = ({ onAdd, onCancel, isFrozen }) => {
 
             <div className="grid grid-cols-2 gap-3">
                 <div>
-                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Tipo Gestión *</label>
-                    <select id="unplanned-tipo" value={form.tipoGestion} onChange={e => setForm(p => ({ ...p, tipoGestion: e.target.value }))} className="input-cell text-[10px] w-full focus:ring-rose-400">
-                        <option value="" disabled>Seleccionar tipo...</option>
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">TIPO GESTIÓN *</label>
+                    <select id="unplanned-tipo" value={form.tipoGestion} onChange={e => setForm(p => ({ ...p, tipoGestion: e.target.value }))} className="input-cell text-[10px] font-bold uppercase w-full focus:ring-rose-400">
+                        <option value="" disabled>SELECCIONAR TIPO...</option>
                         {tiposGestionFiltrados.length > 0 
-                            ? tiposGestionFiltrados.map(t => <option key={t.id || t.nombre} value={t.nombre}>{t.nombre}</option>)
-                            : <option disabled>Cargando catálogo...</option>
+                            ? tiposGestionFiltrados.map(t => <option key={t.id || t.nombre} value={t.nombre}>{String(t.nombre).toUpperCase()}</option>)
+                            : <option disabled>CARGANDO CATÁLOGO...</option>
                         }
                     </select>
                 </div>
                 <div>
-                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Resultado *</label>
-                    <select id="unplanned-resultado" value={form.resultado} onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))} className="input-cell text-[10px] w-full focus:ring-rose-400">
-                        <option value="" disabled>Seleccionar resultado...</option>
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">RESULTADO *</label>
+                    <select id="unplanned-resultado" value={form.resultado} onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))} className="input-cell text-[10px] font-bold uppercase w-full focus:ring-rose-400">
+                        <option value="" disabled>SELECCIONAR RESULTADO...</option>
                         {estatusCartera.length > 0
-                            ? estatusCartera.map(e => <option key={e.id || e.nombre} value={e.nombre}>{e.nombre}</option>)
-                            : <option disabled>Cargando catálogo...</option>
+                            ? estatusCartera.map(e => <option key={e.id || e.nombre} value={e.nombre}>{String(e.nombre).toUpperCase()}</option>)
+                            : <option disabled>CARGANDO CATÁLOGO...</option>
                         }
                     </select>
                 </div>
@@ -804,60 +813,58 @@ const UnplannedForm = ({ onAdd, onCancel, isFrozen }) => {
             {needsAmountDate && (
                 <div className={`p-3 rounded-2xl border space-y-3 animate-in fade-in duration-200 ${isCompromiso ? 'bg-blue-50 border-blue-100' : 'bg-indigo-50 border-indigo-100'}`}>
                     <p className={`text-[9px] font-black uppercase tracking-widest ${isCompromiso ? 'text-blue-700' : 'text-indigo-700'}`}>
-                        {isCompromiso ? 'Datos del Compromiso de Pago *' : 'Datos de la Promesa de Pago *'}
+                        {isCompromiso ? 'DATOS DEL COMPROMISO DE PAGO *' : 'DATOS DE LA PROMESA DE PAGO *'}
                     </p>
                     <div className="grid grid-cols-2 gap-3">
                         <div id="unplanned-monto" tabIndex="-1" className="outline-none focus:ring-2 focus:ring-rose-400 rounded-xl">
                             <FormattedNumberInput
-                                label="Monto *"
+                                label="MONTO *"
                                 type="currency"
                                 value={form.pagoMonto}
                                 onChange={val => setForm(p => ({ ...p, pagoMonto: val }))}
                                 placeholder="$ 0.00"
+                                className="font-bold text-[10px]"
                             />
                         </div>
                         <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Fecha *</label>
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">FECHA *</label>
                             <input id="unplanned-fecha" type="date" value={form.pagoFecha}
                                 onChange={e => setForm(p => ({ ...p, pagoFecha: e.target.value }))}
-                                className="input-cell w-full focus:ring-rose-400" />
+                                className="input-cell w-full focus:ring-rose-400 font-bold uppercase text-[10px]" />
                         </div>
                     </div>
                 </div>
             )}
             <div>
-                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">Notas</label>
-                <input type="text" value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Observaciones extras…" className="input-cell w-full" />
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1">NOTAS</label>
+                <input type="text" value={form.notes} onChange={e => setForm(p => ({ ...p, notes: String(e.target.value).toUpperCase() }))} placeholder="OBSERVACIONES EXTRAS…" className="input-cell w-full font-bold uppercase text-[10px]" />
             </div>
 
-            {/* BOTÓN CON ESTILO DINÁMICO */}
             <button onClick={submit}
                 className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md 
-                ${isReady ? 'bg-rose-500 text-white hover:bg-rose-600 hover:shadow-lg active:scale-95' : 'bg-slate-200 text-slate-500 hover:bg-slate-300'}`}>
-                Registrar Imprevisto
+                ${isReady ? 'bg-rose-500 text-white hover:bg-rose-600 hover:shadow-lg active:scale-95' : 'bg-slate-200 text-slate-500 hover:bg-slate-300 cursor-not-allowed'}`}>
+                REGISTRAR IMPREVISTO
             </button>
 
-            {/* MODAL DE ERROR */}
             <UIModal
                 isOpen={alertConfig.isOpen}
                 onClose={handleCloseAlert}
                 type="warning"
-                title="Datos Incompletos"
+                title="DATOS INCOMPLETOS"
                 message={alertConfig.message}
                 showConfirmButton={true}
-                confirmButtonText="Revisar"
+                confirmButtonText="REVISAR"
                 onConfirm={handleCloseAlert}
             />
 
-            {/* RF-06 / CA-02: GPS obligatorio */}
             <UIModal
                 isOpen={gpsErrorModal.isOpen}
                 onClose={() => setGpsErrorModal({ isOpen: false, message: '' })}
                 type="danger"
-                title="Geolocalización Obligatoria"
+                title="GEOLOCALIZACIÓN OBLIGATORIA"
                 message={gpsErrorModal.message}
                 showConfirmButton={true}
-                confirmButtonText="Reintentar GPS"
+                confirmButtonText="REINTENTAR GPS"
                 onConfirm={() => {
                     setGpsErrorModal({ isOpen: false, message: '' });
                     if (gps.status !== 'loading') gps.retry();
@@ -871,11 +878,9 @@ const UnplannedForm = ({ onAdd, onCancel, isFrozen }) => {
 const VisitCard = ({ visit, checkIn, onCheckIn, isFrozen }) => {
     const { SEG_CFG, RESULTADO_BADGE } = useDynamicUIContext();
     const segCfg = SEG_CFG[visit._segment] || SEG_CFG['Imprevisto'] || { dot: 'bg-slate-400' };
-    // RF-15 / CA-05: Una gestión es inmutable si ya fue check-in, viene
-    // FINALIZADA de BD, o es un imprevisto ya registrado.
-    const isFinalizada = visit.statusAction === 'FINALIZADA'
-        || visit.statusAction === 'NO REALIZADA'
-        || visit.estado === 'FINALIZADA';
+    const isFinalizada = String(visit.statusAction).toUpperCase() === 'FINALIZADA'
+        || String(visit.statusAction).toUpperCase() === 'NO REALIZADA'
+        || String(visit.estado).toUpperCase() === 'FINALIZADA';
     const isDone = !!checkIn || isFinalizada;
 
     return (
@@ -887,16 +892,16 @@ const VisitCard = ({ visit, checkIn, onCheckIn, isFrozen }) => {
             <SegBadge seg={visit._segment} />
             <div className="flex-1 min-w-0">
                 <p className={`text-[13px] font-black uppercase truncate leading-tight ${isDone ? 'text-emerald-700 line-through decoration-emerald-300' : 'text-primary'}`}>
-                    {visit.name}
+                    {String(visit.name).toUpperCase()}
                 </p>
                 {(visit.activity || visit.typeVisitManagement || visit.typeManagement) && (
-                    <p className="text-[10px] text-slate-400 font-medium truncate mt-0.5">
-                        {visit.activity || visit.typeVisitManagement || visit.typeManagement}
+                    <p className="text-[10px] text-slate-400 font-medium uppercase truncate mt-0.5">
+                        {String(visit.activity || visit.typeVisitManagement || visit.typeManagement).toUpperCase()}
                     </p>
                 )}
                 {isDone && checkIn?.resultado && (
-                    <span className={`inline-block text-[8px] font-black px-2 py-0.5 rounded-full mt-1 ${RESULTADO_BADGE[checkIn.resultado] || 'bg-slate-100 text-slate-600'}`}>
-                        {checkIn.resultado}
+                    <span className={`inline-block text-[8px] font-black px-2 py-0.5 rounded-full mt-1 uppercase ${RESULTADO_BADGE[checkIn.resultado] || 'bg-slate-100 text-slate-600'}`}>
+                        {String(checkIn.resultado).toUpperCase()}
                     </span>
                 )}
             </div>
@@ -904,17 +909,17 @@ const VisitCard = ({ visit, checkIn, onCheckIn, isFrozen }) => {
             {CARTERA_SEGS.includes(visit._segment) && (visit.moraActual || visit.saldoActual) && (
                 <div className="hidden md:flex flex-col items-end gap-0.5 flex-shrink-0 text-right">
                     {visit.moraActual && Number(visit.moraActual) > 0 && (
-                        <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">
-                            ⚠️ {visit.moraActual}d mora
+                        <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full uppercase">
+                            ⚠️ {visit.moraActual}D MORA
                         </span>
                     )}
                     {visit.saldoActual && (
-                        <span className="text-[9px] font-semibold text-slate-400">
-                            Saldo: ${Number(visit.saldoActual).toLocaleString()}
+                        <span className="text-[9px] font-semibold text-slate-400 uppercase">
+                            SALDO: ${Number(visit.saldoActual).toLocaleString()}
                         </span>
                     )}
                     {visit.ultimoEstatus && (
-                        <span className="text-[8px] text-slate-300 italic">Ant: {visit.ultimoEstatus}</span>
+                        <span className="text-[8px] text-slate-300 italic uppercase">ANT: {String(visit.ultimoEstatus).toUpperCase()}</span>
                     )}
                 </div>
             )}
@@ -922,12 +927,12 @@ const VisitCard = ({ visit, checkIn, onCheckIn, isFrozen }) => {
             {isDone && (
                 <div className="hidden md:flex items-center gap-2 flex-shrink-0 text-slate-400">
                     {checkIn.checkInTime && (
-                        <span className="flex items-center gap-1 text-[9px]">
+                        <span className="flex items-center gap-1 text-[9px] uppercase">
                             <Clock size={9} /> {checkIn.checkInTime}
                         </span>
                     )}
                     {checkIn.gpsStatus === 'ok' && (
-                        <span className="text-[9px] text-emerald-600 flex items-center gap-0.5">
+                        <span className="text-[9px] text-emerald-600 font-bold flex items-center gap-0.5 uppercase">
                             <Navigation size={9} /> GPS
                         </span>
                     )}
@@ -937,18 +942,18 @@ const VisitCard = ({ visit, checkIn, onCheckIn, isFrozen }) => {
             {isDone ? (
                 <div className="flex items-center gap-1.5 text-emerald-600 flex-shrink-0">
                     <CheckCircle2 size={16} />
-                    <span className="text-[9px] font-black uppercase tracking-wide hidden md:inline">Registrado</span>
+                    <span className="text-[9px] font-black uppercase tracking-wide hidden md:inline">REGISTRADO</span>
                 </div>
             ) : isFrozen ? (
                 <div className="flex items-center gap-1.5 text-slate-400 flex-shrink-0">
                     <Lock size={14} />
-                    <span className="text-[9px] font-black uppercase tracking-wide hidden md:inline">Bloqueado</span>
+                    <span className="text-[9px] font-black uppercase tracking-wide hidden md:inline">BLOQUEADO</span>
                 </div>
             ) : (
                 <button
                     onClick={() => onCheckIn(visit)}
                     className="flex-shrink-0 bg-primary text-white text-[9px] font-black uppercase tracking-widest px-5 py-2.5 rounded-xl hover:bg-blue-700 active:scale-95 transition-all shadow-md shadow-blue-900/20 whitespace-nowrap">
-                    Registrar Gestión
+                    REGISTRAR GESTIÓN
                 </button>
             )}
         </div>
@@ -967,55 +972,55 @@ const FollowUpCard = ({ followUp, checkIn, onSetTime, onCheckIn, isFrozen }) => 
             <div className={`w-3 h-3 rounded-full flex-shrink-0 ring-2 border-2 border-white transition-all
                 ${isDone ? 'bg-emerald-500 ring-emerald-200' : 'bg-blue-500 ring-blue-100'}`} />
 
-            <span className="text-[11px] font-black text-blue-600 flex-shrink-0">
-                📅 {fmtDate(followUp.compromisoFecha)}
+            <span className="text-[11px] font-black text-blue-600 flex-shrink-0 uppercase">
+                📅 {String(fmtDate(followUp.compromisoFecha)).toUpperCase()}
             </span>
 
-            <span className="text-[8px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider flex-shrink-0">Seguimiento</span>
+            <span className="text-[8px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider flex-shrink-0">SEGUIMIENTO</span>
 
             <SegBadge seg={followUp._segment} />
 
             <div className="flex-1 min-w-0">
                 <p className={`text-[13px] font-black uppercase truncate leading-tight
                     ${isDone ? 'text-emerald-700 line-through decoration-emerald-300' : 'text-primary'}`}>
-                    {followUp.name}
+                    {String(followUp.name).toUpperCase()}
                 </p>
                 {followUp.compromisoCuanto && (
-                    <span className="text-[10px] font-bold text-emerald-700">
-                        Compromiso: ${Number(followUp.compromisoCuanto).toLocaleString()}
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase">
+                        COMPROMISO: ${Number(followUp.compromisoCuanto).toLocaleString()}
                     </span>
                 )}
                 {isDone && checkIn?.resultado && (
-                    <span className={`inline-block text-[8px] font-black px-2 py-0.5 rounded-full mt-1
+                    <span className={`inline-block text-[8px] font-black px-2 py-0.5 rounded-full mt-1 uppercase
                         ${RESULTADO_BADGE[checkIn.resultado] || 'bg-slate-100 text-slate-600'}`}>
-                        {checkIn.resultado}
+                        {String(checkIn.resultado).toUpperCase()}
                     </span>
                 )}
             </div>
 
             {!isDone && !isFrozen && (
                 <div className="hidden md:flex items-center gap-2 flex-shrink-0">
-                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Hora:</label>
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">HORA:</label>
                     <input type="time" defaultValue={followUp.time || ''}
                         onChange={e => onSetTime(followUp.id, e.target.value)}
-                        className="text-[11px] font-black border border-slate-200 rounded-lg px-2 py-1 bg-white text-primary" />
+                        className="text-[11px] font-black border border-slate-200 rounded-lg px-2 py-1 bg-white text-primary uppercase" />
                 </div>
             )}
 
             {isDone ? (
                 <div className="flex items-center gap-1.5 text-emerald-600 flex-shrink-0">
                     <CheckCircle2 size={16} />
-                    <span className="text-[9px] font-black uppercase tracking-wide hidden md:inline">Registrado</span>
+                    <span className="text-[9px] font-black uppercase tracking-wide hidden md:inline">REGISTRADO</span>
                 </div>
             ) : isFrozen ? (
                 <div className="flex items-center gap-1.5 text-slate-400 flex-shrink-0">
                     <Lock size={14} />
-                    <span className="text-[9px] font-black uppercase tracking-wide hidden md:inline">Bloqueado</span>
+                    <span className="text-[9px] font-black uppercase tracking-wide hidden md:inline">BLOQUEADO</span>
                 </div>
             ) : (
                 <button onClick={() => onCheckIn(followUp)}
                     className="flex-shrink-0 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest px-5 py-2.5 rounded-xl hover:bg-blue-700 active:scale-95 transition-all shadow-md shadow-blue-900/20 whitespace-nowrap">
-                    Registrar Avance
+                    REGISTRAR AVANCE
                 </button>
             )}
         </div>
@@ -1055,9 +1060,10 @@ const MoneyInput = ({ value, onChange, isCount, disabled }) => {
             <FormattedNumberInput
                 type={isCount ? "number" : "currency"}
                 value={localValue}
-                onChange={v => setLocalValue(v)} // Solo actualiza localmente de inmediato
+                onChange={v => setLocalValue(v)} 
                 placeholder={isCount ? '0' : '$ 0.00'}
                 disabled={disabled}
+                className="font-bold text-[10px]"
             />
         </div>
     );
@@ -1079,10 +1085,10 @@ const KpiRealPanel = ({ kpiCompromisos, kpiReal, onUpdate, isFrozen }) => {
             <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3">
                     <div className="w-1.5 h-7 bg-yellow-400 rounded-full" />
-                    <h3 className="text-base font-black uppercase tracking-wider text-primary">Compromisos KPI del Día</h3>
+                    <h3 className="text-base font-black uppercase tracking-wider text-primary">COMPROMISOS KPI DEL DÍA</h3>
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-slate-500">{filledCount}/{allFields.length} capturados</span>
+                    <span className="text-xs font-bold text-slate-500 uppercase">{filledCount}/{allFields.length} CAPTURADOS</span>
                     <span className={`text-sm font-black px-3 py-1.5 rounded-xl ${kpiColor(avgPct)} ${avgPct >= 90 ? 'bg-emerald-50 border border-emerald-200' : avgPct >= 70 ? 'bg-amber-50 border border-amber-200' : 'bg-red-50 border border-red-200'}`}>
                         {avgPct}% {avgPct >= 90 ? '🟢' : avgPct >= 70 ? '🟡' : '🔴'}
                     </span>
@@ -1106,7 +1112,7 @@ const KpiRealPanel = ({ kpiCompromisos, kpiReal, onUpdate, isFrozen }) => {
                                 <div className="flex items-center gap-2">
                                     <div className={`w-1.5 h-4 rounded-full ${dotCls}`} />
                                     <IconComponent size={14} className="text-white/80" />
-                                    <span className="text-xs font-black uppercase tracking-widest text-white">{group}</span>
+                                    <span className="text-xs font-black uppercase tracking-widest text-white">{String(group).toUpperCase()}</span>
                                 </div>
                             </div>
                             <div className="divide-y divide-slate-100">
@@ -1121,12 +1127,12 @@ const KpiRealPanel = ({ kpiCompromisos, kpiReal, onUpdate, isFrozen }) => {
                                         <div key={key} className="px-5 py-4 flex items-center gap-4">
                                             <div className={`w-4 h-4 rounded-full flex-shrink-0 transition-colors duration-300 ${kpiDotCls(pct, hasReal)}`} />
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-black text-primary uppercase tracking-wide leading-tight">{label}</p>
+                                                <p className="text-sm font-black text-primary uppercase tracking-wide leading-tight">{String(label).toUpperCase()}</p>
                                             </div>
                                             <div className="flex items-end gap-3 flex-shrink-0">
                                                 {hasComp && (
                                                     <div className="text-center">
-                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Compromiso</p>
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">COMPROMISO</p>
                                                         <div className="bg-slate-100 rounded-xl px-3 py-2 min-w-[80px] text-center">
                                                             <p className="text-sm font-black text-slate-700">{fmtNum(comp, isCount)}</p>
                                                         </div>
@@ -1134,7 +1140,7 @@ const KpiRealPanel = ({ kpiCompromisos, kpiReal, onUpdate, isFrozen }) => {
                                                 )}
                                                 {hasComp && <span className="text-slate-300 font-bold text-lg mb-1">→</span>}
                                                 <div className="text-center">
-                                                    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">Real</p>
+                                                    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">REAL</p>
                                                     <MoneyInput value={real} onChange={v => onUpdate(key, v)} isCount={isCount} disabled={isFrozen} />
                                                 </div>
                                                 <div className="text-center min-w-[52px] mb-0.5">
@@ -1171,20 +1177,17 @@ const EjecucionOperativoContent = () => {
     const [followUpTimes, setFollowUpTimes] = useState({});
     const [isSavingDefinitivo, setIsSavingDefinitivo] = useState(false);
 
-    // RF-15 / CA-05: Cualquier intento de abrir el modal de check-in se filtra
-    // contra inmutabilidad (visita ya finalizada o agenda congelada).
     const handleOpenCheckIn = (visit) => {
         const checkIns = currentAgenda.checkIns || {};
         const yaTieneCheckIn = !!checkIns[visit.id];
-        const finalizadaEnBD = visit.statusAction === 'FINALIZADA'
-            || visit.statusAction === 'NO REALIZADA'
-            || visit.estado === 'FINALIZADA';
-        const agendaCongelada = currentAgenda.status === 'ejecutada' || currentAgenda.status === 'completada';
+        const finalizadaEnBD = String(visit.statusAction).toUpperCase() === 'FINALIZADA'
+            || String(visit.statusAction).toUpperCase() === 'NO REALIZADA'
+            || String(visit.estado).toUpperCase() === 'FINALIZADA';
+        const agendaCongelada = String(currentAgenda.status).toLowerCase() === 'ejecutada' || String(currentAgenda.status).toLowerCase() === 'completada';
         if (yaTieneCheckIn || finalizadaEnBD || agendaCongelada) return;
         setModalVisit(visit);
     };
     
-    // ── NUEVO: ESTADO PARA MODAL DE GUARDADO DEFINITIVO ──
     const [showConfirmModal, setShowConfirmModal] = useState(false);
 
     const [errorModal, setErrorModal] = useState({ isOpen: false, message: '' });
@@ -1201,11 +1204,9 @@ const EjecucionOperativoContent = () => {
         .map(fu => ({ ...fu, time: followUpTimes[fu.id] ?? fu.time }));
     const setFollowUpTime = (id, time) => setFollowUpTimes(prev => ({ ...prev, [id]: time }));
 
-    // ── LÓGICA DE CONGELAMIENTO (isFrozen) ──
-    const isFrozen = currentAgenda.status === 'ejecutada' || currentAgenda.status === 'completada';
+    const isFrozen = String(currentAgenda.status).toLowerCase() === 'ejecutada' || String(currentAgenda.status).toLowerCase() === 'completada';
 
-    // Permitimos renderizar la vista solo si está aprobada o si ya está ejecutada
-    if (currentAgenda.status !== 'aprobada' && currentAgenda.status !== 'ejecutada' && currentAgenda.status !== 'completada') {
+    if (String(currentAgenda.status).toLowerCase() !== 'aprobada' && String(currentAgenda.status).toLowerCase() !== 'ejecutada' && String(currentAgenda.status).toLowerCase() !== 'completada') {
         return (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-8">
                 <BlockedScreen status={currentAgenda.status} />
@@ -1216,27 +1217,22 @@ const EjecucionOperativoContent = () => {
     const getAllVisits = () => {
         const visits = [];
         
-        // 1. LECTURA DINÁMICA: Exploramos todas las llaves que mandó el JSON de la BD
         const segmentosDB = currentAgenda.segments || {};
         
         Object.entries(segmentosDB).forEach(([nombreBloque, arregloVisitas]) => {
             if (Array.isArray(arregloVisitas)) {
                 arregloVisitas.forEach(v => {
-                    // 2. IDENTIFICAMOS SI ES IMPREVISTO
-                    const isImprevisto = nombreBloque === 'Visita No Planeada' || nombreBloque === 'Imprevisto' || v.managementResult?.includes('IMPREVISTO');
+                    const isImprevisto = nombreBloque === 'Visita No Planeada' || nombreBloque === 'Imprevisto' || String(v.managementResult || '').toUpperCase().includes('IMPREVISTO');
                     
-                    // 3. Omitimos registros vacíos o sin nombre, EXCEPTO si son imprevistos
                     if (!v || (!v.name && !isImprevisto)) return;
 
-                    // 4. SI ES IMPREVISTO, EXTRAEMOS EL NOMBRE ESCONDIDO
                     let displayName = v.name;
                     if (!displayName && isImprevisto && v.managementResult?.includes('IMPREVISTO:')) {
-                        const nameMatch = v.managementResult.match(/IMPREVISTO:\s*(.*?)(?:\s*\||$)/);
+                        const nameMatch = v.managementResult.match(/IMPREVISTO:\s*(.*?)(?:\s*\||$)/i);
                         displayName = nameMatch ? nameMatch[1].trim() : 'CLIENTE NO PLANEADO';
                     }
 
-                    // 5. Evaluamos si la visita ya está gestionada en Base de Datos
-                    const isFinalizada = v.statusAction === 'FINALIZADA' || v.statusAction === 'NO REALIZADA' || v.estado === 'FINALIZADA';
+                    const isFinalizada = String(v.statusAction).toUpperCase() === 'FINALIZADA' || String(v.statusAction).toUpperCase() === 'NO REALIZADA' || String(v.estado).toUpperCase() === 'FINALIZADA';
                     
                     if (isFinalizada && !checkIns[v.id]) {
                         checkIns[v.id] = {
@@ -1247,10 +1243,9 @@ const EjecucionOperativoContent = () => {
                         };
                     }
                     
-                    // 6. Añadimos la visita forzando el nombre correcto
                     visits.push({ 
                         ...v, 
-                        name: displayName, // Inyectamos el nombre para que las tarjetas lo pinten bien
+                        name: String(displayName).toUpperCase(), 
                         _segment: nombreBloque, 
                         isUnplanned: isImprevisto 
                     });
@@ -1258,14 +1253,12 @@ const EjecucionOperativoContent = () => {
             }
         });
         
-        // 7. Agregamos los imprevistos "locales" (los que el usuario acaba de agregar en la interfaz antes de recargar)
         const localUnplanned = (unplannedVisits || []).map(v => ({ 
             ...v, 
             _segment: v._segment || 'Visita No Planeada', 
             isUnplanned: true 
         }));
         
-        // 8. Unimos ambas listas y ordenamos cronológicamente
         const listaFinal = [...visits, ...localUnplanned];
         listaFinal.sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
         
@@ -1278,33 +1271,29 @@ const EjecucionOperativoContent = () => {
     const total = allVisits.length;
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
-    const todayStr = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+    const todayStr = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase();
 
-    // ── FUNCIÓN DE GUARDADO DEFINITIVO ──
     const handleFinalizarEjecucion = async () => {
-        // 1. Candado anti-doble clic
         if (isSavingDefinitivo) return; 
         
         try {
-            // 2. Activamos el bloqueo
             setIsSavingDefinitivo(true); 
             
             await api.put(`/agenda/plan/${currentAgenda.id}/estatus`, { 
                 estatus: 'ejecutada', 
-                nota: 'Ejecución finalizada por el operativo' 
+                nota: 'EJECUCIÓN FINALIZADA POR EL OPERATIVO' 
             });
             updateAgendaStatus(currentAgenda.id, 'ejecutada');
             setShowConfirmModal(false);
-            LoggerService.info('Ejecución finalizada correctamente', { idPlan: currentAgenda.id });
+            LoggerService.info('EJECUCIÓN FINALIZADA CORRECTAMENTE', { idPlan: currentAgenda.id });
         } catch (error) {
-            LoggerService.error('Error al finalizar la ejecución', error);
+            LoggerService.error('ERROR AL FINALIZAR LA EJECUCIÓN', error);
             setShowConfirmModal(false);
             setErrorModal({
                 isOpen: true,
-                message: "No se pudo conectar con el servidor para finalizar la ejecución."
+                message: "NO SE PUDO CONECTAR CON EL SERVIDOR PARA FINALIZAR LA EJECUCIÓN."
             });
         } finally {
-            // 3. Quitamos el bloqueo al terminar (éxito o error)
             setIsSavingDefinitivo(false); 
         }
     };
@@ -1313,30 +1302,27 @@ const EjecucionOperativoContent = () => {
         if (pct < 100) {
             setAlertConfig({ 
                 isOpen: true, 
-                message: `Tu avance actual es del ${pct}%. Debes registrar todas tus gestiones y seguimientos para poder hacer el guardado definitivo.` 
+                message: `TU AVANCE ACTUAL ES DEL ${pct}%. DEBES REGISTRAR TODAS TUS GESTIONES Y SEGUIMIENTOS PARA PODER HACER EL GUARDADO DEFINITIVO.` 
             });
             return;
         }
-        // Si el avance es del 100%, mostramos el modal de confirmación original
         setShowConfirmModal(true);
     };
 
     return (
         <div className="max-w-[1400px] mx-auto pb-32 px-4 md:px-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Si está congelada, mostramos un banner informativo */}
             {isFrozen && (
                 <div className="mt-8 mb-6 bg-blue-50 border border-blue-200 p-5 rounded-2xl flex items-center gap-4 animate-in fade-in">
                     <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
                         <Lock className="text-blue-600" size={20} />
                     </div>
                     <div>
-                        <h3 className="text-sm font-black text-blue-900 uppercase tracking-widest">Ejecución Finalizada</h3>
-                        <p className="text-blue-700 text-sm font-medium mt-1">Has realizado el Guardado Definitivo. Los registros han sido bloqueados para este plan puedes ver el resumen en la pestaña de "Cierre".</p>
+                        <h3 className="text-sm font-black text-blue-900 uppercase tracking-widest">EJECUCIÓN FINALIZADA</h3>
+                        <p className="text-blue-700 text-sm font-bold mt-1 uppercase">HAS REALIZADO EL GUARDADO DEFINITIVO. LOS REGISTROS HAN SIDO BLOQUEADOS, PUEDES VER EL RESUMEN EN LA PESTAÑA DE "CIERRE".</p>
                     </div>
                 </div>
             )}
 
-            {/* Header */}
             <header className="pt-8 pb-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
                     <h2 className="text-5xl font-black text-primary tracking-tighter leading-none">EJECUCIÓN</h2>
@@ -1347,7 +1333,7 @@ const EjecucionOperativoContent = () => {
                 <div className="flex items-center gap-5 bg-white rounded-[24px] border border-slate-100 shadow-md px-6 py-4">
                     <ProgressRing done={done} total={total} />
                     <div>
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Progreso de Ruta</p>
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">PROGRESO DE RUTA</p>
                         <p className="text-2xl font-black text-primary">{pct}<span className="text-sm text-accent">%</span></p>
                         <div className="w-full h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden">
                             <div className="h-full bg-blue-500 rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
@@ -1356,29 +1342,28 @@ const EjecucionOperativoContent = () => {
                 </div>
             </header>
 
-            {/* Completion Summary Banner */}
             {pct === 100 && total > 0 && (() => {
                 const allFinished = allVisits.filter(v => checkIns[v.id] || v._dbCheckIn || v.isUnplanned);
                 const compromisos = allFinished.filter(c => {
-                    const res = checkIns[c.id]?.resultado || c._dbCheckIn?.resultado || c.resultado || '';
-                    return res.toLowerCase().includes('compromiso') || res.toLowerCase().includes('promesa');
+                    const res = String(checkIns[c.id]?.resultado || c._dbCheckIn?.resultado || c.resultado || '');
+                    return res.toUpperCase().includes('COMPROMISO') || res.toUpperCase().includes('PROMESA');
                 });
                 const totalMonto = compromisos.reduce((s, c) => {
                     const monto = checkIns[c.id]?.pagoMonto || c.pagoMonto || 0;
                     return s + Number(monto);
                 }, 0);
                 const noRealizadas = allFinished.filter(c => {
-                    const res = checkIns[c.id]?.resultado || c._dbCheckIn?.resultado || c.resultado || '';
-                    return res.toLowerCase().includes('no realizada');
+                    const res = String(checkIns[c.id]?.resultado || c._dbCheckIn?.resultado || c.resultado || '');
+                    return res.toUpperCase().includes('NO REALIZADA');
                 }).length;
 
                 return (
                     <div className="mb-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-3xl p-6 text-white shadow-xl animate-in fade-in slide-in-from-top-4 duration-500">
                         <div className="flex items-start justify-between">
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-emerald-200 mb-1">✅ Ruta completada</p>
-                                <h3 className="text-2xl font-black leading-tight">¡Buen trabajo hoy!</h3>
-                                <p className="text-[11px] text-emerald-100 mt-1">{todayStr}</p>
+                                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-emerald-200 mb-1">RUTA COMPLETADA</p>
+                                <h3 className="text-2xl font-black leading-tight uppercase">¡BUEN TRABAJO HOY!</h3>
+                                <p className="text-[11px] text-emerald-100 mt-1 uppercase font-bold">{todayStr}</p>
                             </div>
                             <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
                                 <CheckCircle2 size={28} className="text-white" />
@@ -1387,20 +1372,20 @@ const EjecucionOperativoContent = () => {
                         <div className="grid grid-cols-3 gap-3 mt-5">
                             <div className="bg-white/15 rounded-2xl p-3 text-center">
                                 <p className="text-2xl font-black">{done}</p>
-                                <p className="text-[8px] font-black text-emerald-100 uppercase tracking-wider mt-0.5">Gestiones</p>
+                                <p className="text-[8px] font-black text-emerald-100 uppercase tracking-wider mt-0.5">GESTIONES</p>
                             </div>
                             <div className="bg-white/15 rounded-2xl p-3 text-center">
                                 <p className="text-2xl font-black">{compromisos.length}</p>
-                                <p className="text-[8px] font-black text-emerald-100 uppercase tracking-wider mt-0.5">Compromisos</p>
+                                <p className="text-[8px] font-black text-emerald-100 uppercase tracking-wider mt-0.5">COMPROMISOS</p>
                             </div>
                             <div className="bg-white/15 rounded-2xl p-3 text-center">
                                 <p className="text-2xl font-black">{noRealizadas}</p>
-                                <p className="text-[8px] font-black text-emerald-100 uppercase tracking-wider mt-0.5">No realizadas</p>
+                                <p className="text-[8px] font-black text-emerald-100 uppercase tracking-wider mt-0.5">NO REALIZADAS</p>
                             </div>
                         </div>
                         {totalMonto > 0 && (
                             <div className="mt-3 bg-white/15 rounded-2xl px-4 py-2.5 flex items-center justify-between">
-                                <span className="text-[9px] font-black text-emerald-100 uppercase tracking-wider">Monto total comprometido</span>
+                                <span className="text-[9px] font-black text-emerald-100 uppercase tracking-wider">MONTO TOTAL COMPROMETIDO</span>
                                 <span className="text-[15px] font-black">${totalMonto.toLocaleString()}</span>
                             </div>
                         )}
@@ -1412,7 +1397,7 @@ const EjecucionOperativoContent = () => {
                 {allVisits.length === 0 ? (
                     <div className="text-center py-16 text-slate-400">
                         <MapPin size={32} className="mx-auto mb-3 opacity-30" />
-                        <p className="text-xs font-black uppercase tracking-widest">No hay visitas agendadas</p>
+                        <p className="text-xs font-black uppercase tracking-widest">NO HAY VISITAS AGENDADAS</p>
                     </div>
                 ) : (() => {
                     const grouped = {};
@@ -1429,10 +1414,10 @@ const EjecucionOperativoContent = () => {
                                 <div className="gradient-header !rounded-t-3xl shadow-lg">
                                     <div className="flex items-center gap-2">
                                         <SegBadge seg={seg} />
-                                        <span className="text-xs font-black uppercase tracking-[0.2em] text-white ml-2">{seg}</span>
+                                        <span className="text-xs font-black uppercase tracking-[0.2em] text-white ml-2">{String(seg).toUpperCase()}</span>
                                         <span className="ml-1 text-[9px] font-black bg-white/20 text-white px-2 py-0.5 rounded-full">{visits.length}</span>
                                     </div>
-                                    <span className="text-[9px] font-bold text-white/60">{doneCount}/{visits.length} completadas</span>
+                                    <span className="text-[9px] font-bold text-white/60 uppercase">{doneCount}/{visits.length} COMPLETADAS</span>
                                 </div>
                                 <div className="divide-y divide-slate-50">
                                     {visits.map((v) => (
@@ -1456,11 +1441,11 @@ const EjecucionOperativoContent = () => {
                     <div className="gradient-header !rounded-t-3xl shadow-lg">
                         <div className="flex items-center gap-2">
                             <div className="w-1.5 h-4 rounded-full bg-blue-400" />
-                            <span className="text-xs font-black uppercase tracking-[0.2em] text-white">Seguimientos Comprometidos</span>
+                            <span className="text-xs font-black uppercase tracking-[0.2em] text-white">SEGUIMIENTOS COMPROMETIDOS</span>
                             <span className="ml-1 text-[9px] font-black bg-white/20 text-white px-2 py-0.5 rounded-full">{todayFollowUps.length}</span>
                         </div>
-                        <span className="text-[9px] font-bold text-white/60">
-                            {todayFollowUps.filter(fu => checkIns[fu.id]).length}/{todayFollowUps.length} registrados
+                        <span className="text-[9px] font-bold text-white/60 uppercase">
+                            {todayFollowUps.filter(fu => checkIns[fu.id]).length}/{todayFollowUps.length} REGISTRADOS
                         </span>
                     </div>
                     <div className="divide-y divide-slate-50">
@@ -1479,7 +1464,7 @@ const EjecucionOperativoContent = () => {
                 ) : (
                     <button onClick={() => setShowUnplanned(true)}
                         className="w-full mt-4 flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 hover:border-rose-300 text-slate-400 hover:text-rose-500 py-5 rounded-2xl transition-all text-[10px] font-black uppercase tracking-widest">
-                        <Plus size={16} /> Agregar Visita No Planeada
+                        <Plus size={16} /> AGREGAR VISITA NO PLANEADA
                     </button>
                 )
             )}
@@ -1487,18 +1472,17 @@ const EjecucionOperativoContent = () => {
             {modalVisit && !isFrozen && (
                 <CheckInModal visit={modalVisit} onClose={() => setModalVisit(null)} onSubmit={data => {
                     registerCheckIn(modalVisit.id, data);
-                    if (data.resultado?.toLowerCase().includes('compromiso') && data.pagoFecha) {
+                    if (String(data.resultado).toUpperCase().includes('COMPROMISO') && data.pagoFecha) {
                         scheduleFollowUp(modalVisit, { fecha: data.pagoFecha, monto: data.pagoMonto });
                     }
                     setModalVisit(null);
                 }} />
             )}
 
-            {/* ── BOTÓN FLOTANTE: GUARDADO DEFINITIVO ── */}
-            {currentAgenda.status === 'aprobada' && (
+            {String(currentAgenda.status).toLowerCase() === 'aprobada' && (
                 <footer className="fixed bottom-0 left-0 right-0 md:relative md:mt-12 z-40 bg-white/90 backdrop-blur-md border-t border-slate-200 p-4 md:p-6 flex justify-end md:rounded-[32px] md:border-none md:bg-slate-900 md:shadow-2xl">
                     <div className="flex flex-col md:items-end w-full md:w-auto">
-                        <p className="hidden md:block text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mb-2 text-right">Asegúrate de registrar todas tus visitas antes de continuar.</p>
+                        <p className="hidden md:block text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mb-2 text-right">ASEGÚRATE DE REGISTRAR TODAS TUS VISITAS ANTES DE CONTINUAR.</p>
                        <button 
                             onClick={handleIntentarFinalizar}
                             disabled={isSavingDefinitivo}
@@ -1509,29 +1493,28 @@ const EjecucionOperativoContent = () => {
                                 }`}
                         >
                             {isSavingDefinitivo ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />}
-                            {isSavingDefinitivo ? 'Procesando...' : 'Guardado Definitivo'}
+                            {isSavingDefinitivo ? 'PROCESANDO...' : 'GUARDADO DEFINITIVO'}
                         </button>
                     </div>
                 </footer>
             )}
 
-            {/* Modal de Confirmación */}
             <UIModal
                 isOpen={showConfirmModal}
                 onClose={() => setShowConfirmModal(false)}
                 type="info"
-                title="¿Finalizar Ejecución?"
-                message="Al hacer el guardado definitivo, se bloquearán los inputs y ya no podrás registrar nuevas gestiones ni imprevistos. Asegúrate de haber completado todo."
+                title="¿FINALIZAR EJECUCIÓN?"
+                message="AL HACER EL GUARDADO DEFINITIVO, SE BLOQUEARÁN LOS INPUTS Y YA NO PODRÁS REGISTRAR NUEVAS GESTIONES NI IMPREVISTOS. ASEGÚRATE DE HABER COMPLETADO TODO."
                 showCancel={true}
-                cancelText="Revisar de nuevo"
-                confirmText="Sí, finalizar ejecución"
+                cancelText="REVISAR DE NUEVO"
+                confirmText="SÍ, FINALIZAR EJECUCIÓN"
                 onConfirm={handleFinalizarEjecucion}
             />
 
             <UIModal
                 isOpen={errorModal.isOpen}
                 onClose={() => setErrorModal({ ...errorModal, isOpen: false })}
-                title="Error de Conexión"
+                title="ERROR DE CONEXIÓN"
                 message={errorModal.message}
                 type="danger"
             />
@@ -1540,16 +1523,15 @@ const EjecucionOperativoContent = () => {
                 isOpen={alertConfig.isOpen}
                 onClose={() => setAlertConfig({ isOpen: false, message: '' })}
                 type="warning"
-                title="Ejecución Incompleta"
+                title="EJECUCIÓN INCOMPLETA"
                 message={alertConfig.message}
                 showConfirmButton={true}
-                confirmButtonText="Entendido"
+                confirmButtonText="ENTENDIDO"
             />
         </div>
     );
 };
 
-// ── Wrapper Component: Provee el contexto dinámico ───────────────────────────
 const EjecucionOperativoWrapper = () => {
     const dynamicUI = useDynamicUI();
     return (

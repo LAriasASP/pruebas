@@ -1,9 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useRole } from './RoleContext';
-import { useCatalogs } from './CatalogContext'; 
+import { useCatalogs } from './CatalogContext';
 import api from '../api/axiosConfig';
-import UIModal from '../components/UIModal'; 
-import toast from 'react-hot-toast'; 
+import UIModal from '../components/UIModal';
 
 const MATRIZ_SEGMENTOS = {
     'ASESOR FINANCIERO': ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera'],
@@ -19,17 +18,10 @@ const AgendaContext = createContext();
 
 export const AgendaProvider = ({ children }) => {
     const { selectedRole } = useRole();
-    const catalogos = useCatalogs() || {}; 
+    const catalogos = useCatalogs() || {};
 
-    // ESTADO GLOBAL PARA ALERTAS
-    const [alertModal, setAlertModal] = useState({
-        isOpen: false,
-        title: '',
-        message: '',
-        type: 'info'
-    });
+    const [alertModal, setAlertModal] = useState({ isOpen: false, title: '', message: '', type: 'info' });
 
-    // ── ESTADO DEL DIRECTORIO DE CLIENTES ──
     const [directorio, setDirectorio] = useState([]);
     const [loadingDirectorio, setLoadingDirectorio] = useState(true);
 
@@ -50,9 +42,9 @@ export const AgendaProvider = ({ children }) => {
                 } catch (e) {
                     console.error("Error parseando teléfonos del cliente", item.name, e);
                 }
-                
+
                 while (parsedPhones.length < 3) parsedPhones.push('');
-                
+
                 return {
                     ...item,
                     phones: parsedPhones
@@ -71,7 +63,6 @@ export const AgendaProvider = ({ children }) => {
         cargarDirectorio();
     }, []);
 
-    // ── CARGA DE CONFIGURACIÓN DE KPIS ──
     const [kpiConfig, setKpiConfig] = useState([]);
     const [loadingKpiConfig, setLoadingKpiConfig] = useState(true);
 
@@ -81,7 +72,7 @@ export const AgendaProvider = ({ children }) => {
         if (selectedRole?.category !== 'Operativo') {
             setKpiConfig([]);
             setLoadingKpiConfig(false);
-            return; 
+            return;
         }
 
         const fetchKpiConfig = async () => {
@@ -106,7 +97,6 @@ export const AgendaProvider = ({ children }) => {
         fetchKpiConfig();
     }, [selectedRole?.id]);
 
-    // ── CREACIÓN DE FILAS VACÍAS ──
     const createEmptyRows = (segmentName, count = 1) => {
         return Array.from({ length: count }, (_, i) => {
             const base = { id: Math.random().toString(36).substr(2, 9), time: '', name: '', isNew: true };
@@ -136,12 +126,11 @@ export const AgendaProvider = ({ children }) => {
 
     const emptyKpi = {};
 
-    // ── ESTADO INICIAL DE LA AGENDA ──
     const [currentAgenda, setCurrentAgenda] = useState({
         id: null,
         status: 'borrador',
         segments: {
-            'Promoción': [], 
+            'Promoción': [],
             'Evaluación e Integración': [],
             'Seguimiento de Cartera': [],
             'Gestión de Empresarias': []
@@ -185,28 +174,45 @@ export const AgendaProvider = ({ children }) => {
                 let parsedKpiReal = agendaData.kpiReal || {};
                 if (typeof parsedKpiReal === 'string') parsedKpiReal = JSON.parse(parsedKpiReal);
 
-                const safeSegments = {
-                    ...parsedSegments,
-                    'Promoción': parsedSegments['Promoción'] || [],
-                    'Evaluación e Integración': parsedSegments['Evaluación e Integración'] || [],
-                    'Seguimiento de Cartera': parsedSegments['Seguimiento de Cartera'] || [],
-                    'Gestión de Empresarias': parsedSegments['Gestión de Empresarias'] || []
+                const textFields = ['name', 'classification', 'city', 'colony', 'streets', 'product', 'subProduct', 'program', 'activity', 'notes', 'typeVisitManagement', 'typeIntegration'];
+
+                const normalizeVisits = (visitsArray) => {
+                    if (!visitsArray) return [];
+                    return visitsArray.map(v => {
+                        const normalizedVisit = { ...v };
+                        textFields.forEach(field => {
+                            if (typeof normalizedVisit[field] === 'string') {
+                                normalizedVisit[field] = normalizedVisit[field].toUpperCase();
+                            }
+                        });
+                        return normalizedVisit;
+                    });
                 };
+
+                const safeSegments = {};
+                Object.keys(parsedSegments).forEach(key => {
+                    safeSegments[key] = normalizeVisits(parsedSegments[key]);
+                });
+
+                ['Promoción', 'Evaluación e Integración', 'Seguimiento de Cartera', 'Gestión de Empresarias'].forEach(key => {
+                    if (!safeSegments[key]) safeSegments[key] = [];
+                });
 
                 setCurrentAgenda(prev => ({
                     ...prev,
                     id: agendaData.id,
                     status: agendaData.status?.toLowerCase() || 'borrador',
-                    notaJefe: agendaData.notaJefe || 'Revisa y ajusta los detalles de tu jornada.',
+                    notaJefe: agendaData.notaJefe?.toUpperCase() || 'REVISA Y AJUSTA LOS DETALLES DE TU JORNADA.',
                     segments: safeSegments,
                     kpiCompromisos: parsedKpiCompromisos,
                     kpiReal: parsedKpiReal,
+                    unplannedVisits: [], 
                     metadata: { ...prev.metadata, role: selectedRole?.name }
                 }));
             } else {
                 const isBorrador = selectedRole?.id === 'coordinador-l';
-                setCurrentAgenda(prev => ({ 
-                    ...prev, 
+                setCurrentAgenda(prev => ({
+                    ...prev,
                     status: isBorrador ? 'borrador' : 'borrador',
                     id: null,
                     segments: {
@@ -218,7 +224,7 @@ export const AgendaProvider = ({ children }) => {
         } catch (error) {
             const mensajeError = error.response?.data?.mensaje || "";
             if (error.response?.status === 404 || mensajeError.includes("No se encontró información de la agenda")) {
-                setCurrentAgenda(prev => ({ 
+                setCurrentAgenda(prev => ({
                     ...prev, status: 'borrador', id: null,
                     segments: {
                         'Promoción': [], 'Evaluación e Integración': [], 'Seguimiento de Cartera': [], 'Gestión de Empresarias': []
@@ -236,46 +242,78 @@ export const AgendaProvider = ({ children }) => {
         if (!selectedRole || selectedRole.category !== 'Operativo') return;
         cargarAgendaDelDia();
     }, [selectedRole?.id]);
-    
 
     useEffect(() => {
         const API_COBRANZA = import.meta.env.VITE_API_ORIGIN_COBRANZA;
         const wsUrl = `${API_COBRANZA.replace(/^http/, 'ws')}/api/v1/ws/notificaciones`;
-        let socket;
+        let socket = null;
+        let timerReconexion;
+        let isMounted = true;
 
-        try {
-            socket = new WebSocket(wsUrl);
-            socket.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                
-                if ((data.type === 'STATUS_UPDATE' || data.type === 'AGENDA_UPDATE') && String(data.payload?.idPlan) === String(agendaIdRef.current)) {
-                    
-                    const nuevoEstatus = (data.payload.estatus || data.payload.status)?.toLowerCase();
-                    const estatusAnterior = agendaStatusRef.current?.toLowerCase();
-                    
-                    if (nuevoEstatus && nuevoEstatus !== estatusAnterior) {
-                        
-                        if (nuevoEstatus === 'requiere_modificacion') {
-                            setAlertModal({ isOpen: true, title: 'Agenda Devuelta', message: `Tu supervisor ha devuelto tu agenda para corrección.`, type: 'danger' });
-                        } 
-                        else if ((nuevoEstatus === 'aprobada' || nuevoEstatus === 'autorizada') && estatusAnterior === 'pendiente') {
-                            setAlertModal({ isOpen: true, title: '¡Agenda Autorizada!', message: '¡Excelente! Tu supervisor aprobó tu agenda. Puedes iniciar la ejecución.', type: 'success' });
+        const conectarWS = () => {
+            if (!isMounted) return;
+            try {
+                socket = new WebSocket(wsUrl);
+
+                socket.onopen = () => console.log('[WS Operativo] Conectado en tiempo real.');
+
+                socket.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if ((data.type === 'STATUS_UPDATE' || data.type === 'AGENDA_UPDATE') && String(data.payload?.idPlan) === String(agendaIdRef.current)) {
+                        const nuevoEstatus = (data.payload.estatus || data.payload.status)?.toLowerCase();
+                        const estatusAnterior = agendaStatusRef.current?.toLowerCase();
+
+                        if (nuevoEstatus && nuevoEstatus !== estatusAnterior) {
+                            if (nuevoEstatus === 'requiere_modificacion') {
+                                setAlertModal({ isOpen: true, title: 'AGENDA DEVUELTA', message: `TU SUPERVISOR HA DEVUELTO TU AGENDA PARA CORRECCIÓN.`, type: 'danger' });
+                            }
+                            else if ((nuevoEstatus === 'aprobada' || nuevoEstatus === 'autorizada') && estatusAnterior === 'pendiente') {
+                                setAlertModal({ isOpen: true, title: '¡AGENDA AUTORIZADA!', message: '¡EXCELENTE! TU SUPERVISOR APROBÓ TU AGENDA. PUEDES INICIAR LA EJECUCIÓN.', type: 'success' });
+                            }
+                            else if (nuevoEstatus === 'completada' || data.payload.notaDictamen) {
+                                setAlertModal({ isOpen: true, title: 'JORNADA EVALUADA', message: 'TU SUPERVISOR HA REGISTRADO EL DICTAMEN FINAL DE TU JORNADA.', type: 'info' });
+                            }
                         }
-                        else if (nuevoEstatus === 'completada' || data.payload.notaDictamen) {
-                            setAlertModal({ isOpen: true, title: 'Jornada Evaluada', message: 'Tu supervisor ha registrado el dictamen final de tu jornada.', type: 'info' });
-                        }
+                        cargarAgendaDelDia(true);
                     }
-                    cargarAgendaDelDia(true);
-                }
-            };
-            socket.onerror = (error) => console.error("Error WS Operativo Context:", error);
-        } catch (error) { console.error("Fallo crítico", error); }
+                };
 
-        return () => { if (socket && socket.readyState === WebSocket.OPEN) socket.close(); };
+                socket.onerror = (error) => {
+                    if (isMounted) console.error("Error WS Operativo Context:", error);
+                };
+
+                socket.onclose = () => {
+                    if (isMounted) {
+                        console.warn("[WS Operativo] Desconectado. Intentando reconectar en 3s...");
+                        clearTimeout(timerReconexion);
+                        timerReconexion = setTimeout(() => conectarWS(), 3000);
+                    }
+                };
+
+            } catch (error) {
+                if (isMounted) console.error("Fallo crítico", error);
+            }
+        };
+
+        conectarWS();
+
+        return () => {
+            isMounted = false;
+            clearTimeout(timerReconexion);
+            if (socket) {
+                socket.onclose = null;
+                socket.onerror = null;
+                socket.onmessage = null;
+
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.close();
+                } else if (socket.readyState === WebSocket.CONNECTING) {
+                    socket.onopen = () => socket.close();
+                }
+            }
+        };
     }, []);
 
-
-    // ── RENDERIZADO CONDICIONAL POR ROLES (RBAC) ──
     const getVisibleSegments = () => {
         const roleName = selectedRole?.name?.toUpperCase();
         return MATRIZ_SEGMENTOS[roleName] ?? SEGMENTOS_DEFAULT;
@@ -284,41 +322,34 @@ export const AgendaProvider = ({ children }) => {
     const updateVisit = (segmentName, index, fieldOrObject, value) => {
         setCurrentAgenda(prev => {
             const newSegments = { ...prev.segments };
-            //  CLONAMOS EL ARREGLO PARA OBLIGAR A REACT A REPINTAR
-            const newSegmentArray = [...newSegments[segmentName]]; 
+            const newSegmentArray = [...newSegments[segmentName]];
             const visit = { ...newSegmentArray[index] };
 
             if (typeof fieldOrObject === 'object' && fieldOrObject !== null) {
-                //  MODO 1: ACTUALIZACIÓN MASIVA (Usado para la Mora y el Bucket)
                 Object.keys(fieldOrObject).forEach(key => {
                     visit[key] = fieldOrObject[key];
                 });
             } else {
-                // 🚀 MODO 2: ACTUALIZACIÓN INDIVIDUAL
-                visit[fieldOrObject] = value;
+                let finalValue = value;
+                const textFields = ['city', 'colony', 'streets', 'notes', 'activity'];
+                if (textFields.includes(fieldOrObject) && typeof value === 'string') {
+                    finalValue = value.toUpperCase();
+                }
 
-                //  TU LÓGICA ORIGINAL RESTAURADA Y MEJORADA (Autollenado por Nombre)
-                if (fieldOrObject === 'name' && value) {
-                    const match = directorio.find(item => item.name === value.toUpperCase());
+                visit[fieldOrObject] = finalValue;
+
+                if (fieldOrObject === 'name' && finalValue) {
+                    const match = directorio.find(item => item.name === finalValue.toUpperCase());
                     if (match) {
-                        // Copiamos todas las llaves del match
-                        Object.keys(match).forEach(key => { 
-                            visit[key] = match[key]; 
-                        });
-                        
-                        // Aseguramos los IDs críticos
+                        Object.keys(match).forEach(key => { visit[key] = match[key]; });
                         visit.idContacto = match.idContacto || match.id_contacto || match.id || null;
                         visit.idControl = match.idControl || match.id_control || null;
                         visit.idCliente = match.idCliente || match.id_cliente || null;
 
-                        // Parseo seguro de teléfonos para que no se rompa la pantalla
                         let arrayPhones = ["", "", ""];
                         if (match.phones) {
-                            try {
-                                arrayPhones = typeof match.phones === 'string' ? JSON.parse(match.phones) : match.phones;
-                            } catch (e) {
-                                console.error("Error parseando teléfonos", e);
-                            }
+                            try { arrayPhones = typeof match.phones === 'string' ? JSON.parse(match.phones) : match.phones; }
+                            catch (e) { console.error("Error parseando teléfonos", e); }
                         }
                         while(arrayPhones.length < 3) arrayPhones.push('');
                         visit.phones = arrayPhones;
@@ -326,11 +357,8 @@ export const AgendaProvider = ({ children }) => {
                 }
             }
 
-            visit.isModified = true;
-
             newSegmentArray[index] = visit;
-            newSegments[segmentName] = newSegmentArray; // Asignamos el arreglo clonado
-            
+            newSegments[segmentName] = newSegmentArray;
             return { ...prev, segments: newSegments };
         });
     };
@@ -363,22 +391,22 @@ export const AgendaProvider = ({ children }) => {
     const registerCheckIn = async (visitId, data) => {
         try {
             const payload = {
-                idPlan: currentAgenda.id, 
-                idVisita: visitId, 
-                visitaRealizada: data.visitaRealizada, 
+                idPlan: currentAgenda.id,
+                idVisita: visitId,
+                visitaRealizada: data.visitaRealizada,
                 clienteEncontrado: data.clienteEncontrado,
-                actividadRealizada: data.actividadRealizada, 
+                actividadRealizada: data.actividadRealizada,
                 motivoNoVisita: data.motivoNoVisita,
-                motivoNoActividad: data.motivoNoActividad, 
-                resultado: data.resultado, 
+                motivoNoActividad: data.motivoNoActividad,
+                resultado: data.resultado,
                 tipoGestion: data.tipoGestion,
-                checkInTime: data.checkInTime, 
-                visitaDuration: data.visitaDuration, 
-                lat: data.lat, 
+                checkInTime: data.checkInTime,
+                visitaDuration: data.visitaDuration,
+                lat: data.lat,
                 lng: data.lng,
-                gpsStatus: data.gpsStatus, 
-                pagoMonto: data.pagoMonto, 
-                pagoFecha: data.pagoFecha, 
+                gpsStatus: data.gpsStatus,
+                pagoMonto: data.pagoMonto,
+                pagoFecha: data.pagoFecha,
                 notes: data.notes
             };
             await api.post('/gestion-diaria/ejecucion', payload);
@@ -392,8 +420,8 @@ export const AgendaProvider = ({ children }) => {
             console.error("Error al registrar el check-in", error);
             setAlertModal({
                 isOpen: true,
-                title: 'Error de Sincronización',
-                message: 'No se pudo guardar la gestión en el servidor.',
+                title: 'ERROR DE SINCRONIZACIÓN',
+                message: 'NO SE PUDO GUARDAR LA GESTIÓN EN EL SERVIDOR.',
                 type: 'danger'
             });
         }
@@ -402,47 +430,47 @@ export const AgendaProvider = ({ children }) => {
     const addUnplannedVisit = async (data) => {
         try {
             const payload = {
-                idPlan: currentAgenda.id,      
-                idContacto: data.idContacto,   
-                idVisita: null, 
-                name: data.name, 
-                resultado: data.resultado, 
+                idPlan: currentAgenda.id,
+                idContacto: data.idContacto,
+                idVisita: null,
+                name: data.name,
+                resultado: data.resultado,
                 tipoGestion: data.tipoGestion,
-                checkInTime: data.checkInTime, 
-                pagoMonto: data.pagoMonto, 
-                pagoFecha: data.pagoFecha, 
+                checkInTime: data.checkInTime,
+                pagoMonto: data.pagoMonto,
+                pagoFecha: data.pagoFecha,
                 notes: data.notes
             };
 
             await api.post('/gestion-diaria/ejecucion/no-planeada', payload);
 
             const id = Math.random().toString(36).substr(2, 9);
-            
-            const newVisit = { 
-                id, 
-                ...data, 
+
+            const newVisit = {
+                id,
+                ...data,
                 isUnplanned: true,
-                _segment: 'Visita No Planeada', 
-                estado: 'FINALIZADA',           
+                _segment: 'Visita No Planeada',
+                estado: 'FINALIZADA',
                 statusAction: 'FINALIZADA',
-                _dbCheckIn: {                   
+                _dbCheckIn: {
                     resultado: data.resultado,
                     visitaRealizada: true,
                     checkInTime: data.checkInTime,
                     gpsStatus: 'ok'
                 }
             };
-            
-            setCurrentAgenda(prev => ({ 
-                ...prev, 
-                unplannedVisits: [...(prev.unplannedVisits || []), newVisit] 
+
+            setCurrentAgenda(prev => ({
+                ...prev,
+                unplannedVisits: [...(prev.unplannedVisits || []), newVisit]
             }));
         } catch (error) {
             console.error("Error al registrar visita no planeada", error);
             setAlertModal({
                 isOpen: true,
-                title: 'Error',
-                message: 'Hubo un error al registrar el imprevisto.',
+                title: 'ERROR',
+                message: 'HUBO UN ERROR AL REGISTRAR EL IMPREVISTO.',
                 type: 'danger'
             });
         }
@@ -470,17 +498,13 @@ export const AgendaProvider = ({ children }) => {
         });
     };
 
-    // ── Sprint 5 / RF-11: Lector de gestiones REALMENTE ejecutadas ──────────
-    // Si no se pasa una agenda, usa la del propio Context (`currentAgenda`).
-    // Devuelve un mapa { [idVisita]: { checkInTime, resultado, gpsStatus } }
-    // sólo cuando la agenda está en un estatus que admite gestiones cerradas.
     const getRealCheckIns = (agenda = currentAgenda) => {
         if (!agenda) return {};
         const validStatuses = ['aprobada', 'ejecutada', 'completada'];
         if (!validStatuses.includes(agenda.status?.toLowerCase())) return {};
 
         const result = {};
-        const allVisits = Object.values(agenda.segments || {}).flat().filter(v => v && v.name);
+        const allVisits = Object.values(agenda.segments || {}).flat().filter(v => v && (v.name || String(v.managementResult||'').toUpperCase().includes('IMPREVISTO')));
 
         allVisits.forEach(v => {
             const isDone = v.statusAction === 'FINALIZADA'
@@ -505,21 +529,21 @@ export const AgendaProvider = ({ children }) => {
             .flatMap(([_, visits]) => visits.filter(v => v.name && v.time));
 
         const times = allVisits.map(v => v.time);
-        if (times.length !== new Set(times).size) return { valid: false, message: "No se pueden empalmar horarios exactos." };
+        if (times.length !== new Set(times).size) return { valid: false, message: "NO SE PUEDEN EMPALMAR HORARIOS EXACTOS." };
 
         const timeToMin = (t) => {
             const [h, m] = t.split(':').map(Number);
             return h * 60 + m;
         };
 
-        const promoVisits = currentAgenda.segments['Promoción'].filter(v => v.name && v.time);
+        const promoVisits = (currentAgenda.segments['Promoción'] || []).filter(v => v.name && v.time);
         for (const promo of promoVisits) {
             const pMin = timeToMin(promo.time);
             for (const other of allVisits) {
                 if (promo.id === other.id) continue;
                 const oMin = timeToMin(other.time);
                 if (Math.abs(pMin - oMin) < 30) {
-                    return { valid: false, message: `La visita de Promoción (${promo.time}) está muy cerca de "${other.name}" (${other.time}). Requiere al menos 30 min de espacio.` };
+                    return { valid: false, message: `LA VISITA DE PROMOCIÓN (${promo.time}) ESTÁ MUY CERCA DE "${other.name.toUpperCase()}" (${other.time}). REQUIERE AL MENOS 30 MIN DE ESPACIO.` };
                 }
             }
         }
@@ -534,8 +558,8 @@ export const AgendaProvider = ({ children }) => {
         if (activeVisits.length === 0) {
             setAlertModal({
                 isOpen: true,
-                title: 'Acción Requerida',
-                message: 'Debes registrar al menos una visita para enviar la agenda.',
+                title: 'ACCIÓN REQUERIDA',
+                message: 'DEBES REGISTRAR AL MENOS UNA VISITA PARA ENVIAR LA AGENDA.',
                 type: 'info'
             });
             return;
@@ -545,8 +569,8 @@ export const AgendaProvider = ({ children }) => {
         if (!validation.valid) {
             setAlertModal({
                 isOpen: true,
-                title: 'Ajustes Necesarios',
-                message: validation.message,
+                title: 'AJUSTES NECESARIOS',
+                message: validation.message.toUpperCase(),
                 type: 'danger'
             });
             return;
@@ -557,7 +581,7 @@ export const AgendaProvider = ({ children }) => {
 
             const findCatalogId = (arrayCatalog, textValue) => {
                 if (!textValue || !arrayCatalog) return null;
-                const match = arrayCatalog.find(item => 
+                const match = arrayCatalog.find(item =>
                     item.nombre?.toUpperCase().trim() === String(textValue).toUpperCase().trim()
                 );
                 if (match) return match.id_producto || match.id_programa || match.id_etiqueta || match.id_herramienta || match.id || null;
@@ -569,7 +593,6 @@ export const AgendaProvider = ({ children }) => {
                 mappedSegments[segmentName] = currentAgenda.segments[segmentName].map(v => {
                     const herramientaStr = v.herramientaAplicar || v.herramientaAplicada;
 
-                    // Función para limpiar números
                     const cleanNum = (val) => {
                         if (val === null || val === undefined || val === '') return null;
                         const parsed = Number(String(val).replace(/[^0-9.-]+/g, ""));
@@ -577,12 +600,12 @@ export const AgendaProvider = ({ children }) => {
                     };
 
                     const { herramientaAplicada, herramientaAplicar, ...cleanVisit } = v;
-                    
+
                     const estAmount = cleanNum(v.estimatedAmount);
                     const aRate = cleanNum(v.annualRate);
 
                     return {
-                        ...cleanVisit,                        
+                        ...cleanVisit,
                         estimatedAmount: estAmount !== null ? String(estAmount) : null,
                         annualRate: aRate !== null ? String(aRate) : null,
 
@@ -595,9 +618,9 @@ export const AgendaProvider = ({ children }) => {
                         moraInicioMes: cleanNum(v.moraInicioMes),
                         moraActual: cleanNum(v.moraActual),
                         moraDays: cleanNum(v.moraDays),
-                        
+
                         herramientaAplicada: herramientaStr,
-                        
+
                         idProducto: findCatalogId(catalogos.productos, v.product),
                         idSubProducto: findCatalogId(catalogos.subproductos, v.subProduct),
                         idPrograma: findCatalogId(catalogos.programas, v.program),
@@ -607,7 +630,6 @@ export const AgendaProvider = ({ children }) => {
                 });
             });
 
-            // 4. Limpiamos también los KPIs para que viajen como Números y no como Strings
             const numericKpis = {};
             Object.keys(currentAgenda.kpiCompromisos || {}).forEach(k => {
                  const val = currentAgenda.kpiCompromisos[k];
@@ -618,7 +640,7 @@ export const AgendaProvider = ({ children }) => {
                 idPlan: currentAgenda.id,
                 idArea: idAreaMapeado,
                 kpiCompromisos: numericKpis,
-                segments: mappedSegments 
+                segments: mappedSegments
             };
 
             const response = await api.post(`/agenda/plan/certificar`, payload);
@@ -629,8 +651,8 @@ export const AgendaProvider = ({ children }) => {
 
                 setCurrentAgenda(prev => ({
                     ...prev,
-                    id: realId, 
-                    status: 'pendiente', 
+                    id: realId,
+                    status: 'pendiente',
                     segments: {
                         'Promoción': [], 'Evaluación e Integración': [], 'Seguimiento de Cartera': [], 'Gestión de Empresarias': []
                     }
@@ -638,14 +660,14 @@ export const AgendaProvider = ({ children }) => {
                 setAlertModal({
                     isOpen: true,
                     title: 'AGENDA CAPTURADA EXITOSAMENTE',
-                    message: 'Agenda enviada a supervisor para su validación.',
+                    message: 'AGENDA ENVIADA A SUPERVISOR PARA SU VALIDACIÓN.',
                     type: 'success'
                 });
             } else {
                 setAlertModal({
                     isOpen: true,
-                    title: 'Error de Sistema',
-                    message: 'El servidor respondió, pero hubo un problema al guardar la agenda.',
+                    title: 'ERROR DE SISTEMA',
+                    message: 'EL SERVIDOR RESPONDIÓ, PERO HUBO UN PROBLEMA AL GUARDAR LA AGENDA.',
                     type: 'danger'
                 });
             }
@@ -654,8 +676,8 @@ export const AgendaProvider = ({ children }) => {
             console.error("Error al certificar agenda", error);
             setAlertModal({
                 isOpen: true,
-                title: 'Error de Red',
-                message: 'Hubo un error de conexión al certificar la agenda.',
+                title: 'ERROR DE RED',
+                message: 'HUBO UN ERROR DE CONEXIÓN AL CERTIFICAR LA AGENDA.',
                 type: 'danger'
             });
         }
@@ -673,33 +695,30 @@ export const AgendaProvider = ({ children }) => {
             console.error("Error borrando agenda", error);
             setAlertModal({
                 isOpen: true,
-                title: 'Error',
-                message: 'Ocurrió un problema al limpiar el formulario.',
+                title: 'ERROR',
+                message: 'OCURRIÓ UN PROBLEMA AL LIMPIAR EL FORMULARIO.',
                 type: 'danger'
             });
         }
     };
 
-    // ── INTEGRACIÓN REAL: ACTUALIZAR ESTATUS (Guardado Definitivo) ──
     const updateAgendaStatus = async (idPlan, nuevoEstatus, notes = '') => {
-        // En caso de que se llame de forma local sin ID real, mantenemos protección
         if (!idPlan || idPlan === 'AJ-LOCAL') {
             setCurrentAgenda(prev => ({ ...prev, status: nuevoEstatus, notes }));
             return;
         }
 
         try {
-            // Se envía el payload correspondiente al ActualizarEstatusRequest que espera el backend
             const payload = { estatus: nuevoEstatus, nota: notes };
-            
+
             const response = await api.put(`/agenda/plan/${idPlan}/estatus`, payload);
 
             if (response.data && response.data.codigo === 'OK') {
                 setCurrentAgenda(prev => ({ ...prev, status: nuevoEstatus, notes }));
                 setAlertModal({
                     isOpen: true,
-                    title: 'Estatus Actualizado',
-                    message: `La agenda ha cambiado a estatus: ${nuevoEstatus}`,
+                    title: 'ESTATUS ACTUALIZADO',
+                    message: `LA AGENDA HA CAMBIADO A ESTATUS: ${nuevoEstatus}`,
                     type: 'success'
                 });
             }
@@ -707,8 +726,8 @@ export const AgendaProvider = ({ children }) => {
             console.error("Error al actualizar estatus de la agenda", error);
             setAlertModal({
                 isOpen: true,
-                title: 'Error de Sincronización',
-                message: 'No se pudo actualizar el estatus de la agenda en el servidor.',
+                title: 'ERROR DE SINCRONIZACIÓN',
+                message: 'NO SE PUDO ACTUALIZAR EL ESTATUS DE LA AGENDA EN EL SERVIDOR.',
                 type: 'danger'
             });
         }
@@ -722,12 +741,12 @@ export const AgendaProvider = ({ children }) => {
             loadingAgenda, kpiConfig, loadingKpiConfig, getRealCheckIns
         }}>
             {children}
-            
+
             <UIModal
                 isOpen={alertModal.isOpen}
                 onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
-                title={alertModal.title}
-                message={alertModal.message}
+                title={alertModal.title.toUpperCase()}
+                message={alertModal.message.toUpperCase()}
                 type={alertModal.type}
             />
         </AgendaContext.Provider>

@@ -9,32 +9,27 @@ const CierreJornadaJefe = () => {
     const { selectedRole } = useRole();
     const canal = selectedRole?.canal?.toLowerCase();
 
-    // 1. Nuevos estados dinámicos
     const [loading, setLoading] = useState(true);
     const [agendas, setAgendas] = useState([]);
     const [selectedAgenda, setSelectedAgenda] = useState(null);
 
-    // Estados del formulario
     const [evaluacion, setEvaluacion] = useState('');
     const [notaCierre, setNotaCierre] = useState('');
     const [enviado, setEnviado] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [errorModal, setErrorModal] = useState({ isOpen: false, message: '' });
 
-    // Sprint 5 / RF-12 — Adaptación de terminología por canal
     const isCobranza = canal === 'cobranza';
-    const labelOperativo = isCobranza ? 'Gestor Interno' : 'Operativo';
-    const labelOperativoPlural = isCobranza ? 'Gestores Internos' : 'Operativos';
+    const labelOperativo = isCobranza ? 'GESTOR INTERNO' : 'OPERATIVO';
+    const labelOperativoPlural = isCobranza ? 'GESTORES INTERNOS' : 'OPERATIVOS';
 
-    // Opciones del RF-12 del requerimiento
     const opcionesDictamen = [
-        { id: 'excelente', label: 'Excelente', icon: Star, color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-        { id: 'satisfactorio', label: 'Satisfactorio', icon: CheckCircle2, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' },
-        { id: 'mejora', label: 'Con oportunidad de mejora', icon: BatteryWarning, color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-200' },
-        { id: 'improductivo', label: 'Improductivo', icon: Battery, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200' },
+        { id: 'excelente', label: 'EXCELENTE', icon: Star, color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+        { id: 'satisfactorio', label: 'SATISFACTORIO', icon: CheckCircle2, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' },
+        { id: 'mejora', label: 'CON OPORTUNIDAD DE MEJORA', icon: BatteryWarning, color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-200' },
+        { id: 'improductivo', label: 'IMPRODUCTIVO', icon: Battery, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200' },
     ];
 
-    // 2. Carga dinámica de operativos del día
     useEffect(() => {
         const fetchAgendasCierre = async () => {
             setLoading(true);
@@ -57,11 +52,10 @@ const CierreJornadaJefe = () => {
     const handleSubmit = async () => {
         if (!evaluacion || !selectedAgenda?.id || submitting) return;
 
-        // RF-12: Bloqueo de re-evaluaciones — si la agenda ya tiene dictamen, no se reenvía.
         if (selectedAgenda.notaDictamen) {
             setErrorModal({
                 isOpen: true,
-                message: `Este ${labelOperativo.toLowerCase()} ya cuenta con un dictamen registrado (${selectedAgenda.notaDictamen}). No es posible volver a evaluarlo en el mismo día.`
+                message: `ESTE ${labelOperativo} YA CUENTA CON UN DICTAMEN REGISTRADO (${selectedAgenda.notaDictamen}). NO ES POSIBLE VOLVER A EVALUARLO EN EL MISMO DÍA.`
             });
             return;
         }
@@ -74,7 +68,6 @@ const CierreJornadaJefe = () => {
                 return;
             }
 
-            // Texto exacto que pide RF-12 (Excelente, Satisfactorio, Con Oportunidad de Mejora, Improductivo)
             const etiquetaTexto = opcionSeleccionada.label.toUpperCase();
             const idCalificacionMap = { excelente: 1, satisfactorio: 2, mejora: 3, improductivo: 4 };
             const idCalificacion = idCalificacionMap[evaluacion] ?? 1;
@@ -82,23 +75,19 @@ const CierreJornadaJefe = () => {
             const payload = {
                 idCalificacion,
                 etiqueta: etiquetaTexto,
-                notaCierre
+                notaCierre: String(notaCierre).toUpperCase() // Guardamos notas en mayúsculas también
             };
 
             const response = await api.put(`/agenda/plan/${selectedAgenda.id}/dictamen`, payload);
-
             LoggerService.info('Dictamen de cierre guardado en base de datos', response.data);
 
-            // Sincronizamos la lista local para que la tarjeta quede bloqueada al volver.
-            setAgendas(prev => prev.map(ag => ag.id === selectedAgenda.id
-                ? { ...ag, notaDictamen: etiquetaTexto }
-                : ag));
+            setAgendas(prev => prev.map(ag => ag.id === selectedAgenda.id ? { ...ag, notaDictamen: etiquetaTexto } : ag));
             setEnviado(true);
         } catch (error) {
             LoggerService.error('Error al guardar el dictamen del jefe', error);
             setErrorModal({
                 isOpen: true,
-                message: "Hubo un error al guardar el dictamen. Revisa la consola o intenta de nuevo."
+                message: "HUBO UN ERROR AL GUARDAR EL DICTAMEN. REVISA LA CONSOLA O INTENTA DE NUEVO."
             });
         } finally {
             setSubmitting(false);
@@ -112,7 +101,6 @@ const CierreJornadaJefe = () => {
         setEnviado(false);
     };
 
-    // ── Pantalla de Carga ──
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center py-32 text-slate-400">
@@ -121,40 +109,37 @@ const CierreJornadaJefe = () => {
         );
     }
 
-    // ── Pantalla 1: Selección de Operativo (Con márgenes corregidos a 1400px) ──
+    // ── Pantalla 1: Selección de Operativo ──
     if (!selectedAgenda) {
         return (
             <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8 animate-in fade-in duration-500">
                 <header className="mb-8">
-                    <h2 className="text-3xl font-black text-indigo-950 uppercase tracking-tighter">Cierre de Jornada</h2>
+                    <h2 className="text-3xl font-black text-indigo-950 uppercase tracking-tighter">CIERRE DE JORNADA</h2>
                     <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.3em] mt-2">
-                        {`Selecciona un ${labelOperativo.toLowerCase()} para evaluar su desempeño`}
+                        SELECCIONE UN {labelOperativo} PARA EVALUAR SU DESEMPEÑO
                     </p>
                 </header>
 
                 {agendas.length === 0 ? (
                     <div className="bg-white rounded-3xl border border-slate-100 p-16 text-center shadow-sm">
                         <FileText size={48} className="text-slate-200 mx-auto mb-4" />
-                        <p className="text-sm font-black text-slate-400 uppercase tracking-widest">{`No hay ${labelOperativoPlural.toLowerCase()} en ruta hoy`}</p>
+                        <p className="text-sm font-black text-slate-400 uppercase tracking-widest">NO HAY {labelOperativoPlural} EN RUTA HOY</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {agendas.map(ag => {
-                            // 1. Leemos la nota directamente de tu nueva consulta SQL
                             const dictamenFinal = ag.notaDictamen; 
                             const isEvaluated = !!dictamenFinal;
 
-                            // 2. Asignamos colores al badge según el resultado
                             let badgeColor = 'bg-slate-100 text-slate-500 border-slate-200';
                             if (dictamenFinal === 'EXCELENTE') badgeColor = 'bg-emerald-100 text-emerald-700 border-emerald-200';
                             else if (dictamenFinal === 'SATISFACTORIO') badgeColor = 'bg-blue-100 text-blue-700 border-blue-200';
-                            else if (dictamenFinal === 'CON OPORTUNIDAD DE MEJORA') badgeColor = 'bg-amber-100 text-amber-700 border-amber-200';
+                            else if (dictamenFinal === 'CON OPORTUNIDAD DE MEJIRA' || dictamenFinal?.includes('MEJORA')) badgeColor = 'bg-amber-100 text-amber-700 border-amber-200';
                             else if (dictamenFinal === 'IMPRODUCTIVO') badgeColor = 'bg-red-100 text-red-700 border-red-200';
 
                             return (
                                 <div 
                                     key={ag.id} 
-                                    // Bloqueamos el clic si la agenda ya fue evaluada
                                     onClick={() => !isEvaluated && setSelectedAgenda(ag)}
                                     className={`bg-white rounded-2xl border shadow-sm p-5 transition-all group ${
                                         isEvaluated ? 'border-slate-200 opacity-80 cursor-default' : 'border-slate-100 hover:border-indigo-200 hover:shadow-md cursor-pointer'
@@ -166,30 +151,27 @@ const CierreJornadaJefe = () => {
                                                 <User size={18} />
                                             </div>
                                             <div>
-                                                <p className="font-black text-sm text-indigo-950 uppercase truncate leading-tight">
-                                                    {ag.operativo?.nombre || 'Sin Nombre'}
+                                                <p className="font-black text-sm text-primary uppercase truncate leading-tight">
+                                                    {String(ag.operativo?.nombre || 'SIN NOMBRE').toUpperCase()}
                                                 </p>
                                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                                                    {ag.operativo?.puesto}
+                                                    {String(ag.operativo?.puesto || '—').toUpperCase()}
                                                 </p>
                                             </div>
                                         </div>
                                     </div>
                                     <div className="flex items-center justify-between border-t border-slate-50 pt-3">
-                                        <span className={`px-2 py-1 rounded-md text-[8px] font-black uppercase tracking-widest ${
-                                            ag.status?.toLowerCase() === 'ejecutada' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-500'
-                                        }`}>
-                                            Estatus: {ag.status || 'Borrador'}
+                                        <span className="px-2 py-1 rounded-md text-[8px] font-black uppercase tracking-widest bg-slate-100 text-slate-500">
+                                            ESTATUS: {String(ag.status || 'BORRADOR').toUpperCase()}
                                         </span>
                                         
-                                        {/* 3. Reemplazo dinámico del botón por la etiqueta de evaluación */}
                                         {isEvaluated ? (
                                             <div className={`px-2 py-1 border rounded-md text-[9px] font-black uppercase tracking-widest ${badgeColor}`}>
                                                 {dictamenFinal}
                                             </div>
                                         ) : (
                                             <div className="flex items-center gap-1 text-[10px] font-black text-indigo-500 group-hover:text-indigo-600 uppercase tracking-widest transition-colors">
-                                                Evaluar <ChevronRight size={14} />
+                                                EVALUAR <ChevronRight size={14} />
                                             </div>
                                         )}
                                     </div>
@@ -209,55 +191,53 @@ const CierreJornadaJefe = () => {
                 <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-6 shadow-sm">
                     <CheckCircle2 size={48} />
                 </div>
-                <h3 className="text-3xl font-black text-indigo-950 uppercase tracking-tighter mb-3">Evaluación Registrada</h3>
-                <p className="text-sm text-slate-500 font-medium mb-8">El dictamen de la jornada ha sido guardado exitosamente en el sistema.</p>
+                <h3 className="text-3xl font-black text-indigo-950 uppercase tracking-tighter mb-3">EVALUACIÓN REGISTRADA</h3>
+                <p className="text-sm text-slate-500 font-black uppercase mb-8">EL DICTAMEN DE LA JORNADA HA SIDO GUARDADO EXITOSAMENTE EN EL SISTEMA.</p>
                 <button 
                     onClick={resetForm} 
                     className="px-6 py-3 rounded-xl bg-indigo-50 text-indigo-600 text-xs font-black uppercase tracking-widest hover:bg-indigo-100 transition-colors"
                 >
-                    Evaluar a otro operativo
+                    EVALUAR A OTRO OPERATIVO
                 </button>
             </div>
         );
     }
 
-    // ── Pantalla 3: Formulario de Dictamen (Con centrado corregido) ──
+    // ── Pantalla 3: Formulario de Dictamen ──
     return (
         <div className="max-w-[1400px] mx-auto pb-20 pt-8 px-4 md:px-8 animate-in slide-in-from-right-4 duration-300">
-            
-            {/* CONTENEDOR CENTRAL: Aquí agregamos mx-auto y metimos el botón y el título */}
             <div className="max-w-4xl mx-auto"> 
                 
                 <button onClick={() => setSelectedAgenda(null)} className="flex items-center gap-2 text-[10px] font-black text-slate-400 hover:text-indigo-600 uppercase tracking-widest mb-6 transition-colors">
-                    <ArrowLeft size={14} /> Volver a la lista
+                    <ArrowLeft size={14} /> VOLVER A LA LISTA
                 </button>
 
                 <header className="mb-8">
-                    <h2 className="text-3xl font-black text-indigo-950 uppercase tracking-tighter">Dictamen de Cierre</h2>
+                    <h2 className="text-3xl font-black text-indigo-950 uppercase tracking-tighter">DICTAMEN DE CIERRE</h2>
                     <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.3em] mt-2">
-                        Evaluación de la jornada operativa
+                        EVALUACIÓN DE LA JORNADA OPERATIVA
                     </p>
                 </header>
 
-                {/* Cabecera del Operativo / Gestor Interno */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6 flex flex-col md:flex-row items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-slate-900 flex items-center justify-center text-white flex-shrink-0">
                         <User size={20} />
                     </div>
                     <div className="flex-1 text-center md:text-left">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{`${labelOperativo} Evaluado`}</p>
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{labelOperativo} EVALUADO</p>
                         <p className="text-xl font-black text-indigo-950 uppercase leading-none">
-                            {selectedAgenda.operativo?.nombre || 'Desconocido'}
+                            {String(selectedAgenda.operativo?.nombre || 'DESCONOCIDO').toUpperCase()}
                         </p>
-                        <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest">{selectedAgenda.operativo?.puesto} · {selectedAgenda.sucursal}</p>
+                        <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest">
+                            {String(selectedAgenda.operativo?.puesto).toUpperCase()} · {String(selectedAgenda.sucursal).toUpperCase()}
+                        </p>
                     </div>
                 </div>
 
-                {/* Formulario */}
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
                     <div className="bg-slate-50 border-b border-slate-200 p-6 md:p-8">
-                        <h3 className="text-sm font-black text-indigo-950 uppercase tracking-widest">Resultado Global del Día</h3>
-                        <p className="text-xs text-slate-500 mt-1">{`Selecciona el dictamen según el cumplimiento de metas y KPIs de este ${labelOperativo.toLowerCase()}.`}</p>
+                        <h3 className="text-sm font-black text-indigo-950 uppercase tracking-widest">RESULTADO GLOBAL DEL DÍA</h3>
+                        <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wide">{`SELECCIONA EL DICTAMEN SEGÚN EL CUMPLIMIENTO DE METAS Y KPIS DE ESTE ${labelOperativo}.`}</p>
                     </div>
                     
                     <div className="p-6 md:p-8 space-y-8">
@@ -284,14 +264,14 @@ const CierreJornadaJefe = () => {
 
                         <div className="pt-4">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">
-                                Notas del Jefe (Opcional)
+                                NOTAS DEL JEFE (OPCIONAL)
                             </label>
                             <textarea
                                 value={notaCierre}
-                                onChange={(e) => setNotaCierre(e.target.value)}
-                                placeholder="Añade observaciones adicionales sobre el desempeño, compromisos cumplidos o áreas de enfoque para el día de mañana..."
+                                onChange={(e) => setNotaCierre(String(e.target.value).toUpperCase())}
+                                placeholder="AÑADE OBSERVACIONES ADICIONALES SOBRE EL DESEMPEÑO, COMPROMISOS CUMPLIDOS O ÁREAS DE ENFOQUE PARA EL DÍA DE MAÑANA..."
                                 rows={4}
-                                className="w-full rounded-2xl border border-slate-200 p-5 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none resize-none transition-all text-slate-700"
+                                className="w-full rounded-2xl border border-slate-200 p-5 text-xs focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none resize-none transition-all font-bold uppercase text-slate-700 placeholder:text-slate-300"
                             />
                         </div>
                     </div>
@@ -307,16 +287,16 @@ const CierreJornadaJefe = () => {
                             }`}
                         >
                             {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                            {submitting ? 'Guardando…' : 'Guardar Dictamen'}
+                            {submitting ? 'GUARDANDO...' : 'GUARDAR DICTAMEN'}
                         </button>
                     </div>
                 </div>
             </div>
 
-             <UIModal
+            <UIModal
                 isOpen={errorModal.isOpen}
                 onClose={() => setErrorModal({ ...errorModal, isOpen: false })}
-                title="Error al Guardar"
+                title="ERROR AL GUARDAR"
                 message={errorModal.message}
                 type="danger"
             />            

@@ -25,7 +25,7 @@ const Sidebar = () => {
             >
                 <div className="flex items-center gap-2">
                     <Briefcase size={18} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">{isOpen ? 'Cerrar' : 'Menú'}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">{isOpen ? 'CERRAR' : 'MENÚ'}</span>
                 </div>
             </button>
 
@@ -45,8 +45,8 @@ const Sidebar = () => {
                     <div className="flex items-center gap-4 mb-20">
                         <div className="w-10 h-10 bg-blue-600 rounded-[12px] flex items-center justify-center font-black text-xs shadow-lg shadow-blue-500/20">BC</div>
                         <div className="flex flex-col">
-                            <span className="font-black tracking-tighter text-lg leading-tight uppercase">Business</span>
-                            <span className="text-[10px] font-bold text-blue-400 tracking-[0.3em] -mt-1 uppercase">Control</span>
+                            <span className="font-black tracking-tighter text-lg leading-tight uppercase">BUSINESS</span>
+                            <span className="text-[10px] font-bold text-blue-400 tracking-[0.3em] -mt-1 uppercase">CONTROL</span>
                         </div>
                     </div>
 
@@ -65,7 +65,7 @@ const Sidebar = () => {
                             >
                                 <item.icon size={20} className="transition-transform group-hover:scale-110" />
                                 <span className="text-[11px] font-black uppercase tracking-[0.1em]">
-                                    {item.label}
+                                    {String(item.label).toUpperCase()}
                                 </span>
                             </NavLink>
                         ))}
@@ -79,11 +79,11 @@ const Sidebar = () => {
                             <UserCircle size={28} className="text-slate-400" />
                         </div>
                         <div className="flex flex-col min-w-0">
-                            <span className="text-xs font-black truncate leading-none mb-1">
-                                {session?.userName || session?.name || 'Usuario'}
+                            <span className="text-xs font-black truncate leading-none mb-1 uppercase">
+                                {session?.userName || session?.name || 'USUARIO'}
                             </span>
-                            <span className="text-[9px] text-slate-500 truncate uppercase font-bold tracking-widest">{session?.sucursal || 'Matriz'}</span>
-                            {session?.email && <span className="text-[9px] text-slate-600 truncate font-semibold mt-1">{session.email}</span>}
+                            <span className="text-[9px] text-slate-500 truncate uppercase font-bold tracking-widest">{session?.sucursal || 'MATRIZ'}</span>
+                            {session?.email && <span className="text-[9px] text-slate-600 truncate font-semibold mt-1 uppercase">{String(session.email).toUpperCase()}</span>}
                         </div>
                     </div>
 
@@ -92,17 +92,19 @@ const Sidebar = () => {
                         <div className="bg-slate-900/50 border border-white/10 rounded-xl p-4">
                             <div className="flex items-center gap-2 mb-2">
                                 <ShieldCheck size={14} className="text-blue-400" />
-                                <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em]">Puesto Actual</span>
+                                <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em]">PUESTO ACTUAL</span>
                             </div>
                             <p className="text-[11px] font-black text-white uppercase tracking-wider leading-tight mb-2">
-                                {selectedRole.name}
+                                {String(selectedRole.name).toUpperCase()}
                             </p>
                             <div className="flex items-center gap-2 flex-wrap">
                                 <span className={`w-1.5 h-1.5 rounded-full ${selectedRole.category === 'Operativo' ? 'bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.5)]' : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]'}`}></span>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">{selectedRole.category}</span>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">{String(selectedRole.category).toUpperCase()}</span>
                                 <span className="text-slate-600">·</span>
-                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none capitalize">{selectedRole.canal}</span>
-                                {selectedRole.nivel && <span className="text-[8px] font-black text-blue-300 bg-blue-900/50 px-1.5 py-0.5 rounded uppercase">Nivel {selectedRole.nivel}</span>}
+                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none">
+                                    {String(selectedRole.canal).toUpperCase()}
+                                </span>
+                                {selectedRole.nivel && <span className="text-[8px] font-black text-blue-300 bg-blue-900/50 px-1.5 py-0.5 rounded uppercase">NIVEL {selectedRole.nivel}</span>}
                             </div>
                         </div>
                     )}
@@ -112,7 +114,7 @@ const Sidebar = () => {
                         className="flex items-center justify-center gap-3 py-4 w-full bg-white/5 rounded-xl text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all font-black text-[10px] uppercase tracking-widest border border-white/5"
                     >
                         <LogOut size={16} />
-                        Cerrar Sesión
+                        CERRAR SESIÓN
                     </button>
                 </div>
             </aside>

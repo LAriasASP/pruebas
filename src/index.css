@@ -30,22 +30,39 @@ body {
   @apply text-white px-6 py-3 rounded-t-2xl flex justify-between items-center;
 }
 
-/* Input styles with black text override */
+/* Input styles con mayúsculas y tamaños estandarizados */
 .input-cell {
-  @apply bg-slate-100/50 border border-transparent rounded-md px-2 py-1.5 text-[11px] font-bold outline-none transition-all duration-200 w-full;
-  @apply focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-slate-300;
-  @apply disabled:bg-slate-50 disabled:text-slate-400;
+  @apply bg-slate-100/50 border border-slate-200 rounded-md px-3 py-2 text-[10px] outline-none transition-all duration-200 w-full;
+  @apply focus:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100;
+  @apply disabled:bg-slate-50 disabled:text-slate-400 disabled:border-slate-100;
+  font-weight: 700;
   color: #020617 !important;
+  text-transform: uppercase !important;
+  height: 38px; /* Altura idéntica y simétrica para inputs, selects y contenedores */
 }
 
-/* Ensure select elements don't show red text on Windows/Chrome */
+/* Placeholders estandarizados */
+.input-cell::placeholder {
+  font-weight: 400;
+  color: #94a3b8 !important;
+  text-transform: uppercase !important;
+}
+
 select.input-cell {
   color: #020617 !important;
+  font-weight: 700;
 }
 
 select.input-cell option {
   color: #020617 !important;
+  font-weight: 700;
   @apply bg-white;
+}
+
+/* Clase maestra para etiquetas de campos (Alineación y Tipografía Inviolable) */
+.field-label {
+  @apply text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block pl-1;
+  text-transform: uppercase !important;
 }
 
 @media (max-width: 1024px) {
